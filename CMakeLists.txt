@@ -26,10 +26,11 @@ file(GLOB HEADERS "${INCDIR}/cumpsgemm/*.hpp")
 ## main library
 add_library(cumpsgemm SHARED
 	${SRCDIR}/cumpsgemm.cu
+	${SRCDIR}/cumpsgemm_kernel.cu
 	${HEADERS}
 	)
 
-target_include_directories(cumpsgemm PUBLIC ${INCDIR})
+target_include_directories(cumpsgemm PUBLIC ${INCDIR} ${SUBMODULEDIR}/cutf/include ${SUBMODULEDIR}/wmma_extension/include)
 target_link_libraries(cumpsgemm PRIVATE
 	cuda
 	)
@@ -50,7 +51,7 @@ target_link_libraries(cumpsgemm_rule PRIVATE
 ##########################################################################
 set(TESTSRCDIR test)
 add_executable(cumpsgemm_test ${TESTSRCDIR}/main.cu ${HEADERS})
-target_include_directories(cumpsgemm_test PRIVATE ${INCDIR} ${SUBMODULEDIR}/cutf/include)
+target_include_directories(cumpsgemm_test PRIVATE ${INCDIR} ${SUBMODULEDIR}/cutf/include ${SUBMODULEDIR}/wmma_extension/include)
 target_link_libraries(cumpsgemm_test PRIVATE
 	CUDA::cublas
 	cumpsgemm

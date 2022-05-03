@@ -17,20 +17,34 @@ void test(
 		const unsigned k,
 		float* const a_ptr, const unsigned lda,
 		float* const b_ptr, const unsigned ldb,
-		float* const c_ptr, const unsigned ldc
+		float* const c_ptr, const unsigned ldc,
+		const cuMpSGEMM_compute_mode_t compute_mode
 		) {
 	float alpha = 1.f, beta = 0.f;
 
-	CUTF_CHECK_ERROR(cublasSgemm(
-			cublas_handle,
-			op_A, op_B,
-			m, n, k,
-			&alpha,
-			a_ptr, lda,
-			b_ptr, ldb,
-			&beta,
-			c_ptr, ldc
-			));
+	if (compute_mode == CUMPSGEMM_CUBLAS) {
+		CUTF_CHECK_ERROR(cublasSgemm(
+					cublas_handle,
+					op_A, op_B,
+					m, n, k,
+					&alpha,
+					a_ptr, lda,
+					b_ptr, ldb,
+					&beta,
+					c_ptr, ldc
+					));
+	} else {
+		cuMpSGEMM_sgemm(
+				op_A, op_B,
+				m, n, k,
+				&alpha,
+				a_ptr, lda,
+				b_ptr, ldb,
+				&beta,
+				c_ptr, ldc,
+				compute_mode
+				);
+	}
 	CUTF_CHECK_ERROR(cudaDeviceSynchronize());
 
 	double base_norm2 = 0.;
@@ -54,7 +68,7 @@ void test(
 
 	const auto residual = std::sqrt(diff_norm2 / base_norm2);
 	std::printf("%s,%s,%s,%u,%u,%u,%e\n",
-			cuMpSGEMM_get_compute_mode_string(cuMpSGEMM_get_compute_mode("cublasSgemm_v2", cublas_handle, op_A, op_B, m, n, k)),
+			cuMpSGEMM_get_compute_mode_string(compute_mode),
 			(op_A == CUBLAS_OP_N) ? "N" : "T",
 			(op_B == CUBLAS_OP_N) ? "N" : "T",
 			m, n, k,
@@ -74,18 +88,29 @@ int main() {
 		b_ptr[i] = dist(mt);
 	}
 
+	std::vector<cuMpSGEMM_compute_mode_t> modes = {
+		CUMPSGEMM_CUBLAS,
+		CUMPSGEMM_FP16TCEC,
+		CUMPSGEMM_FP16TC,
+		CUMPSGEMM_TF32TCEC,
+		CUMPSGEMM_TF32TC,
+	};
+
 	auto cublas_handle_uptr = cutf::cublas::get_cublas_unique_ptr();
-	for (unsigned log_N = min_log_N; log_N <= max_log_N; log_N += log_N_interval) {
-		const auto N = 1u << log_N;
-		test(
-				*cublas_handle_uptr.get(),
-				CUBLAS_OP_N,
-				CUBLAS_OP_N,
-				N, N, N,
-				a_ptr, N,
-				b_ptr, N,
-				c_ptr, N
-				);
+	for (const auto mode : modes) {
+		for (unsigned log_N = min_log_N; log_N <= max_log_N; log_N += log_N_interval) {
+			const auto N = 1u << log_N;
+			test(
+					*cublas_handle_uptr.get(),
+					CUBLAS_OP_N,
+					CUBLAS_OP_N,
+					N, N, N,
+					a_ptr, N,
+					b_ptr, N,
+					c_ptr, N,
+					mode
+					);
+		}
 	}
 	CUTF_CHECK_ERROR(cudaDeviceSynchronize());
 

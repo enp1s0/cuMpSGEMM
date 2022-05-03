@@ -3,7 +3,7 @@
 #include <cutf/curand.hpp>
 #include <cutf/memory.hpp>
 #include <cutf/cublas.hpp>
-#include <cumpsgemm/cumpsgemm.h>
+#include <cumpsgemm/cumpsgemm.hpp>
 
 constexpr unsigned min_log_N = 5;
 constexpr unsigned max_log_N = 11;
@@ -15,9 +15,9 @@ double error_threshold(
 		) {
 	if (compute_mode == CUMPSGEMM_FP16TC ||
 			compute_mode == CUMPSGEMM_TF32TC) {
-		return 1e-3 * std::sqrt(N);
+		return 1. / (1 << 10) * std::sqrt(N);
 	}
-	return 1e-7 * std::sqrt(N);
+	return 1. / (1 << 23) * std::sqrt(N);
 }
 
 __device__ double mad(
@@ -34,11 +34,8 @@ __device__ double2 mad(
 		const double2 c
 		) {
 	const auto dbl_a = cuComplexFloatToDouble(a);
-	const auto dbl_b = cuComplexFloatToDouble(a);
-	return make_cuDoubleComplex(
-			dbl_a.x * dbl_b.x - dbl_a.y * dbl_b.y + c.x,
-			dbl_a.y * dbl_b.x + dbl_a.x * dbl_b.y + c.y
-			);
+	const auto dbl_b = cuComplexFloatToDouble(b);
+	return cuCadd(cuCmul(dbl_a, dbl_b), c);
 }
 
 template <class T>
@@ -60,7 +57,7 @@ __device__ cuComplex load_with_op<cuComplex>(
 		) {
 	if (op == CUBLAS_OP_C) {
 		const auto v = *ptr;
-		return make_cuComplex(v.x, -v.y);
+		return cuConjf(v);
 	}
 	return *ptr;
 }
@@ -93,6 +90,15 @@ __device__ double norm2(
 
 
 template <class T>
+__host__ __device__ T one() {return 1;}
+template <> __host__ __device__ cuComplex one() {return make_cuComplex(1, 0);}
+template <class T>
+__host__ __device__ T zero() {return 0;}
+template <> __host__ __device__ cuComplex zero() {return make_cuComplex(0, 0);}
+template <> __host__ __device__ cuDoubleComplex zero() {return make_cuDoubleComplex(0, 0);}
+
+
+template <class T>
 __global__ void calc_matmul_residual_kernel(
 		double* const base_norm2_ptr,
 		double* const diff_norm2_ptr,
@@ -111,7 +117,7 @@ __global__ void calc_matmul_residual_kernel(
 	const auto c_m = tid % m;
 	const auto c_n = tid / m;
 
-	typename doubled_t<T>::type c = 0;
+	auto c = zero<typename doubled_t<T>::type>();
 	for (std::size_t ik = 0; ik < k; ik++) {
 		std::size_t a_index = 0;
 		if (op_A == CUBLAS_OP_C || op_A == CUBLAS_OP_N) {
@@ -132,6 +138,8 @@ __global__ void calc_matmul_residual_kernel(
 				load_with_op(b_ptr + b_index, op_B),
 				c
 				);
+		const auto aa = load_with_op(a_ptr + a_index, op_A);
+		const auto bb = load_with_op(b_ptr + b_index, op_B);
 	}
 	const auto base_norm2 = norm2(c);
 	const auto diff_norm2 = diff2(c, c_ptr[c_m + c_n * ldc]);
@@ -180,6 +188,57 @@ double calc_matmul_residual(
 	return residual;
 }
 
+void cublas_gemm(
+		cublasHandle_t const cublas_handle,
+		const cublasOperation_t op_A,
+		const cublasOperation_t op_B,
+		const unsigned m,
+		const unsigned n,
+		const unsigned k,
+		const float* const alpha,
+		const float* const a_ptr, const unsigned lda,
+		const float* const b_ptr, const unsigned ldb,
+		const float* const beta,
+		float* const c_ptr, const unsigned ldc
+		) {
+		CUTF_CHECK_ERROR(cublasSgemm(
+					cublas_handle,
+					op_A, op_B,
+					m, n, k,
+					alpha,
+					a_ptr, lda,
+					b_ptr, ldb,
+					beta,
+					c_ptr, ldc
+					));
+}
+
+void cublas_gemm(
+		cublasHandle_t const cublas_handle,
+		const cublasOperation_t op_A,
+		const cublasOperation_t op_B,
+		const unsigned m,
+		const unsigned n,
+		const unsigned k,
+		const cuComplex* const alpha,
+		const cuComplex* const a_ptr, const unsigned lda,
+		const cuComplex* const b_ptr, const unsigned ldb,
+		const cuComplex* const beta,
+		cuComplex* const c_ptr, const unsigned ldc
+		) {
+		CUTF_CHECK_ERROR(cublasCgemm(
+					cublas_handle,
+					op_A, op_B,
+					m, n, k,
+					alpha,
+					a_ptr, lda,
+					b_ptr, ldb,
+					beta,
+					c_ptr, ldc
+					));
+}
+
+template <class T>
 void sgemm_test_core(
 		cublasHandle_t const cublas_handle,
 		const cublasOperation_t op_A,
@@ -187,26 +246,26 @@ void sgemm_test_core(
 		const unsigned m,
 		const unsigned n,
 		const unsigned k,
-		float* const a_ptr, const unsigned lda,
-		float* const b_ptr, const unsigned ldb,
-		float* const c_ptr, const unsigned ldc,
+		T* const a_ptr, const unsigned lda,
+		T* const b_ptr, const unsigned ldb,
+		T* const c_ptr, const unsigned ldc,
 		const cuMpSGEMM_compute_mode_t compute_mode
 		) {
-	float alpha = 1.f, beta = 0.f;
+	const auto alpha = one<T>(), beta = zero<T>();
 
 	if (compute_mode == CUMPSGEMM_CUBLAS) {
-		CUTF_CHECK_ERROR(cublasSgemm(
-					cublas_handle,
-					op_A, op_B,
-					m, n, k,
-					&alpha,
-					a_ptr, lda,
-					b_ptr, ldb,
-					&beta,
-					c_ptr, ldc
-					));
+		cublas_gemm(
+				cublas_handle,
+				op_A, op_B,
+				m, n, k,
+				&alpha,
+				a_ptr, lda,
+				b_ptr, ldb,
+				&beta,
+				c_ptr, ldc
+				);
 	} else {
-		cuMpSGEMM_sgemm(
+		cumpsgemm::gemm(
 				op_A, op_B,
 				m, n, k,
 				&alpha,
@@ -226,7 +285,8 @@ void sgemm_test_core(
 					b_ptr, ldb,
 					c_ptr, ldc
 			);
-	std::printf("%s,%s,%s,%u,%u,%u,%e,%s\n",
+	std::printf("%s,%s,%s,%s,%u,%u,%u,%e,%s\n",
+			(std::is_same<float, T>::value ? "sgemm" : "cgemm"),
 			cuMpSGEMM_get_compute_mode_string(compute_mode),
 			(op_A == CUBLAS_OP_N) ? "N" : "T",
 			(op_B == CUBLAS_OP_N) ? "N" : "T",
@@ -234,11 +294,12 @@ void sgemm_test_core(
 			residual,
 			(residual < error_threshold(compute_mode, m) ? "OK" : "NG")
 			);
+	std::fflush(stdout);
 }
 
 int main() {
 	constexpr uint64_t seed = 0;
-	constexpr std::size_t max_num_elements = (1lu << (max_log_N * 2));
+	constexpr std::size_t max_num_elements = (1lu << (max_log_N * 2)) * 2;
 	float* a_ptr = cutf::memory::malloc<float>(max_num_elements);
 	float* b_ptr = cutf::memory::malloc<float>(max_num_elements);
 	float* c_ptr = cutf::memory::malloc<float>(max_num_elements);
@@ -274,6 +335,25 @@ int main() {
 							a_ptr, N,
 							b_ptr, N,
 							c_ptr, N,
+							mode
+							);
+				}
+			}
+		}
+	}
+	for (const auto mode : modes) {
+		for (const auto op_A : ops) {
+			for (const auto op_B : ops) {
+				for (unsigned log_N = min_log_N; log_N <= max_log_N; log_N += log_N_interval) {
+					const auto N = 1u << log_N;
+					sgemm_test_core(
+							*cublas_handle_uptr.get(),
+							op_A,
+							op_B,
+							N, N, N,
+							reinterpret_cast<cuComplex*>(a_ptr), N,
+							reinterpret_cast<cuComplex*>(b_ptr), N,
+							reinterpret_cast<cuComplex*>(c_ptr), N,
 							mode
 							);
 				}

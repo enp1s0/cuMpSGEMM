@@ -5,6 +5,7 @@
 #include <cutf/error.hpp>
 
 #include <cumpsgemm/cumpsgemm.h>
+#include <cumpsgemm/cumpsgemm.hpp>
 #include "device_tcec_wrapper.hpp"
 
 namespace {
@@ -593,6 +594,39 @@ void layout_selector (
 }
 } // noname namespace
 
+template <class T>
+cublasStatus_t cumpsgemm::gemm(
+		const cublasOperation_t op_A,
+		const cublasOperation_t op_B,
+		const uint64_t m,
+		const uint64_t n,
+		const uint64_t k,
+		const T* alpha,
+		const T* const a_dmem_ptr, const uint64_t lda,
+		const T* const b_dmem_ptr, const uint64_t ldb,
+		const T* beta,
+		T* const c_dmem_ptr, const uint64_t ldc,
+		const cuMpSGEMM_compute_mode_t compute_mode,
+		cudaStream_t cuda_stream
+		) {
+	constexpr unsigned SMEM_M = 64;
+	constexpr unsigned SMEM_N = 64;
+	constexpr unsigned SMEM_K = 64;
+	constexpr unsigned FRAG_M = 32;
+	constexpr unsigned FRAG_N = 32;
+	constexpr unsigned FRAG_K = 32;
+	constexpr unsigned BLOCK_SIZE = 128;
+	switch (compute_mode) {
+	case CUMPSGEMM_FP16TC:   layout_selector<T, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, half                         , mtk::wmma::tcec::without_ec>(op_A, op_B, m, n, k, *alpha, a_dmem_ptr, lda, b_dmem_ptr, ldb, *beta, c_dmem_ptr, ldc, cuda_stream);break;
+	case CUMPSGEMM_FP16TCEC: layout_selector<T, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, half                         , mtk::wmma::tcec::with_ec   >(op_A, op_B, m, n, k, *alpha, a_dmem_ptr, lda, b_dmem_ptr, ldb, *beta, c_dmem_ptr, ldc, cuda_stream);break;
+	case CUMPSGEMM_TF32TC:   layout_selector<T, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, nvcuda::wmma::precision::tf32, mtk::wmma::tcec::without_ec>(op_A, op_B, m, n, k, *alpha, a_dmem_ptr, lda, b_dmem_ptr, ldb, *beta, c_dmem_ptr, ldc, cuda_stream);break;
+	case CUMPSGEMM_TF32TCEC: layout_selector<T, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, nvcuda::wmma::precision::tf32, mtk::wmma::tcec::with_ec   >(op_A, op_B, m, n, k, *alpha, a_dmem_ptr, lda, b_dmem_ptr, ldb, *beta, c_dmem_ptr, ldc, cuda_stream);break;
+	default:break;
+	}
+
+	return CUBLAS_STATUS_SUCCESS;
+}
+
 extern "C" cublasStatus_t cuMpSGEMM_sgemm(
 		const cublasOperation_t op_A,
 		const cublasOperation_t op_B,
@@ -607,22 +641,17 @@ extern "C" cublasStatus_t cuMpSGEMM_sgemm(
 		const cuMpSGEMM_compute_mode_t compute_mode,
 		cudaStream_t cuda_stream
 		) {
-	constexpr unsigned SMEM_M = 64;
-	constexpr unsigned SMEM_N = 64;
-	constexpr unsigned SMEM_K = 64;
-	constexpr unsigned FRAG_M = 32;
-	constexpr unsigned FRAG_N = 32;
-	constexpr unsigned FRAG_K = 32;
-	constexpr unsigned BLOCK_SIZE = 128;
-	switch (compute_mode) {
-	case CUMPSGEMM_FP16TC:   layout_selector<float, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, half                         , mtk::wmma::tcec::without_ec>(op_A, op_B, m, n, k, *alpha, a_dmem_ptr, lda, b_dmem_ptr, ldb, *beta, c_dmem_ptr, ldc, cuda_stream);break;
-	case CUMPSGEMM_FP16TCEC: layout_selector<float, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, half                         , mtk::wmma::tcec::with_ec   >(op_A, op_B, m, n, k, *alpha, a_dmem_ptr, lda, b_dmem_ptr, ldb, *beta, c_dmem_ptr, ldc, cuda_stream);break;
-	case CUMPSGEMM_TF32TC:   layout_selector<float, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, nvcuda::wmma::precision::tf32, mtk::wmma::tcec::without_ec>(op_A, op_B, m, n, k, *alpha, a_dmem_ptr, lda, b_dmem_ptr, ldb, *beta, c_dmem_ptr, ldc, cuda_stream);break;
-	case CUMPSGEMM_TF32TCEC: layout_selector<float, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, nvcuda::wmma::precision::tf32, mtk::wmma::tcec::with_ec   >(op_A, op_B, m, n, k, *alpha, a_dmem_ptr, lda, b_dmem_ptr, ldb, *beta, c_dmem_ptr, ldc, cuda_stream);break;
-	default:break;
-	}
-
-	return CUBLAS_STATUS_SUCCESS;
+	return cumpsgemm::gemm<float>(
+			op_A, op_B,
+			m, n, k,
+			alpha,
+			a_dmem_ptr, lda,
+			b_dmem_ptr, ldb,
+			beta,
+			c_dmem_ptr, ldc,
+			compute_mode,
+			cuda_stream
+			);
 }
 
 extern "C" cublasStatus_t cuMpSGEMM_cgemm(
@@ -639,20 +668,15 @@ extern "C" cublasStatus_t cuMpSGEMM_cgemm(
 		const cuMpSGEMM_compute_mode_t compute_mode,
 		cudaStream_t cuda_stream
 		) {
-	constexpr unsigned SMEM_M = 64;
-	constexpr unsigned SMEM_N = 64;
-	constexpr unsigned SMEM_K = 64;
-	constexpr unsigned FRAG_M = 32;
-	constexpr unsigned FRAG_N = 32;
-	constexpr unsigned FRAG_K = 32;
-	constexpr unsigned BLOCK_SIZE = 128;
-	switch (compute_mode) {
-	case CUMPSGEMM_FP16TC:   layout_selector<cuComplex, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, half                         , mtk::wmma::tcec::without_ec>(op_A, op_B, m, n, k, *alpha, a_dmem_ptr, lda, b_dmem_ptr, ldb, *beta, c_dmem_ptr, ldc, cuda_stream);break;
-	case CUMPSGEMM_FP16TCEC: layout_selector<cuComplex, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, half                         , mtk::wmma::tcec::with_ec   >(op_A, op_B, m, n, k, *alpha, a_dmem_ptr, lda, b_dmem_ptr, ldb, *beta, c_dmem_ptr, ldc, cuda_stream);break;
-	case CUMPSGEMM_TF32TC:   layout_selector<cuComplex, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, nvcuda::wmma::precision::tf32, mtk::wmma::tcec::without_ec>(op_A, op_B, m, n, k, *alpha, a_dmem_ptr, lda, b_dmem_ptr, ldb, *beta, c_dmem_ptr, ldc, cuda_stream);break;
-	case CUMPSGEMM_TF32TCEC: layout_selector<cuComplex, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, nvcuda::wmma::precision::tf32, mtk::wmma::tcec::with_ec   >(op_A, op_B, m, n, k, *alpha, a_dmem_ptr, lda, b_dmem_ptr, ldb, *beta, c_dmem_ptr, ldc, cuda_stream);break;
-	default:break;
-	}
-
-	return CUBLAS_STATUS_SUCCESS;
+	return cumpsgemm::gemm<cuComplex>(
+			op_A, op_B,
+			m, n, k,
+			alpha,
+			a_dmem_ptr, lda,
+			b_dmem_ptr, ldb,
+			beta,
+			c_dmem_ptr, ldc,
+			compute_mode,
+			cuda_stream
+			);
 }

@@ -578,7 +578,6 @@ void layout_selector (
 			T* const c_ptr, const std::size_t ldc,
 			cudaStream_t cuda_stream
 		) {
-	assert((std::is_same<T, float>::value && !(op_A == CUBLAS_OP_C || op_B == CUBLAS_OP_C)));
 #define CASE(A, a, B, b) \
 	if (op_A == a && op_B == b) {launch_kernel<T, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, A, B, TC_T, EC>(m, n, k, alpha, a_ptr, lda, b_ptr, ldb, beta, c_ptr, ldc, cuda_stream);return;}
 
@@ -611,7 +610,7 @@ cublasStatus_t cumpsgemm::gemm(
 		) {
 	constexpr unsigned SMEM_M = 64;
 	constexpr unsigned SMEM_N = 64;
-	constexpr unsigned SMEM_K = 64;
+	constexpr unsigned SMEM_K = 32;
 	constexpr unsigned FRAG_M = 32;
 	constexpr unsigned FRAG_N = 32;
 	constexpr unsigned FRAG_K = 32;
@@ -641,6 +640,8 @@ extern "C" cublasStatus_t cuMpSGEMM_sgemm(
 		const cuMpSGEMM_compute_mode_t compute_mode,
 		cudaStream_t cuda_stream
 		) {
+	assert(op_A != CUBLAS_OP_C);
+	assert(op_B != CUBLAS_OP_C);
 	return cumpsgemm::gemm<float>(
 			op_A, op_B,
 			m, n, k,

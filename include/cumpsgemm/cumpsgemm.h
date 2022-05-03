@@ -10,7 +10,7 @@ enum cuMpSGEMM_compute_mode_t {
 	CUMPSGEMM_TF32TC   = 4,
 };
 
-const char* cuMpSGEMM_get_compute_mode_string (
+extern "C" const char* cuMpSGEMM_get_compute_mode_string (
 		const cuMpSGEMM_compute_mode_t mode
 		);
 

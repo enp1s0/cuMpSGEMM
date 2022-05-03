@@ -23,7 +23,7 @@ extern "C" cuMpSGEMM_compute_mode_t cuMpSGEMM_get_compute_mode (
 		const unsigned m, const unsigned n, const unsigned k
 		);
 
-extern "C" int cuMpSGEMM_sgemm(
+extern "C" cublasStatus_t cuMpSGEMM_sgemm(
 		const cublasOperation_t op_A,
 		const cublasOperation_t op_B,
 		const uint64_t m,
@@ -33,20 +33,24 @@ extern "C" int cuMpSGEMM_sgemm(
 		const float* const a_dmem_ptr, const uint64_t lda,
 		const float* const b_dmem_ptr, const uint64_t ldb,
 		const float* beta,
-		const float* const c_dmem_ptr, const uint64_t ldc
+		float* const c_dmem_ptr, const uint64_t ldc,
+		const cuMpSGEMM_compute_mode_t compute_mode,
+		cudaStream_t cuda_stream = 0
 		);
 
-extern "C" int cuMpSGEMM_cgemm(
+extern "C" cublasStatus_t cuMpSGEMM_cgemm(
 		const cublasOperation_t op_A,
 		const cublasOperation_t op_B,
 		const uint64_t m,
 		const uint64_t n,
 		const uint64_t k,
-		const float* alpha,
-		const float* const a_dmem_ptr, const uint64_t lda,
-		const float* const b_dmem_ptr, const uint64_t ldb,
-		const float* beta,
-		const float* const c_dmem_ptr, const uint64_t ldc
+		const cuComplex* alpha,
+		const cuComplex* const a_dmem_ptr, const uint64_t lda,
+		const cuComplex* const b_dmem_ptr, const uint64_t ldb,
+		const cuComplex* beta,
+		cuComplex* const c_dmem_ptr, const uint64_t ldc,
+		const cuMpSGEMM_compute_mode_t compute_mode,
+		cudaStream_t cuda_stream = 0
 		);
 
 #endif

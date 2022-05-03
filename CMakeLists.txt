@@ -56,4 +56,5 @@ target_link_libraries(cumpsgemm_test PRIVATE
 	CUDA::cublas
 	cumpsgemm
 	cuda
+	curand
 	)

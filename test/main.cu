@@ -1,14 +1,186 @@
 #include <iostream>
-#include <random>
+#include <vector>
+#include <cutf/curand.hpp>
 #include <cutf/memory.hpp>
 #include <cutf/cublas.hpp>
 #include <cumpsgemm/cumpsgemm.h>
 
 constexpr unsigned min_log_N = 5;
-constexpr unsigned max_log_N = 9;
+constexpr unsigned max_log_N = 11;
 constexpr unsigned log_N_interval = 2;
 
-void test(
+double error_threshold(
+		const cuMpSGEMM_compute_mode_t compute_mode,
+		const std::size_t N
+		) {
+	if (compute_mode == CUMPSGEMM_FP16TC ||
+			compute_mode == CUMPSGEMM_TF32TC) {
+		return 1e-3 * std::sqrt(N);
+	}
+	return 1e-7 * std::sqrt(N);
+}
+
+__device__ double mad(
+		const float a,
+		const float b,
+		const double c
+		) {
+	return static_cast<double>(a) * static_cast<double>(b) + c;
+}
+
+__device__ double2 mad(
+		const float2 a,
+		const float2 b,
+		const double2 c
+		) {
+	const auto dbl_a = cuComplexFloatToDouble(a);
+	const auto dbl_b = cuComplexFloatToDouble(a);
+	return make_cuDoubleComplex(
+			dbl_a.x * dbl_b.x - dbl_a.y * dbl_b.y + c.x,
+			dbl_a.y * dbl_b.x + dbl_a.x * dbl_b.y + c.y
+			);
+}
+
+template <class T>
+struct doubled_t {using type = double;};
+template <> struct doubled_t<cuComplex> {using type = cuDoubleComplex;};
+
+template <class T>
+__device__ T load_with_op(
+		const T* const ptr,
+		cublasOperation_t op
+		) {
+	return *ptr;
+}
+
+template <>
+__device__ cuComplex load_with_op<cuComplex>(
+		const cuComplex* const ptr,
+		cublasOperation_t op
+		) {
+	if (op == CUBLAS_OP_C) {
+		const auto v = *ptr;
+		return make_cuComplex(v.x, -v.y);
+	}
+	return *ptr;
+}
+
+__device__ double diff2(
+		const cuDoubleComplex ab,
+		const cuComplex c
+		) {
+	const auto real_diff = ab.x - c.x;
+	const auto imag_diff = ab.y - c.y;
+	return real_diff * real_diff + imag_diff * imag_diff;
+}
+__device__ double diff2(
+		const double ab,
+		const float c
+		) {
+	const auto diff = ab - c;
+	return diff * diff;
+}
+__device__ double norm2(
+		const cuDoubleComplex a
+		) {
+	return a.x * a.x + a.y * a.y;
+}
+__device__ double norm2(
+		const double a
+		) {
+	return a * a;
+}
+
+
+template <class T>
+__global__ void calc_matmul_residual_kernel(
+		double* const base_norm2_ptr,
+		double* const diff_norm2_ptr,
+		const cublasOperation_t op_A,
+		const cublasOperation_t op_B,
+		const unsigned m,
+		const unsigned n,
+		const unsigned k,
+		const T* const a_ptr, const unsigned lda,
+		const T* const b_ptr, const unsigned ldb,
+		const T* const c_ptr, const unsigned ldc
+		) {
+	const auto tid = blockDim.x * blockIdx.x + threadIdx.x;
+	if (tid >= m * n) return;
+
+	const auto c_m = tid % m;
+	const auto c_n = tid / m;
+
+	typename doubled_t<T>::type c = 0;
+	for (std::size_t ik = 0; ik < k; ik++) {
+		std::size_t a_index = 0;
+		if (op_A == CUBLAS_OP_C || op_A == CUBLAS_OP_N) {
+			a_index = c_m + ik * lda;
+		} else {
+			a_index = ik + c_m * lda;
+		}
+
+		std::size_t b_index = 0;
+		if (op_B == CUBLAS_OP_C || op_B == CUBLAS_OP_N) {
+			b_index = ik + c_n * ldb;
+		} else {
+			b_index = c_n + ik * ldb;
+		}
+
+		c = mad(
+				load_with_op(a_ptr + a_index, op_A),
+				load_with_op(b_ptr + b_index, op_B),
+				c
+				);
+	}
+	const auto base_norm2 = norm2(c);
+	const auto diff_norm2 = diff2(c, c_ptr[c_m + c_n * ldc]);
+
+	atomicAdd(base_norm2_ptr, base_norm2);
+	atomicAdd(diff_norm2_ptr, diff_norm2);
+}
+
+template <class T>
+double calc_matmul_residual(
+		const cublasOperation_t op_A,
+		const cublasOperation_t op_B,
+		const unsigned m,
+		const unsigned n,
+		const unsigned k,
+		const T* const a_ptr, const unsigned lda,
+		const T* const b_ptr, const unsigned ldb,
+		const T* const c_ptr, const unsigned ldc
+		) {
+	auto base_norm2_ptr = cutf::memory::malloc_managed<double>(1);
+	auto diff_norm2_ptr = cutf::memory::malloc_managed<double>(1);
+
+	*base_norm2_ptr = 0;
+	*diff_norm2_ptr = 0;
+
+	constexpr unsigned block_size = 256;
+	const auto num_threads = m * n;
+	const auto grid_size = (num_threads + block_size - 1) / block_size;
+
+	cudaDeviceSynchronize();
+	calc_matmul_residual_kernel<<<grid_size, block_size>>>(
+			base_norm2_ptr, diff_norm2_ptr,
+			op_A, op_B,
+			m, n, k,
+			a_ptr, lda,
+			b_ptr, ldb,
+			c_ptr, ldc
+			);
+	cudaDeviceSynchronize();
+
+	const auto residual = std::sqrt(*diff_norm2_ptr / *base_norm2_ptr);
+
+	cutf::memory::free(base_norm2_ptr);
+	cutf::memory::free(diff_norm2_ptr);
+
+	return residual;
+}
+
+void sgemm_test_core(
 		cublasHandle_t const cublas_handle,
 		const cublasOperation_t op_A,
 		const cublasOperation_t op_B,
@@ -47,46 +219,34 @@ void test(
 	}
 	CUTF_CHECK_ERROR(cudaDeviceSynchronize());
 
-	double base_norm2 = 0.;
-	double diff_norm2 = 0.;
-
-	for (unsigned i = 0; i < m; i++) {
-		for (unsigned j = 0; j < n; j++) {
-			double c = 0.;
-			for (unsigned l = 0; l < k; l++) {
-				const auto a_index = (op_A == CUBLAS_OP_N) ? (i + lda * l) : (l + lda * i);
-				const auto b_index = (op_B == CUBLAS_OP_N) ? (l + ldb * j) : (j + ldb * l);
-
-				c += static_cast<double>(a_ptr[a_index]) * static_cast<double>(b_ptr[b_index]);
-			}
-
-			const auto diff = c - c_ptr[i + j * ldc];
-			base_norm2 += c * c;
-			diff_norm2 += diff * diff;
-		}
-	}
-
-	const auto residual = std::sqrt(diff_norm2 / base_norm2);
-	std::printf("%s,%s,%s,%u,%u,%u,%e\n",
+	const auto residual = calc_matmul_residual(
+					op_A, op_B,
+					m, n, k,
+					a_ptr, lda,
+					b_ptr, ldb,
+					c_ptr, ldc
+			);
+	std::printf("%s,%s,%s,%u,%u,%u,%e,%s\n",
 			cuMpSGEMM_get_compute_mode_string(compute_mode),
 			(op_A == CUBLAS_OP_N) ? "N" : "T",
 			(op_B == CUBLAS_OP_N) ? "N" : "T",
 			m, n, k,
-			residual
+			residual,
+			(residual < error_threshold(compute_mode, m) ? "OK" : "NG")
 			);
 }
 
 int main() {
-	float* a_ptr = cutf::memory::malloc_managed<float>((1lu << (max_log_N * 2)));
-	float* b_ptr = cutf::memory::malloc_managed<float>((1lu << (max_log_N * 2)));
-	float* c_ptr = cutf::memory::malloc_managed<float>((1lu << (max_log_N * 2)));
+	constexpr uint64_t seed = 0;
+	constexpr std::size_t max_num_elements = (1lu << (max_log_N * 2));
+	float* a_ptr = cutf::memory::malloc<float>(max_num_elements);
+	float* b_ptr = cutf::memory::malloc<float>(max_num_elements);
+	float* c_ptr = cutf::memory::malloc<float>(max_num_elements);
 
-	std::mt19937 mt(0);
-	std::uniform_real_distribution<float> dist(-1.f, 1.f);
-	for (unsigned i = 0; i < (1lu << (max_log_N * 2)); i++) {
-		a_ptr[i] = dist(mt);
-		b_ptr[i] = dist(mt);
-	}
+	auto curand_gen = cutf::curand::get_curand_unique_ptr(CURAND_RNG_PSEUDO_PHILOX4_32_10);
+	CUTF_CHECK_ERROR(curandSetPseudoRandomGeneratorSeed(*curand_gen.get(), seed));
+	CUTF_CHECK_ERROR(cutf::curand::generate_uniform(*curand_gen.get(), a_ptr, max_num_elements));
+	CUTF_CHECK_ERROR(cutf::curand::generate_uniform(*curand_gen.get(), b_ptr, max_num_elements));
 
 	std::vector<cuMpSGEMM_compute_mode_t> modes = {
 		CUMPSGEMM_CUBLAS,
@@ -95,21 +255,29 @@ int main() {
 		CUMPSGEMM_TF32TCEC,
 		CUMPSGEMM_TF32TC,
 	};
+	std::vector<cublasOperation_t> ops = {
+		CUBLAS_OP_N,
+		CUBLAS_OP_T
+	};
 
 	auto cublas_handle_uptr = cutf::cublas::get_cublas_unique_ptr();
 	for (const auto mode : modes) {
-		for (unsigned log_N = min_log_N; log_N <= max_log_N; log_N += log_N_interval) {
-			const auto N = 1u << log_N;
-			test(
-					*cublas_handle_uptr.get(),
-					CUBLAS_OP_N,
-					CUBLAS_OP_N,
-					N, N, N,
-					a_ptr, N,
-					b_ptr, N,
-					c_ptr, N,
-					mode
-					);
+		for (const auto op_A : ops) {
+			for (const auto op_B : ops) {
+				for (unsigned log_N = min_log_N; log_N <= max_log_N; log_N += log_N_interval) {
+					const auto N = 1u << log_N;
+					sgemm_test_core(
+							*cublas_handle_uptr.get(),
+							op_A,
+							op_B,
+							N, N, N,
+							a_ptr, N,
+							b_ptr, N,
+							c_ptr, N,
+							mode
+							);
+				}
+			}
 		}
 	}
 	CUTF_CHECK_ERROR(cudaDeviceSynchronize());

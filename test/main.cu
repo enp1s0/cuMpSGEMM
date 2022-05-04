@@ -288,8 +288,8 @@ void sgemm_test_core(
 	std::printf("%s,%s,%s,%s,%u,%u,%u,%e,%s\n",
 			(std::is_same<float, T>::value ? "sgemm" : "cgemm"),
 			cuMpSGEMM_get_compute_mode_string(compute_mode),
-			(op_A == CUBLAS_OP_N) ? "N" : "T",
-			(op_B == CUBLAS_OP_N) ? "N" : "T",
+			(op_A == CUBLAS_OP_N) ? "N" : ((op_A == CUBLAS_OP_T) ? "T" : "C"),
+			(op_B == CUBLAS_OP_N) ? "N" : ((op_B == CUBLAS_OP_T) ? "T" : "C"),
 			m, n, k,
 			residual,
 			(residual < error_threshold(compute_mode, m) ? "OK" : "NG")
@@ -316,15 +316,20 @@ int main() {
 		CUMPSGEMM_TF32TCEC,
 		CUMPSGEMM_TF32TC,
 	};
-	std::vector<cublasOperation_t> ops = {
+	std::vector<cublasOperation_t> sgemm_ops = {
 		CUBLAS_OP_N,
 		CUBLAS_OP_T
+	};
+	std::vector<cublasOperation_t> cgemm_ops = {
+		CUBLAS_OP_N,
+		CUBLAS_OP_T,
+		CUBLAS_OP_C
 	};
 
 	auto cublas_handle_uptr = cutf::cublas::get_cublas_unique_ptr();
 	for (const auto mode : modes) {
-		for (const auto op_A : ops) {
-			for (const auto op_B : ops) {
+		for (const auto op_A : sgemm_ops) {
+			for (const auto op_B : sgemm_ops) {
 				for (unsigned log_N = min_log_N; log_N <= max_log_N; log_N += log_N_interval) {
 					const auto N = 1u << log_N;
 					sgemm_test_core(
@@ -342,8 +347,8 @@ int main() {
 		}
 	}
 	for (const auto mode : modes) {
-		for (const auto op_A : ops) {
-			for (const auto op_B : ops) {
+		for (const auto op_A : cgemm_ops) {
+			for (const auto op_B : cgemm_ops) {
 				for (unsigned log_N = min_log_N; log_N <= max_log_N; log_N += log_N_interval) {
 					const auto N = 1u << log_N;
 					sgemm_test_core(

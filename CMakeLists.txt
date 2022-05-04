@@ -30,6 +30,15 @@ file(GLOB HEADERS "${INCDIR}/cumpsgemm/*.hpp")
 file(GLOB INSTANCES "${SRCDIR}/instances/*.cu")
 
 ## main library
+add_library(cumpsgemm_static STATIC
+	${SRCDIR}/cumpsgemm.cu
+	${INSTANCES}
+	${HEADERS}
+	)
+
+target_include_directories(cumpsgemm_static PUBLIC ${INCDIR} ${SUBMODULEDIR}/cutf/include ${SUBMODULEDIR}/wmma_extension/include)
+
+## shared library
 add_library(cumpsgemm SHARED
 	${SRCDIR}/cumpsgemm.cu
 	${INSTANCES}
@@ -37,9 +46,6 @@ add_library(cumpsgemm SHARED
 	)
 
 target_include_directories(cumpsgemm PUBLIC ${INCDIR} ${SUBMODULEDIR}/cutf/include ${SUBMODULEDIR}/wmma_extension/include)
-target_link_libraries(cumpsgemm PRIVATE
-	cuda
-	)
 
 ## Default rule library
 add_library(cumpsgemm_rule SHARED

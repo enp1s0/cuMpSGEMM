@@ -22,11 +22,12 @@ set(SRCDIR src)
 set(SUBMODULEDIR submodules)
 
 file(GLOB HEADERS "${INCDIR}/cumpsgemm/*.hpp")
+file(GLOB INSTANCES "${SRCDIR}/instances/*.cu")
 
 ## main library
 add_library(cumpsgemm SHARED
 	${SRCDIR}/cumpsgemm.cu
-	${SRCDIR}/cumpsgemm_kernel.cu
+	${INSTANCES}
 	${HEADERS}
 	)
 

@@ -58,6 +58,6 @@ echo "// build (e.g. make)"
 
 echo ""
 echo "#-- Hijack dynamic library"
-echo "// Adter compiling the target application, "
+echo "// After compiling the target application, "
 echo "export LD_PRELOAD=$(pwd)/${hijack_lib_dir}/libcumpsgemm.so:\$LD_PRELOAD"
 echo "// and execute it as usual (e.g. ./a.out)"

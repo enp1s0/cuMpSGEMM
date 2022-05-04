@@ -16,6 +16,11 @@ endforeach()
 # CUDA (1/2)
 SET(CMAKE_CUDA_ARCHITECTURES 80 86)
 
+# Generate template instance files
+set(GEN_CMD "${CMAKE_CURRENT_SOURCE_DIR}/src/instances/gencode.sh")
+message("GEN_CMD: ${GEN_CMD}")
+execute_process(COMMAND ${GEN_CMD} WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/src/instances")
+
 # Directories
 set(INCDIR include)
 set(SRCDIR src)

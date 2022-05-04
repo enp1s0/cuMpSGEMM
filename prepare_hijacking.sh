@@ -40,12 +40,21 @@ if [ "$?" -ne "0" ];then
 	exit 1
 fi
 
-# Copy libcublas.so
-echo "Copying a shared library..."
+# Copy shared library
+echo "Copying libcumpsgemm.so..."
 cp ${build_dir}/libcumpsgemm.so ${hijack_lib_dir}
 
 if [ "$?" -ne "0" ];then
 	echo "Failed to copy the dynamic library"
+	exit 1
+fi
+
+# Copy rule library
+echo "Copying libcumpsgemm_rule.so..."
+cp ${build_dir}/libcumpsgemm_rule.so ${hijack_lib_dir}
+
+if [ "$?" -ne "0" ];then
+	echo "Failed to copy the default rule library"
 	exit 1
 fi
 
@@ -54,10 +63,12 @@ echo "Done!"
 echo ""
 echo "#-- Hijack static library"
 echo "export LIBRARY_PATH=$(pwd)/${hijack_lib_dir}:\$LIBRARY_PATH"
+echo "export LD_LIBRARY_PATH=$(pwd)/${hijack_lib_dir}:\$LD_LIBRARY_PATH"
 echo "// build (e.g. make)"
 
 echo ""
 echo "#-- Hijack dynamic library"
 echo "// After compiling the target application, "
 echo "export LD_PRELOAD=$(pwd)/${hijack_lib_dir}/libcumpsgemm.so:\$LD_PRELOAD"
+echo "export LD_LIBRARY_PATH=$(pwd)/${hijack_lib_dir}:\$LD_LIBRARY_PATH"
 echo "// and execute it as usual (e.g. ./a.out)"

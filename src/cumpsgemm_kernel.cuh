@@ -19,9 +19,9 @@ constexpr unsigned warp_size = 32;
 
 // smem size
 template <unsigned SMEM_M, unsigned SMEM_N, unsigned SKEW, class Layout>
-struct get_smem_size                                             {static constexpr unsigned value = (SMEM_M + SKEW) * SMEM_N;};
+struct get_smem_size                                             {static constexpr unsigned value = (SMEM_N + SKEW) * SMEM_M;};
 template <unsigned SMEM_M, unsigned SMEM_N, unsigned SKEW>
-struct get_smem_size<SMEM_M, SMEM_N, SKEW, cumpsgemm::row_major> {static constexpr unsigned value = (SMEM_N + SKEW) * SMEM_M;};
+struct get_smem_size<SMEM_M, SMEM_N, SKEW, cumpsgemm::col_major> {static constexpr unsigned value = (SMEM_M + SKEW) * SMEM_N;};
 
 // leading dimension
 template <unsigned SMEM_M, unsigned SMEM_N, unsigned SKEW, class Layout>

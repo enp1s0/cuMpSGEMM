@@ -5,6 +5,7 @@
 #include <wmma_extension/utils.hpp>
 #include <cutf/cuda.hpp>
 #include <cutf/error.hpp>
+#include <cutf/cp_async.hpp>
 
 #include <cumpsgemm/cumpsgemm.h>
 #include <cumpsgemm/cumpsgemm.hpp>
@@ -40,6 +41,11 @@ template <class T>
 __device__ T zero() {return 0;}
 template <> __device__ cuComplex zero<cuComplex>() {return make_cuComplex(0, 0);}
 
+template <class T>
+struct size_of {static constexpr unsigned value = 0;};
+template <> struct size_of<float    > {static constexpr unsigned value = 4;};
+template <> struct size_of<cuComplex> {static constexpr unsigned value = 8;};
+
 // Dmem loader
 template <class T, unsigned SMEM_M, unsigned SMEM_N, unsigned SKEW, unsigned BLOCK_SIZE>
 struct dmem_loader_core {
@@ -54,13 +60,33 @@ struct dmem_loader_core {
 			const std::size_t size_n
 			) {
 		if (start_m + SMEM_M < size_m && start_n + SMEM_N < size_n) {
-			for (unsigned offset = 0; offset < SMEM_M * SMEM_N; offset += BLOCK_SIZE) {
-				const auto index = offset + threadIdx.x;
-				const auto m = index % SMEM_M;
-				const auto n = index / SMEM_M;
-				const auto smem_index = m + n * (SMEM_M + SKEW);
-				const auto dmem_index = (start_m + m) + (start_n + n) * ld;
-				smem_ptr[smem_index] = dmem_ptr[dmem_index];
+			if (ld % (16 / size_of<T>::value) == 0) {
+				for (unsigned offset = 0; offset < SMEM_M * SMEM_N; offset += BLOCK_SIZE * (16 / size_of<T>::value)) {
+					const auto index = offset + threadIdx.x * (16 / size_of<T>::value);
+					const auto m = index % SMEM_M;
+					const auto n = index / SMEM_M;
+					const auto smem_index = m + n * (SMEM_M + SKEW);
+					const auto dmem_index = (start_m + m) + (start_n + n) * ld;
+					cutf::cp_async::cp_async<16>(&smem_ptr[smem_index], &dmem_ptr[dmem_index]);
+				}
+			} else if ((ld % (8 / size_of<T>::value) == 0)) {
+				for (unsigned offset = 0; offset < SMEM_M * SMEM_N; offset += BLOCK_SIZE * (8 / size_of<T>::value)) {
+					const auto index = offset + threadIdx.x * (8 / size_of<T>::value);
+					const auto m = index % SMEM_M;
+					const auto n = index / SMEM_M;
+					const auto smem_index = m + n * (SMEM_M + SKEW);
+					const auto dmem_index = (start_m + m) + (start_n + n) * ld;
+					cutf::cp_async::cp_async<8>(&smem_ptr[smem_index], &dmem_ptr[dmem_index]);
+				}
+			} else if ((4 / size_of<T>::value != 0) && (ld % (4 / size_of<T>::value) == 0)) {
+				for (unsigned offset = 0; offset < SMEM_M * SMEM_N; offset += BLOCK_SIZE * (4 / size_of<T>::value)) {
+					const auto index = offset + threadIdx.x * (4 / size_of<T>::value);
+					const auto m = index % SMEM_M;
+					const auto n = index / SMEM_M;
+					const auto smem_index = m + n * (SMEM_M + SKEW);
+					const auto dmem_index = (start_m + m) + (start_n + n) * ld;
+					cutf::cp_async::cp_async<4>(&smem_ptr[smem_index], &dmem_ptr[dmem_index]);
+				}
 			}
 		} else {
 			for (unsigned offset = 0; offset < SMEM_M * SMEM_N; offset += BLOCK_SIZE) {
@@ -78,6 +104,7 @@ struct dmem_loader_core {
 				smem_ptr[smem_index] = v;
 			}
 		}
+		cutf::cp_async::commit();
 	}
 };
 
@@ -372,7 +399,6 @@ __global__ void gemm_kernel(
 			0, blockIdx.y * SMEM_N,
 			k, n
 			);
-	__syncthreads();
 	for (uint64_t bk = SMEM_K; bk < k; bk += SMEM_K) {
 		smem_buffer_id = (bk / SMEM_K) % 2;
 		a_dmem_loader(
@@ -389,6 +415,8 @@ __global__ void gemm_kernel(
 				bk, blockIdx.y * SMEM_N,
 				k, n
 				);
+		cutf::cp_async::wait_group<2>();
+		__syncthreads();
 		mma_smem<
 			T,
 			SMEM_M, SMEM_N, SMEM_K,
@@ -404,6 +432,8 @@ __global__ void gemm_kernel(
 				 );
 		__syncthreads();
 	}
+	cutf::cp_async::wait_group<2>();
+	__syncthreads();
 	mma_smem<
 		T,
 		SMEM_M, SMEM_N, SMEM_K,

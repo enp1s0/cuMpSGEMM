@@ -254,7 +254,7 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 				m, n, k
 				);
 
-	cuMpSGEMM_log(std::string(func_name) + "op=(" + get_cublas_op_str(op_A) + ", " + get_cublas_op_str(op_B) +
+	cuMpSGEMM_log(std::string(func_name) + " op=(" + get_cublas_op_str(op_A) + ", " + get_cublas_op_str(op_B) +
 			"), shape=(" + std::to_string(m) + ", " + std::to_string(n) + "," + std::to_string(k) + "), mode=" + cuMpSGEMM_get_compute_mode_string(compute_mode));
 
 	if (compute_mode == CUMPSGEMM_CUBLAS) {

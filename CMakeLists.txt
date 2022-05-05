@@ -46,6 +46,11 @@ add_library(cumpsgemm SHARED
 	)
 
 target_include_directories(cumpsgemm PUBLIC ${INCDIR} ${SUBMODULEDIR}/cutf/include ${SUBMODULEDIR}/wmma_extension/include)
+target_link_libraries(cumpsgemm PRIVATE
+	cublas_static
+	cublasLt_static
+	culibos
+	)
 
 ## Default rule library
 add_library(cumpsgemm_rule SHARED

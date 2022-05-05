@@ -120,14 +120,14 @@ __global__ void calc_matmul_residual_kernel(
 	auto c = zero<typename doubled_t<T>::type>();
 	for (std::size_t ik = 0; ik < k; ik++) {
 		std::size_t a_index = 0;
-		if (op_A == CUBLAS_OP_C || op_A == CUBLAS_OP_N) {
+		if (op_A == CUBLAS_OP_N) {
 			a_index = c_m + ik * lda;
 		} else {
 			a_index = ik + c_m * lda;
 		}
 
 		std::size_t b_index = 0;
-		if (op_B == CUBLAS_OP_C || op_B == CUBLAS_OP_N) {
+		if (op_B == CUBLAS_OP_N) {
 			b_index = ik + c_n * ldb;
 		} else {
 			b_index = c_n + ik * ldb;
@@ -239,7 +239,7 @@ void cublas_gemm(
 }
 
 template <class T>
-void sgemm_test_core(
+int sgemm_test_core(
 		cublasHandle_t const cublas_handle,
 		const cublasOperation_t op_A,
 		const cublasOperation_t op_B,
@@ -285,6 +285,7 @@ void sgemm_test_core(
 					b_ptr, ldb,
 					c_ptr, ldc
 			);
+	const auto check = residual < error_threshold(compute_mode, m);
 	std::printf("%s,%s,%s,%s,%u,%u,%u,%e,%s\n",
 			(std::is_same<float, T>::value ? "sgemm" : "cgemm"),
 			cuMpSGEMM_get_compute_mode_string(compute_mode),
@@ -292,9 +293,15 @@ void sgemm_test_core(
 			(op_B == CUBLAS_OP_N) ? "N" : ((op_B == CUBLAS_OP_T) ? "T" : "C"),
 			m, n, k,
 			residual,
-			(residual < error_threshold(compute_mode, m) ? "OK" : "NG")
+			(check ? "OK" : "NG")
 			);
 	std::fflush(stdout);
+
+	if (check) {
+		return 0;
+	} else {
+		return 1;
+	}
 }
 
 int main() {
@@ -326,13 +333,15 @@ int main() {
 		CUBLAS_OP_C
 	};
 
+	unsigned num_tests = 0;
+	unsigned num_passed = 0;
 	auto cublas_handle_uptr = cutf::cublas::get_cublas_unique_ptr();
 	for (const auto mode : modes) {
 		for (const auto op_A : sgemm_ops) {
 			for (const auto op_B : sgemm_ops) {
 				for (unsigned log_N = min_log_N; log_N <= max_log_N; log_N += log_N_interval) {
 					const auto N = 1u << log_N;
-					sgemm_test_core(
+					const auto res = sgemm_test_core(
 							*cublas_handle_uptr.get(),
 							op_A,
 							op_B,
@@ -342,6 +351,10 @@ int main() {
 							c_ptr, N,
 							mode
 							);
+					num_tests++;
+					if (res == 0) {
+						num_passed++;
+					}
 				}
 			}
 		}
@@ -351,7 +364,7 @@ int main() {
 			for (const auto op_B : cgemm_ops) {
 				for (unsigned log_N = min_log_N; log_N <= max_log_N; log_N += log_N_interval) {
 					const auto N = 1u << log_N;
-					sgemm_test_core(
+					const auto res = sgemm_test_core(
 							*cublas_handle_uptr.get(),
 							op_A,
 							op_B,
@@ -361,11 +374,20 @@ int main() {
 							reinterpret_cast<cuComplex*>(c_ptr), N,
 							mode
 							);
+					num_tests++;
+					if (res == 0) {
+						num_passed++;
+					}
 				}
 			}
 		}
 	}
 	CUTF_CHECK_ERROR(cudaDeviceSynchronize());
+
+	std::printf("Result : %u / %u passed\n",
+			num_passed,
+			num_tests
+			);
 
 	cutf::memory::free(a_ptr);
 	cutf::memory::free(b_ptr);

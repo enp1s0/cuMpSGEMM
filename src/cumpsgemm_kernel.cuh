@@ -128,9 +128,8 @@ struct dmem_loader<cumpsgemm::row_major, T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE> {
 };
 
 template <unsigned SMEM_M, unsigned SMEM_N, unsigned SKEW, unsigned BLOCK_SIZE>
-struct dmem_loader<cumpsgemm::conjugate, cuComplex, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE> {
-	using Layout = cumpsgemm::col_major;
-	__device__ dmem_loader(){}
+struct dmem_loader_conj_core {
+	__device__ dmem_loader_conj_core(){}
 	__device__ void operator() (
 			cuComplex* const smem_ptr,
 			const cuComplex* const dmem_ptr,
@@ -167,6 +166,29 @@ struct dmem_loader<cumpsgemm::conjugate, cuComplex, SMEM_M, SMEM_N, SKEW, BLOCK_
 				smem_ptr[smem_index] = v;
 			}
 		}
+	}
+};
+
+template <unsigned SMEM_M, unsigned SMEM_N, unsigned SKEW, unsigned BLOCK_SIZE>
+struct dmem_loader<cumpsgemm::conjugate, cuComplex, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE> {
+	using Layout = cumpsgemm::row_major;
+	__device__ dmem_loader(){}
+	__device__ void operator() (
+			cuComplex* const smem_ptr,
+			const cuComplex* const dmem_ptr,
+			const std::size_t ld,
+			const std::size_t start_m,
+			const std::size_t start_n,
+			const std::size_t size_m,
+			const std::size_t size_n
+			) {
+		dmem_loader_conj_core<SMEM_N, SMEM_M, SKEW, BLOCK_SIZE>{}(
+				smem_ptr,
+				dmem_ptr,
+				ld,
+				start_n, start_m,
+				size_n, size_m
+				);
 	}
 };
 

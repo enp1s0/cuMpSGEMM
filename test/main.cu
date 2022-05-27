@@ -1,5 +1,6 @@
 #include <iostream>
 #include <vector>
+#include <chrono>
 #include <cutf/curand.hpp>
 #include <cutf/memory.hpp>
 #include <cutf/cublas.hpp>
@@ -253,29 +254,34 @@ int sgemm_test_core(
 		) {
 	const auto alpha = one<T>(), beta = zero<T>();
 
-	if (compute_mode == CUMPSGEMM_CUBLAS) {
-		cublas_gemm(
-				cublas_handle,
-				op_A, op_B,
-				m, n, k,
-				&alpha,
-				a_ptr, lda,
-				b_ptr, ldb,
-				&beta,
-				c_ptr, ldc
-				);
-	} else {
-		cumpsgemm::gemm(
-				op_A, op_B,
-				m, n, k,
-				&alpha,
-				a_ptr, lda,
-				b_ptr, ldb,
-				&beta,
-				c_ptr, ldc,
-				compute_mode
-				);
-	}
+	auto gemm_func = [&]() {
+		if (compute_mode == CUMPSGEMM_CUBLAS) {
+			cublas_gemm(
+					cublas_handle,
+					op_A, op_B,
+					m, n, k,
+					&alpha,
+					a_ptr, lda,
+					b_ptr, ldb,
+					&beta,
+					c_ptr, ldc
+					);
+		} else {
+			cumpsgemm::gemm(
+					op_A, op_B,
+					m, n, k,
+					&alpha,
+					a_ptr, lda,
+					b_ptr, ldb,
+					&beta,
+					c_ptr, ldc,
+					compute_mode
+					);
+		}
+	};
+
+	gemm_func();
+
 	CUTF_CHECK_ERROR(cudaDeviceSynchronize());
 
 	const auto residual = calc_matmul_residual(
@@ -286,12 +292,26 @@ int sgemm_test_core(
 					c_ptr, ldc
 			);
 	const auto check = residual < error_threshold(compute_mode, m);
-	std::printf("%s,%s,%s,%s,%u,%u,%u,%e,%s\n",
+
+	// Throughput
+	constexpr unsigned test_count = 16;
+	CUTF_CHECK_ERROR(cudaDeviceSynchronize());
+	const auto start_clock = std::chrono::system_clock::now();
+	for (unsigned i = 0; i < test_count; i++) {
+		gemm_func();
+	}
+	CUTF_CHECK_ERROR(cudaDeviceSynchronize());
+	const auto end_clock = std::chrono::system_clock::now();
+	const auto elapsed_time = std::chrono::duration_cast<std::chrono::microseconds>(end_clock - start_clock).count() * 1e-6;
+	const auto throughput = 2lu * m * n * k * (std::is_same<float, T>::value ? 1 : 4) / (elapsed_time / test_count);
+
+	std::printf("%s,%s,%s,%s,%u,%u,%u,%e,%e,%s\n",
 			(std::is_same<float, T>::value ? "sgemm" : "cgemm"),
 			cuMpSGEMM_get_compute_mode_string(compute_mode),
 			(op_A == CUBLAS_OP_N) ? "N" : ((op_A == CUBLAS_OP_T) ? "T" : "C"),
 			(op_B == CUBLAS_OP_N) ? "N" : ((op_B == CUBLAS_OP_T) ? "T" : "C"),
 			m, n, k,
+			throughput * 1e-12,
 			residual,
 			(check ? "OK" : "NG")
 			);
@@ -333,6 +353,7 @@ int main() {
 		CUBLAS_OP_C
 	};
 
+	std::printf("type,mode,op_A,op_B,m,n,k,throughput_in_tflops,residual,check\n");
 	unsigned num_tests = 0;
 	unsigned num_passed = 0;
 	auto cublas_handle_uptr = cutf::cublas::get_cublas_unique_ptr();

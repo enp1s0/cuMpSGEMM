@@ -6,5 +6,6 @@
 
 ## Run
 ```bash
+export LD_PRELOAD=/path/to/libcumpsgemm.so
 python main.py
 ```

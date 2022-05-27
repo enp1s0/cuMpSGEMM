@@ -303,7 +303,7 @@ int sgemm_test_core(
 	CUTF_CHECK_ERROR(cudaDeviceSynchronize());
 	const auto end_clock = std::chrono::system_clock::now();
 	const auto elapsed_time = std::chrono::duration_cast<std::chrono::microseconds>(end_clock - start_clock).count() * 1e-6;
-	const auto throughput = 2lu * m * n * k / elapsed_time;
+	const auto throughput = 2lu * m * n * k * (std::is_same<float, T>::value ? 1 : 4) / (elapsed_time / test_count);
 
 	std::printf("%s,%s,%s,%s,%u,%u,%u,%e,%e,%s\n",
 			(std::is_same<float, T>::value ? "sgemm" : "cgemm"),

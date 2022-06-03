@@ -468,7 +468,7 @@ int sgemm_strided_batch_test_core(
 	}
 }
 
-void sgemm_test(const std::size_t min_N, const std::size_t max_N, const std::size_t interval) {
+void sgemm_test(const std::size_t min_N, const std::size_t max_N, const std::size_t interval, const bool only_cublas) {
 	constexpr uint64_t seed = 0;
 	const std::size_t max_num_elements = max_N * max_N * 2;
 	float* a_ptr = cutf::memory::malloc<float>(max_num_elements);
@@ -482,11 +482,15 @@ void sgemm_test(const std::size_t min_N, const std::size_t max_N, const std::siz
 
 	std::vector<cuMpSGEMM_compute_mode_t> modes = {
 		CUMPSGEMM_CUBLAS,
-		CUMPSGEMM_FP16TCEC,
-		CUMPSGEMM_FP16TC,
-		CUMPSGEMM_TF32TCEC,
-		CUMPSGEMM_TF32TC,
 	};
+
+	if (!only_cublas) {
+		modes.push_back(CUMPSGEMM_FP16TCEC);
+		modes.push_back(CUMPSGEMM_FP16TC);
+		modes.push_back(CUMPSGEMM_TF32TCEC);
+		modes.push_back(CUMPSGEMM_TF32TC);
+	}
+
 	std::vector<cublasOperation_t> sgemm_ops = {
 		CUBLAS_OP_N,
 		CUBLAS_OP_T
@@ -558,7 +562,7 @@ void sgemm_test(const std::size_t min_N, const std::size_t max_N, const std::siz
 	cutf::memory::free(c_ptr);
 }
 
-void sgemm_strided_batch_test(const std::size_t min_N, const std::size_t max_N, const std::size_t interval, const std::size_t batch_count) {
+void sgemm_strided_batch_test(const std::size_t min_N, const std::size_t max_N, const std::size_t interval, const std::size_t batch_count, const bool only_cublas) {
 	constexpr uint64_t seed = 0;
 	const std::size_t max_num_elements = max_N * max_N * batch_count * 2;
 	float* a_ptr = cutf::memory::malloc<float>(max_num_elements);
@@ -570,13 +574,18 @@ void sgemm_strided_batch_test(const std::size_t min_N, const std::size_t max_N, 
 	CUTF_CHECK_ERROR(cutf::curand::generate_uniform(*curand_gen.get(), a_ptr, max_num_elements));
 	CUTF_CHECK_ERROR(cutf::curand::generate_uniform(*curand_gen.get(), b_ptr, max_num_elements));
 
+
 	std::vector<cuMpSGEMM_compute_mode_t> modes = {
 		CUMPSGEMM_CUBLAS,
-		CUMPSGEMM_FP16TCEC,
-		CUMPSGEMM_FP16TC,
-		CUMPSGEMM_TF32TCEC,
-		CUMPSGEMM_TF32TC,
 	};
+
+	if (!only_cublas) {
+		modes.push_back(CUMPSGEMM_FP16TCEC);
+		modes.push_back(CUMPSGEMM_FP16TC);
+		modes.push_back(CUMPSGEMM_TF32TCEC);
+		modes.push_back(CUMPSGEMM_TF32TC);
+	}
+
 	std::vector<cublasOperation_t> sgemm_ops = {
 		CUBLAS_OP_N,
 		CUBLAS_OP_T
@@ -653,8 +662,10 @@ void sgemm_strided_batch_test(const std::size_t min_N, const std::size_t max_N, 
 void print_usage(const char* program_name) {
 	std::fprintf(stderr,
 			"Usage : %s gemm [min_N] [max_N] [interval]\n"
-			"      : %s gemm_strided_batch [min_N] [max_N] [interval] [batch_count]\n",
-			program_name, program_name
+			"      : %s gemm_strided_batch [min_N] [max_N] [interval] [batch_count]\n"
+			"      : %s cublas_gemm [min_N] [max_N] [interval]\n"
+			"      : %s cublas_gemm_strided_batch [min_N] [max_N] [interval] [batch_count]\n",
+			program_name, program_name, program_name, program_name
 			);
 	std::fflush(stderr);
 }
@@ -672,13 +683,25 @@ int main(int argc, char** argv) {
 			print_usage(argv[0]);
 			return 1;
 		}
-		sgemm_test(std::stoi(argv[2]), std::stoi(argv[3]), std::stoi(argv[4]));
+		sgemm_test(std::stoi(argv[2]), std::stoi(argv[3]), std::stoi(argv[4]), false);
 	} else if (command == "gemm_strided_batch") {
 		if (argc < 1 + 1 + 3 + 1) {
 			print_usage(argv[0]);
 			return 1;
 		}
-		sgemm_strided_batch_test(std::stoi(argv[2]), std::stoi(argv[3]), std::stoi(argv[4]), std::stoi(argv[5]));
+		sgemm_strided_batch_test(std::stoi(argv[2]), std::stoi(argv[3]), std::stoi(argv[4]), std::stoi(argv[5]), false);
+	} else if (command == "cublas_gemm") {
+		if (argc < 1 + 1 + 3) {
+			print_usage(argv[0]);
+			return 1;
+		}
+		sgemm_test(std::stoi(argv[2]), std::stoi(argv[3]), std::stoi(argv[4]), true);
+	} else if (command == "cublas_gemm_strided_batch") {
+		if (argc < 1 + 1 + 3 + 1) {
+			print_usage(argv[0]);
+			return 1;
+		}
+		sgemm_strided_batch_test(std::stoi(argv[2]), std::stoi(argv[3]), std::stoi(argv[4]), std::stoi(argv[5]), true);
 	} else {
 		print_usage(argv[0]);
 		return 1;

@@ -5,7 +5,7 @@
 #include <cumpsgemm/cumpsgemm.hpp>
 
 namespace {
-const std::string debug_env_name = "CUMPSGEMM_DEBUG";
+const std::string debug_env_name = "CUMPSGEMM_INFO";
 void cuMpSGEMM_log(
 		const std::string str
 		) {

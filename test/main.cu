@@ -1,14 +1,11 @@
 #include <iostream>
 #include <vector>
+#include <string>
 #include <chrono>
 #include <cutf/curand.hpp>
 #include <cutf/memory.hpp>
 #include <cutf/cublas.hpp>
 #include <cumpsgemm/cumpsgemm.hpp>
-
-constexpr unsigned min_log_N = 5;
-constexpr unsigned max_log_N = 11;
-constexpr unsigned log_N_interval = 2;
 
 double error_threshold(
 		const cuMpSGEMM_compute_mode_t compute_mode,
@@ -239,6 +236,60 @@ void cublas_gemm(
 					));
 }
 
+void cublas_gemm_strided_batch(
+		cublasHandle_t const cublas_handle,
+		const cublasOperation_t op_A,
+		const cublasOperation_t op_B,
+		const unsigned m,
+		const unsigned n,
+		const unsigned k,
+		const float* const alpha,
+		const float* const a_ptr, const unsigned lda, const long long int stride_a,
+		const float* const b_ptr, const unsigned ldb, const long long int stride_b,
+		const float* const beta,
+		float* const c_ptr, const unsigned ldc, const long long int stride_c,
+		const long long int batch_count
+		) {
+		CUTF_CHECK_ERROR(cublasSgemmStridedBatched(
+					cublas_handle,
+					op_A, op_B,
+					m, n, k,
+					alpha,
+					a_ptr, lda, stride_a,
+					b_ptr, ldb, stride_b,
+					beta,
+					c_ptr, ldc, stride_c,
+					batch_count
+					));
+}
+
+void cublas_gemm_strided_batch(
+		cublasHandle_t const cublas_handle,
+		const cublasOperation_t op_A,
+		const cublasOperation_t op_B,
+		const unsigned m,
+		const unsigned n,
+		const unsigned k,
+		const cuComplex* const alpha,
+		const cuComplex* const a_ptr, const unsigned lda, const long long int stride_a,
+		const cuComplex* const b_ptr, const unsigned ldb, const long long int stride_b,
+		const cuComplex* const beta,
+		cuComplex* const c_ptr, const unsigned ldc, const long long int stride_c,
+		const long long int batch_count
+		) {
+		CUTF_CHECK_ERROR(cublasCgemmStridedBatched(
+					cublas_handle,
+					op_A, op_B,
+					m, n, k,
+					alpha,
+					a_ptr, lda, stride_a,
+					b_ptr, ldb, stride_b,
+					beta,
+					c_ptr, ldc, stride_c,
+					batch_count
+					));
+}
+
 template <class T>
 int sgemm_test_core(
 		cublasHandle_t const cublas_handle,
@@ -324,9 +375,102 @@ int sgemm_test_core(
 	}
 }
 
-int main() {
+template <class T>
+int sgemm_strided_batch_test_core(
+		cublasHandle_t const cublas_handle,
+		const cublasOperation_t op_A,
+		const cublasOperation_t op_B,
+		const unsigned m,
+		const unsigned n,
+		const unsigned k,
+		T* const a_ptr, const unsigned lda, const long long int stride_a,
+		T* const b_ptr, const unsigned ldb, const long long int stride_b,
+		T* const c_ptr, const unsigned ldc, const long long int stride_c,
+		const long long int batch_count,
+		const cuMpSGEMM_compute_mode_t compute_mode
+		) {
+	const auto alpha = one<T>(), beta = zero<T>();
+
+	auto gemm_func = [&]() {
+		if (compute_mode == CUMPSGEMM_CUBLAS) {
+			cublas_gemm_strided_batch(
+					cublas_handle,
+					op_A, op_B,
+					m, n, k,
+					&alpha,
+					a_ptr, lda, stride_a,
+					b_ptr, ldb, stride_b,
+					&beta,
+					c_ptr, ldc, stride_c,
+					batch_count
+					);
+		} else {
+			cumpsgemm::gemm_stridedBatch(
+					op_A, op_B,
+					m, n, k,
+					&alpha,
+					a_ptr, lda, stride_a,
+					b_ptr, ldb, stride_b,
+					&beta,
+					c_ptr, ldc, stride_c,
+					batch_count,
+					compute_mode
+					);
+		}
+	};
+
+	gemm_func();
+
+	CUTF_CHECK_ERROR(cudaDeviceSynchronize());
+
+	double residual = 0;
+	for (unsigned long long int b = 0; b < batch_count; b++) {
+	 	residual += calc_matmul_residual(
+					op_A, op_B,
+					m, n, k,
+					a_ptr + stride_a, lda,
+					b_ptr + stride_b, ldb,
+					c_ptr + stride_c, ldc
+			);
+	}
+	residual /= batch_count;
+	const auto check = residual < error_threshold(compute_mode, m);
+
+	// Throughput
+	constexpr unsigned test_count = 16;
+	CUTF_CHECK_ERROR(cudaDeviceSynchronize());
+	const auto start_clock = std::chrono::system_clock::now();
+	for (unsigned i = 0; i < test_count; i++) {
+		gemm_func();
+	}
+	CUTF_CHECK_ERROR(cudaDeviceSynchronize());
+	const auto end_clock = std::chrono::system_clock::now();
+	const auto elapsed_time = std::chrono::duration_cast<std::chrono::microseconds>(end_clock - start_clock).count() * 1e-6;
+	const auto throughput = 2lu * m * n * k * batch_count * (std::is_same<float, T>::value ? 1 : 4) / (elapsed_time / test_count);
+
+	std::printf("%s,%s,%s,%s,%u,%u,%u,%lld,%e,%e,%s\n",
+			(std::is_same<float, T>::value ? "sgemm" : "cgemm"),
+			cuMpSGEMM_get_compute_mode_string(compute_mode),
+			(op_A == CUBLAS_OP_N) ? "N" : ((op_A == CUBLAS_OP_T) ? "T" : "C"),
+			(op_B == CUBLAS_OP_N) ? "N" : ((op_B == CUBLAS_OP_T) ? "T" : "C"),
+			m, n, k,
+			batch_count,
+			throughput * 1e-12,
+			residual,
+			(check ? "OK" : "NG")
+			);
+	std::fflush(stdout);
+
+	if (check) {
+		return 0;
+	} else {
+		return 1;
+	}
+}
+
+void sgemm_test(const std::size_t min_N, const std::size_t max_N, const std::size_t interval) {
 	constexpr uint64_t seed = 0;
-	constexpr std::size_t max_num_elements = (1lu << (max_log_N * 2)) * 2;
+	const std::size_t max_num_elements = max_N * max_N;
 	float* a_ptr = cutf::memory::malloc<float>(max_num_elements);
 	float* b_ptr = cutf::memory::malloc<float>(max_num_elements);
 	float* c_ptr = cutf::memory::malloc<float>(max_num_elements);
@@ -353,6 +497,7 @@ int main() {
 		CUBLAS_OP_C
 	};
 
+	std::printf("## %s\n", __func__);
 	std::printf("type,mode,op_A,op_B,m,n,k,throughput_in_tflops,residual,check\n");
 	unsigned num_tests = 0;
 	unsigned num_passed = 0;
@@ -360,8 +505,7 @@ int main() {
 	for (const auto mode : modes) {
 		for (const auto op_A : sgemm_ops) {
 			for (const auto op_B : sgemm_ops) {
-				for (unsigned log_N = min_log_N; log_N <= max_log_N; log_N += log_N_interval) {
-					const auto N = 1u << log_N;
+				for (unsigned N = min_N; N < max_N; N += interval) {
 					const auto res = sgemm_test_core(
 							*cublas_handle_uptr.get(),
 							op_A,
@@ -383,8 +527,7 @@ int main() {
 	for (const auto mode : modes) {
 		for (const auto op_A : cgemm_ops) {
 			for (const auto op_B : cgemm_ops) {
-				for (unsigned log_N = min_log_N; log_N <= max_log_N; log_N += log_N_interval) {
-					const auto N = 1u << log_N;
+				for (unsigned N = min_N; N < max_N; N += interval) {
 					const auto res = sgemm_test_core(
 							*cublas_handle_uptr.get(),
 							op_A,
@@ -413,4 +556,131 @@ int main() {
 	cutf::memory::free(a_ptr);
 	cutf::memory::free(b_ptr);
 	cutf::memory::free(c_ptr);
+}
+
+void sgemm_strided_batch_test(const std::size_t min_N, const std::size_t max_N, const std::size_t interval, const std::size_t batch_count) {
+	constexpr uint64_t seed = 0;
+	const std::size_t max_num_elements = max_N * max_N * batch_count;
+	float* a_ptr = cutf::memory::malloc<float>(max_num_elements);
+	float* b_ptr = cutf::memory::malloc<float>(max_num_elements);
+	float* c_ptr = cutf::memory::malloc<float>(max_num_elements);
+
+	auto curand_gen = cutf::curand::get_curand_unique_ptr(CURAND_RNG_PSEUDO_PHILOX4_32_10);
+	CUTF_CHECK_ERROR(curandSetPseudoRandomGeneratorSeed(*curand_gen.get(), seed));
+	CUTF_CHECK_ERROR(cutf::curand::generate_uniform(*curand_gen.get(), a_ptr, max_num_elements));
+	CUTF_CHECK_ERROR(cutf::curand::generate_uniform(*curand_gen.get(), b_ptr, max_num_elements));
+
+	std::vector<cuMpSGEMM_compute_mode_t> modes = {
+		CUMPSGEMM_CUBLAS,
+		CUMPSGEMM_FP16TCEC,
+		CUMPSGEMM_FP16TC,
+		CUMPSGEMM_TF32TCEC,
+		CUMPSGEMM_TF32TC,
+	};
+	std::vector<cublasOperation_t> sgemm_ops = {
+		CUBLAS_OP_N,
+		CUBLAS_OP_T
+	};
+	std::vector<cublasOperation_t> cgemm_ops = {
+		CUBLAS_OP_N,
+		CUBLAS_OP_T,
+		CUBLAS_OP_C
+	};
+
+	std::printf("## %s\n", __func__);
+	std::printf("type,mode,op_A,op_B,m,n,k,batch_count,throughput_in_tflops,residual,check\n");
+	unsigned num_tests = 0;
+	unsigned num_passed = 0;
+	auto cublas_handle_uptr = cutf::cublas::get_cublas_unique_ptr();
+	for (const auto mode : modes) {
+		for (const auto op_A : sgemm_ops) {
+			for (const auto op_B : sgemm_ops) {
+				for (unsigned N = min_N; N < max_N; N += interval) {
+					const auto res = sgemm_strided_batch_test_core(
+							*cublas_handle_uptr.get(),
+							op_A,
+							op_B,
+							N, N, N,
+							a_ptr, N, max_N * max_N,
+							b_ptr, N, max_N * max_N,
+							c_ptr, N, max_N * max_N,
+							batch_count,
+							mode
+							);
+					num_tests++;
+					if (res == 0) {
+						num_passed++;
+					}
+				}
+			}
+		}
+	}
+	for (const auto mode : modes) {
+		for (const auto op_A : cgemm_ops) {
+			for (const auto op_B : cgemm_ops) {
+				for (unsigned N = min_N; N < max_N; N += interval) {
+					const auto res = sgemm_strided_batch_test_core(
+							*cublas_handle_uptr.get(),
+							op_A,
+							op_B,
+							N, N, N,
+							reinterpret_cast<cuComplex*>(a_ptr), N, max_N * max_N,
+							reinterpret_cast<cuComplex*>(b_ptr), N, max_N * max_N,
+							reinterpret_cast<cuComplex*>(c_ptr), N, max_N * max_N,
+							batch_count,
+							mode
+							);
+					num_tests++;
+					if (res == 0) {
+						num_passed++;
+					}
+				}
+			}
+		}
+	}
+	CUTF_CHECK_ERROR(cudaDeviceSynchronize());
+
+	std::printf("Result : %u / %u passed\n",
+			num_passed,
+			num_tests
+			);
+
+	cutf::memory::free(a_ptr);
+	cutf::memory::free(b_ptr);
+	cutf::memory::free(c_ptr);
+}
+
+void print_usage(const char* program_name) {
+	std::fprintf(stderr,
+			"Usage : %s gemm [min_N] [max_N] [interval]\n"
+			"      : %s gemm_strided_batch [min_N] [max_N] [interval] [batch_count]\n",
+			program_name, program_name
+			);
+	std::fflush(stderr);
+}
+
+int main(int argc, char** argv) {
+	if (argc < 2) {
+		print_usage(argv[0]);
+		return 1;
+	}
+
+	const std::string command = argv[1];
+
+	if (command == "gemm") {
+		if (argc < 1 + 1 + 3) {
+			print_usage(argv[0]);
+			return 1;
+		}
+		sgemm_test(std::stoi(argv[2]), std::stoi(argv[3]), std::stoi(argv[4]));
+	} else if (command == "gemm_strided_batch") {
+		if (argc < 1 + 1 + 3 + 1) {
+			print_usage(argv[0]);
+			return 1;
+		}
+		sgemm_strided_batch_test(std::stoi(argv[2]), std::stoi(argv[3]), std::stoi(argv[4]), std::stoi(argv[5]));
+	} else {
+		print_usage(argv[0]);
+		return 1;
+	}
 }

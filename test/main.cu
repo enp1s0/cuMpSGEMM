@@ -470,7 +470,7 @@ int sgemm_strided_batch_test_core(
 
 void sgemm_test(const std::size_t min_N, const std::size_t max_N, const std::size_t interval) {
 	constexpr uint64_t seed = 0;
-	const std::size_t max_num_elements = max_N * max_N;
+	const std::size_t max_num_elements = max_N * max_N * 2;
 	float* a_ptr = cutf::memory::malloc<float>(max_num_elements);
 	float* b_ptr = cutf::memory::malloc<float>(max_num_elements);
 	float* c_ptr = cutf::memory::malloc<float>(max_num_elements);
@@ -560,7 +560,7 @@ void sgemm_test(const std::size_t min_N, const std::size_t max_N, const std::siz
 
 void sgemm_strided_batch_test(const std::size_t min_N, const std::size_t max_N, const std::size_t interval, const std::size_t batch_count) {
 	constexpr uint64_t seed = 0;
-	const std::size_t max_num_elements = max_N * max_N * batch_count;
+	const std::size_t max_num_elements = max_N * max_N * batch_count * 2;
 	float* a_ptr = cutf::memory::malloc<float>(max_num_elements);
 	float* b_ptr = cutf::memory::malloc<float>(max_num_elements);
 	float* c_ptr = cutf::memory::malloc<float>(max_num_elements);

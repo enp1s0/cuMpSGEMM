@@ -505,7 +505,7 @@ void sgemm_test(const std::size_t min_N, const std::size_t max_N, const std::siz
 	for (const auto mode : modes) {
 		for (const auto op_A : sgemm_ops) {
 			for (const auto op_B : sgemm_ops) {
-				for (unsigned N = min_N; N < max_N; N += interval) {
+				for (unsigned N = min_N; N <= max_N; N += interval) {
 					const auto res = sgemm_test_core(
 							*cublas_handle_uptr.get(),
 							op_A,
@@ -527,7 +527,7 @@ void sgemm_test(const std::size_t min_N, const std::size_t max_N, const std::siz
 	for (const auto mode : modes) {
 		for (const auto op_A : cgemm_ops) {
 			for (const auto op_B : cgemm_ops) {
-				for (unsigned N = min_N; N < max_N; N += interval) {
+				for (unsigned N = min_N; N <= max_N; N += interval) {
 					const auto res = sgemm_test_core(
 							*cublas_handle_uptr.get(),
 							op_A,
@@ -595,7 +595,7 @@ void sgemm_strided_batch_test(const std::size_t min_N, const std::size_t max_N, 
 	for (const auto mode : modes) {
 		for (const auto op_A : sgemm_ops) {
 			for (const auto op_B : sgemm_ops) {
-				for (unsigned N = min_N; N < max_N; N += interval) {
+				for (unsigned N = min_N; N <= max_N; N += interval) {
 					const auto res = sgemm_strided_batch_test_core(
 							*cublas_handle_uptr.get(),
 							op_A,
@@ -618,7 +618,7 @@ void sgemm_strided_batch_test(const std::size_t min_N, const std::size_t max_N, 
 	for (const auto mode : modes) {
 		for (const auto op_A : cgemm_ops) {
 			for (const auto op_B : cgemm_ops) {
-				for (unsigned N = min_N; N < max_N; N += interval) {
+				for (unsigned N = min_N; N <= max_N; N += interval) {
 					const auto res = sgemm_strided_batch_test_core(
 							*cublas_handle_uptr.get(),
 							op_A,

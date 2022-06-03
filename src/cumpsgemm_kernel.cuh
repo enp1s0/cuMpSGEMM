@@ -495,8 +495,145 @@ __global__ void gemm_kernel(
 			);
 }
 
+template <
+	class T,
+	unsigned SMEM_M,
+	unsigned SMEM_N,
+	unsigned SMEM_K,
+	unsigned FRAG_M,
+	unsigned FRAG_N,
+	unsigned FRAG_K,
+	unsigned BLOCK_SIZE,
+	class A_DMEM_LOADER,
+	class B_DMEM_LOADER,
+	class C_DMEM_STORER,
+	class TC_T,
+	class EC
+>
+__global__ void gemm_batchStrided_kernel(
+		const uint64_t m,
+		const uint64_t n,
+		const uint64_t k,
+		const T alpha,
+		const T* const a_ptr, const uint64_t lda, const uint64_t stridea,
+		const T* const b_ptr, const uint64_t ldb, const uint64_t strideb,
+		const T beta,
+		T* const c_ptr, const uint64_t ldc, const uint64_t stridec,
+		const unsigned num_blocks_per_gemm
+		) {
+	extern __shared__ uint8_t smem_base[];
+	T* smem = reinterpret_cast<T*>(smem_base);
+	T* const a_smem_ptr = smem;
+	T* const b_smem_ptr = smem + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * 2;
+
+	A_DMEM_LOADER a_dmem_loader;
+	B_DMEM_LOADER b_dmem_loader;
+
+	const auto gemm_id = blockIdx.x / num_blocks_per_gemm;
+	const auto blockIdx_x = (blockIdx.x % num_blocks_per_gemm) % ((m + SMEM_M - 1) / SMEM_M);
+	const auto blockIdx_y = (blockIdx.x % num_blocks_per_gemm) / ((m + SMEM_M - 1) / SMEM_M);
+
+	const T* const a_dmem_ptr = a_ptr + gemm_id * stridea;
+	const T* const b_dmem_ptr = b_ptr + gemm_id * strideb;
+	T* const c_dmem_ptr = c_ptr + gemm_id * stridec;
+
+	constexpr unsigned frag_c_array_size = SMEM_M * SMEM_N / (FRAG_M * FRAG_N) / (BLOCK_SIZE / warp_size);
+	cumpsgemm::device::tc_fragment<T, nvcuda::wmma::accumulator, FRAG_M, FRAG_N, FRAG_K, void, TC_T, EC> frag_c[frag_c_array_size];
+	for (unsigned i = 0; i < frag_c_array_size; i++) {
+		cumpsgemm::device::fill_zero(frag_c[i]);
+	}
+
+	unsigned smem_buffer_id = 0;
+	a_dmem_loader(
+			a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * smem_buffer_id,
+			a_dmem_ptr,
+			lda,
+			blockIdx_x * SMEM_M, 0,
+			m, k
+			);
+	b_dmem_loader(
+			b_smem_ptr + get_smem_size<SMEM_K, SMEM_N, smem_B_skew, typename B_DMEM_LOADER::Layout>::value * smem_buffer_id,
+			b_dmem_ptr,
+			ldb,
+			0, blockIdx_y * SMEM_N,
+			k, n
+			);
+	for (uint64_t bk = SMEM_K; bk < k; bk += SMEM_K) {
+		smem_buffer_id = (bk / SMEM_K) % 2;
+		a_dmem_loader(
+				a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * smem_buffer_id,
+				a_dmem_ptr,
+				lda,
+				blockIdx_x * SMEM_M, bk,
+				m, k
+				);
+		b_dmem_loader(
+				b_smem_ptr + get_smem_size<SMEM_K, SMEM_N, smem_B_skew, typename B_DMEM_LOADER::Layout>::value * smem_buffer_id,
+				b_dmem_ptr,
+				ldb,
+				bk, blockIdx_y * SMEM_N,
+				k, n
+				);
+		cutf::cp_async::wait_group<2>();
+		__syncthreads();
+		mma_smem<
+			T,
+			SMEM_M, SMEM_N, SMEM_K,
+			FRAG_M, FRAG_N, FRAG_K,
+			BLOCK_SIZE,
+			typename A_DMEM_LOADER::Layout,
+			typename B_DMEM_LOADER::Layout,
+			TC_T,
+			EC>(
+					frag_c,
+					a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * (1 - smem_buffer_id),
+					b_smem_ptr + get_smem_size<SMEM_K, SMEM_N, smem_B_skew, typename B_DMEM_LOADER::Layout>::value * (1 - smem_buffer_id)
+				 );
+		__syncthreads();
+	}
+	cutf::cp_async::wait_group<2>();
+	__syncthreads();
+	mma_smem<
+		T,
+		SMEM_M, SMEM_N, SMEM_K,
+		FRAG_M, FRAG_N, FRAG_K,
+		BLOCK_SIZE,
+		typename A_DMEM_LOADER::Layout,
+		typename B_DMEM_LOADER::Layout,
+		TC_T,
+		EC>(
+				frag_c,
+				a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * smem_buffer_id,
+				b_smem_ptr + get_smem_size<SMEM_K, SMEM_N, smem_B_skew, typename B_DMEM_LOADER::Layout>::value * smem_buffer_id
+			 );
+	__syncthreads();
+
+	// register to smem
+	for (unsigned i = threadIdx.x / warp_size; i < (SMEM_M / FRAG_M) * (SMEM_N / FRAG_N); i += BLOCK_SIZE / warp_size) {
+		const unsigned bm = i % (SMEM_M / FRAG_M);
+		const unsigned bn = i / (SMEM_M / FRAG_M);
+		cumpsgemm::device::store_matrix(
+				smem + get_smem_index<SMEM_M, SMEM_N, smem_C_skew, cumpsgemm::col_major>{}(
+					bm * FRAG_M, bn * FRAG_N
+					),
+				frag_c[i],
+				SMEM_M + smem_C_skew
+				);
+	}
+	__syncthreads();
+
+	C_DMEM_STORER c_dmem_storer;
+	c_dmem_storer(
+			c_dmem_ptr, ldc,
+			blockIdx_x * SMEM_M, blockIdx_y * SMEM_N,
+			m, n,
+			smem,
+			alpha, beta
+			);
+}
+
 template <class T>
-using kernel_func_t = void (*)(
+using gemm_kernel_func_t = void (*)(
 			const uint64_t,
 			const uint64_t,
 			const uint64_t,
@@ -507,6 +644,18 @@ using kernel_func_t = void (*)(
 			T* const, const uint64_t
 			);
 
+template <class T>
+using gemm_stridedBatch_kernel_func_t = void (*)(
+			const uint64_t,
+			const uint64_t,
+			const uint64_t,
+			const T,
+			const T* const, const uint64_t, const uint64_t,
+			const T* const, const uint64_t, const uint64_t,
+			const T,
+			T* const, const uint64_t, const uint64_t,
+			const uint32_t
+			);
 
 template <
 	class T,
@@ -522,8 +671,37 @@ template <
 	class TC_T,
 	class EC
 >
-kernel_func_t<T> get_kernel_func_ptr() {
-	constexpr kernel_func_t<T> func_ptr = &(gemm_kernel<
+gemm_kernel_func_t<T> get_kernel_func_ptr() {
+	constexpr gemm_kernel_func_t<T> func_ptr = &(gemm_kernel<
+		T,
+		SMEM_M, SMEM_N, SMEM_K,
+		FRAG_M, FRAG_N, FRAG_K,
+		BLOCK_SIZE,
+		dmem_loader<OP_A, T, SMEM_M, SMEM_K, smem_A_skew, BLOCK_SIZE>,
+		dmem_loader<OP_B, T, SMEM_K, SMEM_N, smem_B_skew, BLOCK_SIZE>,
+		dmem_storer<T, SMEM_M, SMEM_N, smem_C_skew, BLOCK_SIZE>,
+		TC_T,
+		EC
+	>);
+	return func_ptr;
+}
+
+template <
+	class T,
+	unsigned SMEM_M,
+	unsigned SMEM_N,
+	unsigned SMEM_K,
+	unsigned FRAG_M,
+	unsigned FRAG_N,
+	unsigned FRAG_K,
+	unsigned BLOCK_SIZE,
+	class OP_A,
+	class OP_B,
+	class TC_T,
+	class EC
+>
+gemm_stridedBatch_kernel_func_t<T> get_stridedBatch_kernel_func_ptr() {
+	constexpr gemm_stridedBatch_kernel_func_t<T> func_ptr = &(gemm_batchStrided_kernel<
 		T,
 		SMEM_M, SMEM_N, SMEM_K,
 		FRAG_M, FRAG_N, FRAG_K,
@@ -607,6 +785,62 @@ void launch_kernel (
 			b_ptr, ldb,
 			beta,
 			c_ptr, ldc
+			);
+}
+
+template <
+	class T,
+	unsigned SMEM_M,
+	unsigned SMEM_N,
+	unsigned SMEM_K,
+	unsigned FRAG_M,
+	unsigned FRAG_N,
+	unsigned FRAG_K,
+	unsigned BLOCK_SIZE,
+	class OP_A,
+	class OP_B,
+	class TC_T,
+	class EC
+>
+void launch_stridedBatch_kernel (
+			const std::size_t m,
+			const std::size_t n,
+			const std::size_t k,
+			const T alpha,
+			const T* const a_ptr, const std::size_t lda, const std::size_t stridea,
+			const T* const b_ptr, const std::size_t ldb, const std::size_t strideb,
+			const T beta,
+			T* const c_ptr, const std::size_t ldc, const std::size_t stridec,
+			const std::size_t batch_count,
+			cudaStream_t cuda_stream
+		) {
+	const auto smem_size_in_byte = get_total_smem_size<
+		T,
+		SMEM_M, SMEM_N, SMEM_K,
+		OP_A, OP_B>();
+	const auto kernel_ptr = get_stridedBatch_kernel_func_ptr<
+		T,
+		SMEM_M, SMEM_N, SMEM_K,
+		FRAG_M, FRAG_N, FRAG_K,
+		BLOCK_SIZE,
+		OP_A, OP_B,
+		TC_T, EC>();
+	CUTF_CHECK_ERROR(cudaFuncSetAttribute(kernel_ptr, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size_in_byte));
+
+	const dim3 block_size(BLOCK_SIZE);
+	const auto num_blocks_per_gemm = (m + SMEM_M - 1) / SMEM_M * (n + SMEM_N - 1) / SMEM_N;
+	const dim3 grid_size(
+			num_blocks_per_gemm * batch_count
+			);
+
+	kernel_ptr<<<grid_size, block_size, smem_size_in_byte, cuda_stream>>>(
+			m, n, k,
+			alpha,
+			a_ptr, lda, stridea,
+			b_ptr, ldb, strideb,
+			beta,
+			c_ptr, ldc, stridec,
+			num_blocks_per_gemm
 			);
 }
 } // namespace cumpsgemm

@@ -75,5 +75,11 @@ To hijack the cuBLAS static library, the same name library is created.
 In this process, the build script decomposes the cuBLAS static library and composes the TCEC SGEMM and decomposed modules except sgemm.o etc.
 This is not the reverse engineering, decompiling or disassembling that is prohibited by [NVIDIA EULA](https://docs.nvidia.com/cuda/eula/index.html).
 
+## Test
+```
+Usage : ./build/cumpsgemm_test gemm [min_N] [max_N] [interval]
+      : ./build/cumpsgemm_test gemm_strided_batch [min_N] [max_N] [interval] [batch_count]
+```
+
 ## License
 MIT

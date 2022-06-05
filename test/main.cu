@@ -1,7 +1,9 @@
 #include <iostream>
 #include <vector>
 #include <string>
+#include <fstream>
 #include <chrono>
+#include <regex>
 #include <cutf/curand.hpp>
 #include <cutf/memory.hpp>
 #include <cutf/cublas.hpp>
@@ -342,7 +344,7 @@ int sgemm_test_core(
 					b_ptr, ldb,
 					c_ptr, ldc
 			);
-	const auto check = residual < error_threshold(compute_mode, m);
+	const auto check = residual < error_threshold(compute_mode, k);
 
 	// Throughput
 	constexpr unsigned test_count = 16;
@@ -659,13 +661,131 @@ void sgemm_strided_batch_test(const std::size_t min_N, const std::size_t max_N, 
 	cutf::memory::free(c_ptr);
 }
 
+// [cuMpSGEMM LOG] cublasCgemm_v2 op=(N, T), shape=(4, 128, 65536), mode=TF32TCEC
+void test_logged_shape(
+		const std::string log_path
+		) {
+	std::ifstream ifs(log_path);
+	if (!ifs) {
+		throw std::runtime_error("No such file : " + log_path);
+	}
+
+	auto cublas_handle_uptr = cutf::cublas::get_cublas_unique_ptr();
+	std::size_t num_passed = 0;
+	std::size_t num_tested = 0;
+	std::printf("## %s\n", __func__);
+	const std::string log_prefix = "[cuMpSGEMM LOG] ";
+	std::string buffer;
+	while (std::getline(ifs, buffer)) {
+		if (buffer.find(log_prefix) == std::string::npos) {
+			continue;
+		}
+		buffer = buffer.substr(log_prefix.length());
+		std::regex base_regex(R"((\w+) (.+), mode=(.+))");
+		std::smatch base_match;
+
+		std::string func = "";
+		std::string params = "";
+		std::string mode = "";
+		if (std::regex_match(buffer, base_match, base_regex)) {
+			func = base_match[1].str();
+			params = base_match[2].str();
+			mode = base_match[3].str();
+		}
+
+		if (func.length() * params.length() * mode.length() == 0) {
+			continue;
+		}
+
+		cuMpSGEMM_compute_mode_t compute_mode = CUMPSGEMM_CUBLAS;
+		if (mode == "FP16TC") {
+			compute_mode = CUMPSGEMM_FP16TC;
+		} else if (mode == "FP16TCEC") {
+			compute_mode = CUMPSGEMM_FP16TCEC;
+		} else if (mode == "TF32TC") {
+			compute_mode = CUMPSGEMM_TF32TC;
+		} else if (mode == "TF32TCEC") {
+			compute_mode = CUMPSGEMM_TF32TCEC;
+		} else {
+			throw std::runtime_error("Unknown compute mode : " + mode);
+		}
+
+		if (func == "cublasCgemm_v2" || func == "cublasSgemm_v2") {
+			std::regex param_regex(R"(op=\((.), (.)\), shape=\((\d+), (\d+), (\d+)\))");
+			std::smatch param_match;
+
+			std::size_t m = 0, n = 0, k = 0;
+			cublasOperation_t op_A, op_B;
+			if (std::regex_match(params, param_match, param_regex) && param_match.size() > 1) {
+				op_A = param_match[1].str() == "N" ? CUBLAS_OP_N : (param_match[1].str() == "T" ? CUBLAS_OP_T : CUBLAS_OP_C);
+				op_B = param_match[2].str() == "N" ? CUBLAS_OP_N : (param_match[2].str() == "T" ? CUBLAS_OP_T : CUBLAS_OP_C);
+				m = std::stoul(param_match[3].str());
+				n = std::stoul(param_match[4].str());
+				k = std::stoul(param_match[5].str());
+			} else {
+				throw std::runtime_error("Failed to parse parameters : " + params);
+			}
+
+			if (m * n * k == 0) {
+				throw std::runtime_error("Invalid shape : (" + std::to_string(m) + ", " + std::to_string(n) + ", " + std::to_string(k) + ")");
+			}
+			constexpr uint64_t seed = 0;
+
+			const std::size_t num_e = (func == "cublasSgemm_v2" ? 1 : 2);
+			float* a_ptr = cutf::memory::malloc<float>(m * k * num_e);
+			float* b_ptr = cutf::memory::malloc<float>(k * n * num_e);
+			float* c_ptr = cutf::memory::malloc<float>(m * n * num_e);
+
+			auto curand_gen = cutf::curand::get_curand_unique_ptr(CURAND_RNG_PSEUDO_PHILOX4_32_10);
+			CUTF_CHECK_ERROR(curandSetPseudoRandomGeneratorSeed(*curand_gen.get(), seed));
+			CUTF_CHECK_ERROR(cutf::curand::generate_uniform(*curand_gen.get(), a_ptr, m * k * num_e));
+			CUTF_CHECK_ERROR(cutf::curand::generate_uniform(*curand_gen.get(), b_ptr, k * n * num_e));
+			int res;
+			if (func == "cublasSgemm_v2") {
+				res = sgemm_test_core(
+						*cublas_handle_uptr.get(),
+						op_A,
+						op_B,
+						m, n, k,
+						a_ptr, (op_A == CUBLAS_OP_N ? m : k),
+						b_ptr, (op_B == CUBLAS_OP_N ? k : n),
+						c_ptr, m,
+						compute_mode
+						);
+			} else {
+				res = sgemm_test_core(
+						*cublas_handle_uptr.get(),
+						op_A,
+						op_B,
+						m, n, k,
+						reinterpret_cast<cuComplex*>(a_ptr), (op_A == CUBLAS_OP_N ? m : k),
+						reinterpret_cast<cuComplex*>(b_ptr), (op_B == CUBLAS_OP_N ? k : n),
+						reinterpret_cast<cuComplex*>(c_ptr), m,
+						compute_mode
+						);
+			}
+			if (res == 0) {
+				num_passed++;
+			}
+			num_tested++;
+
+			cutf::memory::free(a_ptr);
+			cutf::memory::free(b_ptr);
+			cutf::memory::free(c_ptr);
+		}
+	}
+	ifs.close();
+	std::printf("%lu / %lu passed\n", num_passed, num_tested);
+}
+
 void print_usage(const char* program_name) {
 	std::fprintf(stderr,
 			"Usage : %s gemm [min_N] [max_N] [interval]\n"
 			"      : %s gemm_strided_batch [min_N] [max_N] [interval] [batch_count]\n"
 			"      : %s cublas_gemm [min_N] [max_N] [interval]\n"
-			"      : %s cublas_gemm_strided_batch [min_N] [max_N] [interval] [batch_count]\n",
-			program_name, program_name, program_name, program_name
+			"      : %s cublas_gemm_strided_batch [min_N] [max_N] [interval] [batch_count]\n"
+			"      : %s log [/path/to/log]\n",
+			program_name, program_name, program_name, program_name, program_name
 			);
 	std::fflush(stderr);
 }
@@ -702,6 +822,12 @@ int main(int argc, char** argv) {
 			return 1;
 		}
 		sgemm_strided_batch_test(std::stoi(argv[2]), std::stoi(argv[3]), std::stoi(argv[4]), std::stoi(argv[5]), true);
+	} else if (command == "log") {
+		if (argc < 1 + 1 + 1) {
+			print_usage(argv[0]);
+			return 1;
+		}
+		test_logged_shape(argv[2]);
 	} else {
 		print_usage(argv[0]);
 		return 1;

@@ -344,7 +344,7 @@ int sgemm_test_core(
 					b_ptr, ldb,
 					c_ptr, ldc
 			);
-	const auto check = residual < error_threshold(compute_mode, m);
+	const auto check = residual < error_threshold(compute_mode, k);
 
 	// Throughput
 	constexpr unsigned test_count = 16;

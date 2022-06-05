@@ -406,19 +406,22 @@ __global__ void gemm_kernel(
 		cumpsgemm::device::fill_zero(frag_c[i]);
 	}
 
+	const auto blockIdx_x = (blockIdx.x) % ((m + SMEM_M - 1) / SMEM_M);
+	const auto blockIdx_y = (blockIdx.x) / ((m + SMEM_M - 1) / SMEM_M);
+
 	unsigned smem_buffer_id = 0;
 	a_dmem_loader(
 			a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * smem_buffer_id,
 			a_dmem_ptr,
 			lda,
-			blockIdx.x * SMEM_M, 0,
+			blockIdx_x * SMEM_M, 0,
 			m, k
 			);
 	b_dmem_loader(
 			b_smem_ptr + get_smem_size<SMEM_K, SMEM_N, smem_B_skew, typename B_DMEM_LOADER::Layout>::value * smem_buffer_id,
 			b_dmem_ptr,
 			ldb,
-			0, blockIdx.y * SMEM_N,
+			0, blockIdx_y * SMEM_N,
 			k, n
 			);
 	for (uint64_t bk = SMEM_K; bk < k; bk += SMEM_K) {
@@ -427,14 +430,14 @@ __global__ void gemm_kernel(
 				a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * smem_buffer_id,
 				a_dmem_ptr,
 				lda,
-				blockIdx.x * SMEM_M, bk,
+				blockIdx_x * SMEM_M, bk,
 				m, k
 				);
 		b_dmem_loader(
 				b_smem_ptr + get_smem_size<SMEM_K, SMEM_N, smem_B_skew, typename B_DMEM_LOADER::Layout>::value * smem_buffer_id,
 				b_dmem_ptr,
 				ldb,
-				bk, blockIdx.y * SMEM_N,
+				bk, blockIdx_y * SMEM_N,
 				k, n
 				);
 		cutf::cp_async::wait_group<2>();
@@ -488,7 +491,7 @@ __global__ void gemm_kernel(
 	C_DMEM_STORER c_dmem_storer;
 	c_dmem_storer(
 			c_dmem_ptr, ldc,
-			blockIdx.x * SMEM_M, blockIdx.y * SMEM_N,
+			blockIdx_x * SMEM_M, blockIdx_y * SMEM_N,
 			m, n,
 			smem,
 			alpha, beta
@@ -774,8 +777,7 @@ void launch_kernel (
 
 	const dim3 block_size(BLOCK_SIZE);
 	const dim3 grid_size(
-			(m + SMEM_M - 1) / SMEM_M,
-			(n + SMEM_N - 1) / SMEM_N
+			((m + SMEM_M - 1) / SMEM_M) * ((n + SMEM_N - 1) / SMEM_N)
 			);
 
 	kernel_ptr<<<grid_size, block_size, smem_size_in_byte, cuda_stream>>>(

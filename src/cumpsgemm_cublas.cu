@@ -81,7 +81,7 @@ extern "C" const char* cuMpSGEMM_get_compute_mode_string (
 	return "Unknown";
 }
 
-extern "C" cuMpSGEMM_compute_mode_t cuMpSGEMM_get_compute_mode (
+extern "C" cuMpSGEMM_compute_mode_t cuMpSGEMM_get_compute_mode_internal (
 		const char* const func_name,
 		cublasHandle_t const cublas_handle,
 		const cublasOperation_t op_A,
@@ -98,7 +98,7 @@ extern "C" cuMpSGEMM_compute_mode_t cuMpSGEMM_get_compute_mode (
 	*(void**)(&func) = cuMpSGEMM_get_function_pointer(rule_lib_name, __func__);
 
 	if (func == nullptr) {
-		return CUMPSGEMM_CUBLAS;
+		return cuMpSGEMM_get_compute_mode(func_name, cublas_handle, op_A, op_B, m, n, k);
 	}
 
 	return func(func_name, cublas_handle, op_A, op_B, m, n, k);
@@ -127,7 +127,7 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 	cublasGetStream(cublas_handle, &cuda_stream);
 
 	cuMpSGEMM_compute_mode_t compute_mode =
-		cuMpSGEMM_get_compute_mode(
+		cuMpSGEMM_get_compute_mode_internal(
 				func_name,
 				cublas_handle,
 				op_A,
@@ -184,7 +184,7 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 	cublasGetStream(cublas_handle, &cuda_stream);
 
 	cuMpSGEMM_compute_mode_t compute_mode =
-		cuMpSGEMM_get_compute_mode(
+		cuMpSGEMM_get_compute_mode_internal(
 				func_name,
 				cublas_handle,
 				op_A,
@@ -349,7 +349,7 @@ cublasStatus_t cublasGemmEx(cublasHandle_t handle, cublasOperation_t transa,
 														cublasComputeType_t computeType,
 														cublasGemmAlgo_t algo) {
 	cuMpSGEMM_compute_mode_t compute_mode =
-		cuMpSGEMM_get_compute_mode(
+		cuMpSGEMM_get_compute_mode_internal(
 				__func__,
 				handle,
 				transa,
@@ -401,7 +401,7 @@ cublasStatus_t cublasGemmStridedBatchedEx(cublasHandle_t handle, cublasOperation
 														cublasComputeType_t computeType,
 														cublasGemmAlgo_t algo) {
 	cuMpSGEMM_compute_mode_t compute_mode =
-		cuMpSGEMM_get_compute_mode(
+		cuMpSGEMM_get_compute_mode_internal(
 				__func__,
 				handle,
 				transa,

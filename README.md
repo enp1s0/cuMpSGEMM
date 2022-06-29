@@ -27,22 +27,20 @@ make -j4
 
 ### 1. Hijack cuBLAS library
 
-- static library
+#### Shared library
+
+Before executing a target application, set an environmental variable as follows.
+```bash
+export LD_PRELOAD=/path/to/cumpsgemm/hijack/lib/libcumpsgemm.so:$LD_PRELOAD
+```
+
+#### Static library
 
 Before building the target application,
 ```bash
 export LIBRARY_PATH=/path/to/cumpsgemm/hijack/lib:$LIBRARY_PATH
-export LD_LIBRARY_PATH=/path/to/cumpsgemm/hijack/lib:$LD_LIBRARY_PATH
 ```
 and build (e.g. make)
-
-- shared library
-
-Before executing the target application,
-```bash
-export LD_PRELOAD=/path/to/cumpsgemm/hijack/lib/libcumpsgemm.so:$LD_PRELOAD
-export LD_LIBRARY_PATH=/path/to/cumpsgemm/hijack/lib:$LD_LIBRARY_PATH
-```
 
 ### 2. Control SGEMM computing mode
 By the default rule, the SGEMM computing mode can be changed via an environmental variable as follows:
@@ -62,6 +60,10 @@ export CUMPSGEMM_COMPUTE_MODE=FP16TCEC
 #### Custom rule
 By defining a custom `cuMpSGEMM_get_compute_mode` function and including it in a shared library named `libcumpsgemm_rule.so`, the SGEMM mode can be changed as you want.
 The default function definition is in [default_cumpsgemm_rule.cu](src/default_cumpsgemm_rule.cu).
+Before executing a target application, set an environmental variable as follows.
+```bash
+export LD_LIBRARY_PATH=/path/to/libcumpsgemm_rule.so/dir:$LD_LIBRARY_PATH
+```
 
 ## How this library works
 
@@ -79,6 +81,21 @@ This is not the reverse engineering, decompiling or disassembling that is prohib
 ```
 Usage : ./build/cumpsgemm_test gemm [min_N] [max_N] [interval]
       : ./build/cumpsgemm_test gemm_strided_batch [min_N] [max_N] [interval] [batch_count]
+      : ./build/cumpsgemm_test cublas_gemm [min_N] [max_N] [interval]
+      : ./build/cumpsgemm_test cublas_gemm_strided_batch [min_N] [max_N] [interval] [batch_count]
+      : ./build/cumpsgemm_test log [/path/to/log]
+```
+
+## Controling environmental variables
+```bash
+# Select a GEMM implementation executing
+export CUMPSGEMM_COMPUTE_MODE=[FP16TC|FP16TCEC|TF32TC|TF32TCEC|CUBLAS]
+
+# Output debug information
+export CUMPSGEMM_INFO=1
+
+# Output error message
+export CUMPSGEMM_ERROR=1
 ```
 
 ## License

@@ -33,6 +33,7 @@ file(GLOB INSTANCES "${SRCDIR}/instances/*.cu")
 add_library(cumpsgemm_static STATIC
 	${SRCDIR}/cumpsgemm.cu
 	${SRCDIR}/cumpsgemm_cublas.cu
+	${SRCDIR}/default_cumpsgemm_rule.cu
 	${INSTANCES}
 	${HEADERS}
 	)
@@ -43,6 +44,7 @@ target_include_directories(cumpsgemm_static PUBLIC ${INCDIR} ${SUBMODULEDIR}/cut
 add_library(cumpsgemm SHARED
 	${SRCDIR}/cumpsgemm.cu
 	${SRCDIR}/cumpsgemm_cublas.cu
+	${SRCDIR}/default_cumpsgemm_rule.cu
 	${INSTANCES}
 	${HEADERS}
 	)

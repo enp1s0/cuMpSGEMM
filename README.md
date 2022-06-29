@@ -92,10 +92,10 @@ Usage : ./build/cumpsgemm_test gemm [min_N] [max_N] [interval]
 export CUMPSGEMM_COMPUTE_MODE=[FP16TC|FP16TCEC|TF32TC|TF32TCEC|CUBLAS]
 
 # Output debug information
-export CUMPSGEMM_INFO=1
+export CUMPSGEMM_INFO=[0|1]
 
 # Output error message
-export CUMPSGEMM_ERROR=1
+export CUMPSGEMM_ERROR=[0|1]
 ```
 
 ## License

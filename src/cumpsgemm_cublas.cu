@@ -16,7 +16,7 @@ void cuMpSGEMM_log(
 	}
 }
 
-const std::string error_env_name = "CUMPSGEMM_ERROR";
+const std::string error_env_name = "CUMPSGEMM_ERROR_LOG";
 void cuMpSGEMM_error(
 		const std::string str
 		) {
@@ -27,19 +27,29 @@ void cuMpSGEMM_error(
 	}
 }
 
+void cuMpSGEMM_warning(
+		const std::string str
+		) {
+	const auto env = getenv(error_env_name.c_str());
+	if (env != nullptr && std::string(env) != "0") {
+		std::fprintf(stdout, "[cuMpSGEMM WARNING] %s\n",
+				str.c_str());
+	}
+}
+
 void* cuMpSGEMM_get_function_pointer(const std::string library_name, const std::string function_name) {
 
 	// Open the library
 	const auto lib_ptr = dlopen(library_name.c_str(), RTLD_NOW);
 	if (lib_ptr == nullptr) {
-		cuMpSGEMM_error("Failed to load " + library_name + ". Default rule will be used.");
+		cuMpSGEMM_warning("Failed to load " + library_name + ". Default rule will be used.");
 		return nullptr;
 	}
 
 	// Get function pointer
 	void* function_ptr = dlsym(lib_ptr, function_name.c_str());
 	if (function_ptr == NULL) {
-		cuMpSGEMM_error("Failed to load a function " + function_name + " during selecting hijacking function. Default rule will be used.");
+		cuMpSGEMM_warning("Failed to load a function " + function_name + " during selecting hijacking function. Default rule will be used.");
 		return nullptr;
 	}
 

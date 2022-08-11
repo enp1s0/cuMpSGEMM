@@ -34,7 +34,7 @@ Before executing a target application, set an environmental variable as follows.
 export LD_PRELOAD=/path/to/cumpsgemm/hijack/lib/libcumpsgemm.so:$LD_PRELOAD
 ```
 
-#### Static library
+#### Static library (Unstable)
 
 Before building the target application,
 ```bash
@@ -95,7 +95,7 @@ export CUMPSGEMM_COMPUTE_MODE=[FP16TC|FP16TCEC|TF32TC|TF32TCEC|CUBLAS]
 export CUMPSGEMM_INFO=[0|1]
 
 # Output error message
-export CUMPSGEMM_ERROR=[0|1]
+export CUMPSGEMM_ERROR_LOG=[0|1]
 ```
 
 ## License

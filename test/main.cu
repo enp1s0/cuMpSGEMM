@@ -772,6 +772,72 @@ void test_logged_shape(
 			cutf::memory::free(a_ptr);
 			cutf::memory::free(b_ptr);
 			cutf::memory::free(c_ptr);
+		} else if (func == "cublasSgemmStridedBatched" || func == "cublasCgemmStridedBatched") {
+			std::regex param_regex(R"(op=\((.), (.)\), shape=\((\d+), (\d+), (\d+)\), batch=([0-9]+))");
+			std::smatch param_match;
+
+			std::size_t m = 0, n = 0, k = 0;
+			std::size_t batch_size = 0;
+			cublasOperation_t op_A, op_B;
+			if (std::regex_match(params, param_match, param_regex) && param_match.size() > 1) {
+				op_A = param_match[1].str() == "N" ? CUBLAS_OP_N : (param_match[1].str() == "T" ? CUBLAS_OP_T : CUBLAS_OP_C);
+				op_B = param_match[2].str() == "N" ? CUBLAS_OP_N : (param_match[2].str() == "T" ? CUBLAS_OP_T : CUBLAS_OP_C);
+				m = std::stoul(param_match[3].str());
+				n = std::stoul(param_match[4].str());
+				k = std::stoul(param_match[5].str());
+				batch_size = std::stoul(param_match[6].str());
+			} else {
+				throw std::runtime_error("Failed to parse parameters : " + params);
+			}
+
+			if (m * n * k * batch_size == 0) {
+				throw std::runtime_error("Invalid shape : (" + std::to_string(m) + ", " + std::to_string(n) + ", " + std::to_string(k) + "), batch_size = " + std::to_string(batch_size));
+			}
+			constexpr uint64_t seed = 0;
+
+			const std::size_t num_e = (func == "cublasSgemmStridedBatched" ? 1 : 2);
+			float* a_ptr = cutf::memory::malloc<float>(m * k * num_e * batch_size);
+			float* b_ptr = cutf::memory::malloc<float>(k * n * num_e * batch_size);
+			float* c_ptr = cutf::memory::malloc<float>(m * n * num_e * batch_size);
+
+			auto curand_gen = cutf::curand::get_curand_unique_ptr(CURAND_RNG_PSEUDO_PHILOX4_32_10);
+			CUTF_CHECK_ERROR(curandSetPseudoRandomGeneratorSeed(*curand_gen.get(), seed));
+			CUTF_CHECK_ERROR(cutf::curand::generate_uniform(*curand_gen.get(), a_ptr, m * k * num_e * batch_size));
+			CUTF_CHECK_ERROR(cutf::curand::generate_uniform(*curand_gen.get(), b_ptr, k * n * num_e * batch_size));
+			int res;
+			if (func == "cublasSgemmStridedBatched") {
+				res = sgemm_strided_batch_test_core(
+						*cublas_handle_uptr.get(),
+						op_A,
+						op_B,
+						m, n, k,
+						a_ptr, (op_A == CUBLAS_OP_N ? m : k), m * k,
+						b_ptr, (op_B == CUBLAS_OP_N ? k : n), k * n,
+						c_ptr, m, m * n,
+						batch_size,
+						compute_mode
+						);
+			} else {
+				res = sgemm_strided_batch_test_core(
+						*cublas_handle_uptr.get(),
+						op_A,
+						op_B,
+						m, n, k,
+						reinterpret_cast<cuComplex*>(a_ptr), (op_A == CUBLAS_OP_N ? m : k), m * k,
+						reinterpret_cast<cuComplex*>(b_ptr), (op_B == CUBLAS_OP_N ? k : n), k * n,
+						reinterpret_cast<cuComplex*>(c_ptr), m, m * n,
+						batch_size,
+						compute_mode
+						);
+			}
+			if (res == 0) {
+				num_passed++;
+			}
+			num_tested++;
+
+			cutf::memory::free(a_ptr);
+			cutf::memory::free(b_ptr);
+			cutf::memory::free(c_ptr);
 		}
 	}
 	ifs.close();

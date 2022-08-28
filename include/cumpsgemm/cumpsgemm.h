@@ -1,15 +1,16 @@
 #ifndef __CUMPSGEMM_H__
 #define __CUMPSGEMM_H__
 #include <cublas_v2.h>
+#include <cstdint>
 
 struct cuMpSGEMM_handle;
 typedef cuMpSGEMM_handle* cuMpSGEMM_handle_t;
 
-cublasStatus_t cuMpSGEMM_create(
+extern "C" cublasStatus_t cuMpSGEMM_create(
 		cuMpSGEMM_handle_t* const handle
 		);
 
-cublasStatus_t cuMpSGEMM_destroy(
+extern "C" cublasStatus_t cuMpSGEMM_destroy(
 		cuMpSGEMM_handle_t handle
 		);
 
@@ -35,6 +36,7 @@ extern "C" cuMpSGEMM_compute_mode_t cuMpSGEMM_get_compute_mode (
 		);
 
 extern "C" cublasStatus_t cuMpSGEMM_sgemm(
+		cuMpSGEMM_handle_t handle,
 		const cublasOperation_t op_A,
 		const cublasOperation_t op_B,
 		const uint64_t m,
@@ -50,6 +52,7 @@ extern "C" cublasStatus_t cuMpSGEMM_sgemm(
 		);
 
 extern "C" cublasStatus_t cuMpSGEMM_cgemm(
+		cuMpSGEMM_handle_t handle,
 		const cublasOperation_t op_A,
 		const cublasOperation_t op_B,
 		const uint64_t m,
@@ -65,6 +68,7 @@ extern "C" cublasStatus_t cuMpSGEMM_cgemm(
 		);
 
 extern "C" cublasStatus_t cuMpSGEMM_sgemm_strided_batch(
+		cuMpSGEMM_handle_t handle,
 		const cublasOperation_t op_A,
 		const cublasOperation_t op_B,
 		const uint64_t m,
@@ -81,6 +85,7 @@ extern "C" cublasStatus_t cuMpSGEMM_sgemm_strided_batch(
 		);
 
 extern "C" cublasStatus_t cuMpSGEMM_cgemm_strided_batch(
+		cuMpSGEMM_handle_t handle,
 		const cublasOperation_t op_A,
 		const cublasOperation_t op_B,
 		const uint64_t m,

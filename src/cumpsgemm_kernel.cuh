@@ -11,6 +11,7 @@
 #include <cumpsgemm/cumpsgemm.hpp>
 #include "device_tcec_wrapper.hpp"
 #include "cumpsgemm_internal.hpp"
+#include "handle.hpp"
 
 namespace {
 constexpr unsigned smem_A_skew = 8;
@@ -635,31 +636,6 @@ __global__ void gemm_batchStrided_kernel(
 			);
 }
 
-template <class T>
-using gemm_kernel_func_t = void (*)(
-			const uint64_t,
-			const uint64_t,
-			const uint64_t,
-			const T,
-			const T* const, const uint64_t,
-			const T* const, const uint64_t,
-			const T,
-			T* const, const uint64_t
-			);
-
-template <class T>
-using gemm_stridedBatch_kernel_func_t = void (*)(
-			const uint64_t,
-			const uint64_t,
-			const uint64_t,
-			const T,
-			const T* const, const uint64_t, const uint64_t,
-			const T* const, const uint64_t, const uint64_t,
-			const T,
-			T* const, const uint64_t, const uint64_t,
-			const uint32_t
-			);
-
 template <
 	class T,
 	unsigned SMEM_M,
@@ -674,8 +650,8 @@ template <
 	class TC_T,
 	class EC
 >
-gemm_kernel_func_t<T> get_kernel_func_ptr() {
-	constexpr gemm_kernel_func_t<T> func_ptr = &(gemm_kernel<
+cumpsgemm::gemm_kernel_func_t<T> get_kernel_func_ptr() {
+	constexpr cumpsgemm::gemm_kernel_func_t<T> func_ptr = &(gemm_kernel<
 		T,
 		SMEM_M, SMEM_N, SMEM_K,
 		FRAG_M, FRAG_N, FRAG_K,
@@ -703,8 +679,8 @@ template <
 	class TC_T,
 	class EC
 >
-gemm_stridedBatch_kernel_func_t<T> get_stridedBatch_kernel_func_ptr() {
-	constexpr gemm_stridedBatch_kernel_func_t<T> func_ptr = &(gemm_batchStrided_kernel<
+cumpsgemm::gemm_stridedBatch_kernel_func_t<T> get_stridedBatch_kernel_func_ptr() {
+	constexpr cumpsgemm::gemm_stridedBatch_kernel_func_t<T> func_ptr = &(gemm_batchStrided_kernel<
 		T,
 		SMEM_M, SMEM_N, SMEM_K,
 		FRAG_M, FRAG_N, FRAG_K,

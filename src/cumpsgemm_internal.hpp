@@ -2,6 +2,7 @@
 #define __CUMPGEMM_INTERNAL_HPP__
 #include "device_common.hpp"
 #include "device_tcec_wrapper.hpp"
+
 namespace cumpsgemm {
 // prototype declaration
 template <

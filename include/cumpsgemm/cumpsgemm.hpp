@@ -5,6 +5,7 @@
 namespace cumpsgemm {
 template <class T>
 cublasStatus_t gemm(
+		cuMpSGEMM_handle_t handle,
 		const cublasOperation_t op_A,
 		const cublasOperation_t op_B,
 		const uint64_t m,
@@ -20,6 +21,7 @@ cublasStatus_t gemm(
 		);
 template <class T>
 cublasStatus_t gemm_stridedBatch(
+		cuMpSGEMM_handle_t handle,
 		const cublasOperation_t op_A,
 		const cublasOperation_t op_B,
 		const uint64_t m,

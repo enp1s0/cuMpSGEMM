@@ -92,6 +92,7 @@ void stridedBatch_layout_selector (
 
 template <class T>
 cublasStatus_t cumpsgemm::gemm(
+		cuMpSGEMM_handle_t handle,
 		const cublasOperation_t op_A,
 		const cublasOperation_t op_B,
 		const uint64_t m,
@@ -119,6 +120,7 @@ cublasStatus_t cumpsgemm::gemm(
 
 template <class T>
 cublasStatus_t cumpsgemm::gemm_stridedBatch(
+		cuMpSGEMM_handle_t handle,
 		const cublasOperation_t op_A,
 		const cublasOperation_t op_B,
 		const uint64_t m,
@@ -146,6 +148,7 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 
 extern "C" {
 cublasStatus_t cuMpSGEMM_sgemm(
+		cuMpSGEMM_handle_t handle,
 		const cublasOperation_t op_A,
 		const cublasOperation_t op_B,
 		const uint64_t m,
@@ -162,6 +165,7 @@ cublasStatus_t cuMpSGEMM_sgemm(
 	assert(op_A != CUBLAS_OP_C);
 	assert(op_B != CUBLAS_OP_C);
 	return cumpsgemm::gemm<float>(
+			handle,
 			op_A, op_B,
 			m, n, k,
 			alpha,
@@ -175,6 +179,7 @@ cublasStatus_t cuMpSGEMM_sgemm(
 }
 
 cublasStatus_t cuMpSGEMM_cgemm(
+		cuMpSGEMM_handle_t handle,
 		const cublasOperation_t op_A,
 		const cublasOperation_t op_B,
 		const uint64_t m,
@@ -189,6 +194,7 @@ cublasStatus_t cuMpSGEMM_cgemm(
 		cudaStream_t cuda_stream
 		) {
 	return cumpsgemm::gemm<cuComplex>(
+			handle,
 			op_A, op_B,
 			m, n, k,
 			alpha,
@@ -202,6 +208,7 @@ cublasStatus_t cuMpSGEMM_cgemm(
 }
 
 cublasStatus_t cuMpSGEMM_sgemm_strided_batch(
+		cuMpSGEMM_handle_t handle,
 		const cublasOperation_t op_A,
 		const cublasOperation_t op_B,
 		const uint64_t m,
@@ -219,6 +226,7 @@ cublasStatus_t cuMpSGEMM_sgemm_strided_batch(
 	assert(op_A != CUBLAS_OP_C);
 	assert(op_B != CUBLAS_OP_C);
 	return cumpsgemm::gemm_stridedBatch<float>(
+			handle,
 			op_A, op_B,
 			m, n, k,
 			alpha,
@@ -233,6 +241,7 @@ cublasStatus_t cuMpSGEMM_sgemm_strided_batch(
 }
 
 cublasStatus_t cuMpSGEMM_cgemm_strided_batch(
+		cuMpSGEMM_handle_t handle,
 		const cublasOperation_t op_A,
 		const cublasOperation_t op_B,
 		const uint64_t m,
@@ -248,6 +257,7 @@ cublasStatus_t cuMpSGEMM_cgemm_strided_batch(
 		cudaStream_t cuda_stream
 		) {
 	return cumpsgemm::gemm_stridedBatch<cuComplex>(
+			handle,
 			op_A, op_B,
 			m, n, k,
 			alpha,
@@ -260,4 +270,4 @@ cublasStatus_t cuMpSGEMM_cgemm_strided_batch(
 			cuda_stream
 			);
 }
-}
+} // extern "C"

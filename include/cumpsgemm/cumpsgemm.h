@@ -2,6 +2,17 @@
 #define __CUMPSGEMM_H__
 #include <cublas_v2.h>
 
+struct cuMpSGEMM_handle;
+typedef cuMpSGEMM_handle* cuMpSGEMM_handle_t;
+
+cublasStatus_t cuMpSGEMM_create(
+		cuMpSGEMM_handle_t* const handle
+		);
+
+cublasStatus_t cuMpSGEMM_destroy(
+		cuMpSGEMM_handle_t handle
+		);
+
 enum cuMpSGEMM_compute_mode_t {
 	CUMPSGEMM_CUBLAS   = 0,
 	CUMPSGEMM_FP16TCEC = 1,

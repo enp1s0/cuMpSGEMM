@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.18)
 project(cuMpSGEMM LANGUAGES CXX CUDA)
 
-set(BUILD_SHGEMM_TEST OFF)
+set(BUILD_STATIC_LIBRARY OFF)
 
 find_package(CUDA 11.0 REQUIRED)
 find_package(CUDAToolkit REQUIRED)
@@ -29,23 +29,25 @@ set(SUBMODULEDIR submodules)
 file(GLOB HEADERS "${INCDIR}/cumpsgemm/*.hpp")
 file(GLOB INSTANCES "${SRCDIR}/instances/*.cu")
 
-## main library
-add_library(cumpsgemm_static STATIC
-	${SRCDIR}/cumpsgemm.cu
-	${SRCDIR}/cumpsgemm_cublas.cu
-	${SRCDIR}/default_cumpsgemm_rule.cu
-	${INSTANCES}
-	${HEADERS}
-	)
+if (BUILD_STATIC_LIBRARY)
+	## static library
+	add_library(cumpsgemm_static STATIC
+		${SRCDIR}/cumpsgemm.cu
+		${SRCDIR}/cumpsgemm_cublas.cu
+		${SRCDIR}/default_cumpsgemm_rule.cu
+		${SRCDIR}/handle.cu
+		${HEADERS}
+		)
 
-target_include_directories(cumpsgemm_static PUBLIC ${INCDIR} ${SUBMODULEDIR}/cutf/include ${SUBMODULEDIR}/wmma_extension/include)
+	target_include_directories(cumpsgemm_static PUBLIC ${INCDIR} ${SUBMODULEDIR}/cutf/include ${SUBMODULEDIR}/wmma_extension/include)
+endif()
 
 ## shared library
 add_library(cumpsgemm SHARED
 	${SRCDIR}/cumpsgemm.cu
 	${SRCDIR}/cumpsgemm_cublas.cu
 	${SRCDIR}/default_cumpsgemm_rule.cu
-	${INSTANCES}
+	${SRCDIR}/handle.cu
 	${HEADERS}
 	)
 

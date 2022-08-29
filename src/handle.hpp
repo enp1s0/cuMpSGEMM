@@ -28,52 +28,38 @@ using gemm_stridedBatch_kernel_func_t = void (*)(
 			const uint32_t
 			);
 
-template <class T>
 struct gemm_module {
-	gemm_kernel_func_t<T> kernel_func;
+	void* kernel_func;
 
 	unsigned smem_m, smem_n, smem_k;
+	unsigned smem_size;
+	unsigned block_size;
 };
 
-template <class T>
-struct gemm_stridedBatch_module {
-	gemm_stridedBatch_kernel_func_t<T> kernel_func;
-
-	unsigned smem_m, smem_n, smem_k;
-};
-} // unnamed namespace
+namespace kernel_module_code {
+using code_t = std::uint32_t;
+constexpr code_t op_a_col_major   = 0b0'0'0'00'01;
+constexpr code_t op_a_row_major   = 0b0'0'0'00'10;
+constexpr code_t op_a_conjugate   = 0b0'0'0'00'11;
+constexpr code_t op_b_col_major   = 0b0'0'0'01'00;
+constexpr code_t op_b_row_major   = 0b0'0'0'10'00;
+constexpr code_t op_b_conjugate   = 0b0'0'0'11'00;
+constexpr code_t half             = 0b0'0'0'00'00;
+constexpr code_t tf32             = 0b0'0'1'00'00;
+constexpr code_t with_ec          = 0b0'0'0'00'00;
+constexpr code_t without_ec       = 0b0'1'0'00'00;
+constexpr code_t s                = 0b0'0'0'00'00;
+constexpr code_t c                = 0b1'0'0'00'00;
+// ------- OR accumulation ------
+constexpr code_t max_code = 0b1'11'11'11;
+} // namespace kernel_module_code
+} // namespace cumpsgemm
 
 struct cuMpSGEMM_handle {
+	unsigned num_sms;
 	// 0 is for large size matmul and (num_kernel_candidates - 1) is for small.
 	static constexpr unsigned num_kernel_candidates = 3;
 
-	cumpsgemm::gemm_module<float>     sgemm_nn_func[num_kernel_candidates];
-	cumpsgemm::gemm_module<float>     sgemm_tn_func[num_kernel_candidates];
-	cumpsgemm::gemm_module<float>     sgemm_nt_func[num_kernel_candidates];
-	cumpsgemm::gemm_module<float>     sgemm_tt_func[num_kernel_candidates];
-
-	cumpsgemm::gemm_module<cuComplex> cgemm_nn_func[num_kernel_candidates];
-	cumpsgemm::gemm_module<cuComplex> cgemm_tn_func[num_kernel_candidates];
-	cumpsgemm::gemm_module<cuComplex> cgemm_cn_func[num_kernel_candidates];
-	cumpsgemm::gemm_module<cuComplex> cgemm_nt_func[num_kernel_candidates];
-	cumpsgemm::gemm_module<cuComplex> cgemm_tt_func[num_kernel_candidates];
-	cumpsgemm::gemm_module<cuComplex> cgemm_ct_func[num_kernel_candidates];
-	cumpsgemm::gemm_module<cuComplex> cgemm_nc_func[num_kernel_candidates];
-	cumpsgemm::gemm_module<cuComplex> cgemm_tc_func[num_kernel_candidates];
-	cumpsgemm::gemm_module<cuComplex> cgemm_cc_func[num_kernel_candidates];
-
-	cumpsgemm::gemm_stridedBatch_kernel_func_t<float>     sgemm_stridedBatch_nn_func[num_kernel_candidates];
-	cumpsgemm::gemm_stridedBatch_kernel_func_t<float>     sgemm_stridedBatch_tn_func[num_kernel_candidates];
-	cumpsgemm::gemm_stridedBatch_kernel_func_t<float>     sgemm_stridedBatch_nt_func[num_kernel_candidates];
-	cumpsgemm::gemm_stridedBatch_kernel_func_t<float>     sgemm_stridedBatch_tt_func[num_kernel_candidates];
-
-	cumpsgemm::gemm_stridedBatch_kernel_func_t<cuComplex> cgemm_stridedBatch_nn_func[num_kernel_candidates];
-	cumpsgemm::gemm_stridedBatch_kernel_func_t<cuComplex> cgemm_stridedBatch_tn_func[num_kernel_candidates];
-	cumpsgemm::gemm_stridedBatch_kernel_func_t<cuComplex> cgemm_stridedBatch_cn_func[num_kernel_candidates];
-	cumpsgemm::gemm_stridedBatch_kernel_func_t<cuComplex> cgemm_stridedBatch_nt_func[num_kernel_candidates];
-	cumpsgemm::gemm_stridedBatch_kernel_func_t<cuComplex> cgemm_stridedBatch_tt_func[num_kernel_candidates];
-	cumpsgemm::gemm_stridedBatch_kernel_func_t<cuComplex> cgemm_stridedBatch_ct_func[num_kernel_candidates];
-	cumpsgemm::gemm_stridedBatch_kernel_func_t<cuComplex> cgemm_stridedBatch_nc_func[num_kernel_candidates];
-	cumpsgemm::gemm_stridedBatch_kernel_func_t<cuComplex> cgemm_stridedBatch_tc_func[num_kernel_candidates];
-	cumpsgemm::gemm_stridedBatch_kernel_func_t<cuComplex> cgemm_stridedBatch_cc_func[num_kernel_candidates];
+	cumpsgemm::gemm_module gemm_module             [cumpsgemm::kernel_module_code::max_code][num_kernel_candidates];
+	cumpsgemm::gemm_module gemm_stridedBatch_module[cumpsgemm::kernel_module_code::max_code][num_kernel_candidates];
 };

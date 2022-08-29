@@ -757,7 +757,7 @@ template <
 	class TC_T,
 	class EC
 >
-cumpsgemm::gemm_module generate_gemm_StridedBatch_module() {
+cumpsgemm::gemm_module generate_gemm_stridedBatch_module() {
 	const auto kernel_func = get_stridedBatch_kernel_func_ptr<T, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, OP_A, OP_B, TC_T, EC>();
 	cumpsgemm::gemm_module mod;
 	mod.kernel_func = reinterpret_cast<void*>(kernel_func);

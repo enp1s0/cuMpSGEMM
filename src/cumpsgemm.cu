@@ -90,8 +90,9 @@ void launch_kernel (
 		) {
 	const auto kernel_ptr = reinterpret_cast<cumpsgemm::gemm_stridedBatch_kernel_func_t<T>>(gemm_module.kernel_func);
 	const dim3 block_size(gemm_module.block_size);
+	const auto num_blocks_per_gemm = (m + gemm_module.smem_m - 1) / gemm_module.smem_m * (n + gemm_module.smem_n - 1) / gemm_module.smem_n;
 	const dim3 grid_size(
-			((m + gemm_module.smem_m - 1) / gemm_module.smem_m) * ((n + gemm_module.smem_n - 1) / gemm_module.smem_n)
+			num_blocks_per_gemm * batch_count
 			);
 
 	kernel_ptr<<<grid_size, block_size, gemm_module.smem_size, cuda_stream>>>(
@@ -101,7 +102,7 @@ void launch_kernel (
 			b_ptr, ldb, strideb,
 			beta,
 			c_ptr, ldc, stridec,
-			batch_count
+			num_blocks_per_gemm
 			);
 }
 } // unnamed namespace

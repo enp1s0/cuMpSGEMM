@@ -737,7 +737,6 @@ cumpsgemm::gemm_module generate_gemm_module() {
 	mod.smem_m = SMEM_M;
 	mod.smem_n = SMEM_N;
 	mod.smem_k = SMEM_K;
-	std::printf("module {ptr=%p, SMEM_M=%u, SMEM_N=%u, SMEM_K=%u, smem_size = %u}\n", kernel_func, SMEM_M, SMEM_N, SMEM_K, mod.smem_size);
 	CUTF_CHECK_ERROR(cudaFuncSetAttribute(kernel_func, cudaFuncAttributeMaxDynamicSharedMemorySize, mod.smem_size));
 
 	return mod;
@@ -766,7 +765,7 @@ cumpsgemm::gemm_module generate_gemm_stridedBatch_module() {
 	mod.smem_m = SMEM_M;
 	mod.smem_n = SMEM_N;
 	mod.smem_k = SMEM_K;
-	CUTF_CHECK_ERROR(cudaFuncSetAttribute(&kernel_func, cudaFuncAttributeMaxDynamicSharedMemorySize, mod.smem_size));
+	CUTF_CHECK_ERROR(cudaFuncSetAttribute(kernel_func, cudaFuncAttributeMaxDynamicSharedMemorySize, mod.smem_size));
 
 	return mod;
 }

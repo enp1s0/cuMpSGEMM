@@ -51,7 +51,7 @@ constexpr code_t without_ec       = 0b0'1'0'00'00;
 constexpr code_t s                = 0b0'0'0'00'00;
 constexpr code_t c                = 0b1'0'0'00'00;
 // ------- OR accumulation ------
-constexpr code_t max_code = 0b1'11'11'11;
+constexpr code_t max_code = 0b1'11'11'11 + 1;
 } // namespace kernel_module_code
 } // namespace cumpsgemm
 

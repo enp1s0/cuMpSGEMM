@@ -550,24 +550,24 @@ __global__ void gemm_batchStrided_kernel(
 		cumpsgemm::device::fill_zero(frag_c[i]);
 	}
 
-	unsigned smem_buffer_id = 0;
+	std::uint32_t bk = 0;
 	a_dmem_loader(
-			a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * smem_buffer_id,
+			a_smem_ptr,
 			a_dmem_ptr,
 			lda,
 			blockIdx_x * SMEM_M, 0,
 			m, k
 			);
 	b_dmem_loader(
-			b_smem_ptr + get_smem_size<SMEM_K, SMEM_N, smem_B_skew, typename B_DMEM_LOADER::Layout>::value * smem_buffer_id,
+			b_smem_ptr,
 			b_dmem_ptr,
 			ldb,
 			0, blockIdx_y * SMEM_N,
 			k, n
 			);
 #pragma NUM_UNROLLINGS
-	for (uint64_t bk = SMEM_K; bk < k; bk += SMEM_K) {
-		smem_buffer_id = (bk / SMEM_K) % 2;
+	for (bk += SMEM_K; bk < k; bk += SMEM_K) {
+		const auto smem_buffer_id = 1 - ((bk / SMEM_K) % 2);
 		a_dmem_loader(
 				a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * smem_buffer_id,
 				a_dmem_ptr,
@@ -599,7 +599,8 @@ __global__ void gemm_batchStrided_kernel(
 				 );
 		__syncthreads();
 	}
-	cutf::cp_async::wait_group<2>();
+	const auto smem_buffer_id = 1 - ((bk / SMEM_K) % 2);
+	cutf::cp_async::wait_all();
 	__syncthreads();
 	mma_smem<
 		T,

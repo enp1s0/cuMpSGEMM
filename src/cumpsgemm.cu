@@ -1,28 +1,53 @@
 #include <iostream>
 #include <cassert>
+#include <type_traits>
 #include <cublas.h>
 #include <cumpsgemm/cumpsgemm.hpp>
 
 #include "cumpsgemm_internal.hpp"
-
-// cuMpGEMM implementation
+#include "handle.hpp"
 
 namespace {
-template <
-	class T,
-	unsigned SMEM_M,
-	unsigned SMEM_N,
-	unsigned SMEM_K,
-	unsigned FRAG_M,
-	unsigned FRAG_N,
-	unsigned FRAG_K,
-	unsigned BLOCK_SIZE,
-	class TC_T,
-	class EC
->
-void layout_selector (
-			const cublasOperation_t op_A,
-			const cublasOperation_t op_B,
+template <class T>
+cumpsgemm::kernel_module_code::code_t gen_module_code(
+		const cublasOperation_t op_A,
+		const cublasOperation_t op_B,
+		const cuMpSGEMM_compute_mode_t compute_mode
+		) {
+	cumpsgemm::kernel_module_code::code_t code = 0;
+	switch (compute_mode) {
+	case CUMPSGEMM_FP16TC:   code |= cumpsgemm::kernel_module_code::half | cumpsgemm::kernel_module_code::without_ec;break;
+	case CUMPSGEMM_FP16TCEC: code |= cumpsgemm::kernel_module_code::half | cumpsgemm::kernel_module_code::with_ec   ;break;
+	case CUMPSGEMM_TF32TC:   code |= cumpsgemm::kernel_module_code::tf32 | cumpsgemm::kernel_module_code::without_ec;break;
+	case CUMPSGEMM_TF32TCEC: code |= cumpsgemm::kernel_module_code::tf32 | cumpsgemm::kernel_module_code::with_ec   ;break;
+	default:break;
+	}
+	switch (op_A) {
+	case CUBLAS_OP_N: code |= cumpsgemm::kernel_module_code::op_a_col_major;break;
+	case CUBLAS_OP_T: code |= cumpsgemm::kernel_module_code::op_a_row_major;break;
+	case CUBLAS_OP_C: code |= cumpsgemm::kernel_module_code::op_a_conjugate;break;
+	default:break;
+	}
+	switch (op_B) {
+	case CUBLAS_OP_N: code |= cumpsgemm::kernel_module_code::op_b_col_major;break;
+	case CUBLAS_OP_T: code |= cumpsgemm::kernel_module_code::op_b_row_major;break;
+	case CUBLAS_OP_C: code |= cumpsgemm::kernel_module_code::op_b_conjugate;break;
+	default:break;
+	}
+	if (std::is_same<T, float>::value) {
+		code |= cumpsgemm::kernel_module_code::s;
+	} else if (std::is_same<T, cuComplex>::value) {
+		code |= cumpsgemm::kernel_module_code::c;
+	}
+
+	assert(code <= cumpsgemm::kernel_module_code::max_code);
+
+	return code;
+}
+
+template <class T>
+void launch_kernel (
+			const cumpsgemm::gemm_module gemm_module,
 			const std::size_t m,
 			const std::size_t n,
 			const std::size_t k,
@@ -33,65 +58,58 @@ void layout_selector (
 			T* const c_ptr, const std::size_t ldc,
 			cudaStream_t cuda_stream
 		) {
-#define CASE(A, a, B, b) \
-	if (op_A == a && op_B == b) {cumpsgemm::launch_kernel<T, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, A, B, TC_T, EC>(m, n, k, alpha, a_ptr, lda, b_ptr, ldb, beta, c_ptr, ldc, cuda_stream);return;}
+	const auto kernel_ptr = reinterpret_cast<cumpsgemm::gemm_kernel_func_t<T>>(gemm_module.kernel_func);
+	const dim3 block_size(gemm_module.block_size);
+	const dim3 grid_size(
+			((m + gemm_module.smem_m - 1) / gemm_module.smem_m) * ((n + gemm_module.smem_n - 1) / gemm_module.smem_n)
+			);
 
-	CASE(cumpsgemm::col_major, CUBLAS_OP_N, cumpsgemm::col_major, CUBLAS_OP_N);
-	CASE(cumpsgemm::row_major, CUBLAS_OP_T, cumpsgemm::col_major, CUBLAS_OP_N);
-	CASE(cumpsgemm::conjugate, CUBLAS_OP_C, cumpsgemm::col_major, CUBLAS_OP_N);
-	CASE(cumpsgemm::col_major, CUBLAS_OP_N, cumpsgemm::row_major, CUBLAS_OP_T);
-	CASE(cumpsgemm::row_major, CUBLAS_OP_T, cumpsgemm::row_major, CUBLAS_OP_T);
-	CASE(cumpsgemm::conjugate, CUBLAS_OP_C, cumpsgemm::row_major, CUBLAS_OP_T);
-	CASE(cumpsgemm::col_major, CUBLAS_OP_N, cumpsgemm::conjugate, CUBLAS_OP_C);
-	CASE(cumpsgemm::row_major, CUBLAS_OP_T, cumpsgemm::conjugate, CUBLAS_OP_C);
-	CASE(cumpsgemm::conjugate, CUBLAS_OP_C, cumpsgemm::conjugate, CUBLAS_OP_C);
-#undef CASE
+	kernel_ptr<<<grid_size, block_size, gemm_module.smem_size, cuda_stream>>>(
+			m, n, k,
+			alpha,
+			a_ptr, lda,
+			b_ptr, ldb,
+			beta,
+			c_ptr, ldc
+			);
 }
 
-template <
-	class T,
-	unsigned SMEM_M,
-	unsigned SMEM_N,
-	unsigned SMEM_K,
-	unsigned FRAG_M,
-	unsigned FRAG_N,
-	unsigned FRAG_K,
-	unsigned BLOCK_SIZE,
-	class TC_T,
-	class EC
->
-void stridedBatch_layout_selector (
-			const cublasOperation_t op_A,
-			const cublasOperation_t op_B,
+template <class T>
+void launch_kernel (
+			const cumpsgemm::gemm_module gemm_module,
 			const std::size_t m,
 			const std::size_t n,
 			const std::size_t k,
 			const T alpha,
-			const T* const a_ptr, const std::size_t lda, const std::size_t strideda,
-			const T* const b_ptr, const std::size_t ldb, const std::size_t stridedb,
+			const T* const a_ptr, const std::size_t lda, const uint64_t stridea,
+			const T* const b_ptr, const std::size_t ldb, const uint64_t strideb,
 			const T beta,
-			T* const c_ptr, const std::size_t ldc, const std::size_t stridedc,
-			const std::size_t batch_count,
+			T* const c_ptr, const std::size_t ldc, const uint64_t stridec,
+			const uint64_t batch_count,
 			cudaStream_t cuda_stream
 		) {
-#define CASE(A, a, B, b) \
-	if (op_A == a && op_B == b) {cumpsgemm::launch_stridedBatch_kernel<T, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, A, B, TC_T, EC>(m, n, k, alpha, a_ptr, lda, strideda, b_ptr, ldb, stridedb, beta, c_ptr, ldc, stridedc, batch_count, cuda_stream);return;}
+	const auto kernel_ptr = reinterpret_cast<cumpsgemm::gemm_stridedBatch_kernel_func_t<T>>(gemm_module.kernel_func);
+	const dim3 block_size(gemm_module.block_size);
+	const auto num_blocks_per_gemm = (m + gemm_module.smem_m - 1) / gemm_module.smem_m * (n + gemm_module.smem_n - 1) / gemm_module.smem_n;
+	const dim3 grid_size(
+			num_blocks_per_gemm * batch_count
+			);
 
-	CASE(cumpsgemm::col_major, CUBLAS_OP_N, cumpsgemm::col_major, CUBLAS_OP_N);
-	CASE(cumpsgemm::row_major, CUBLAS_OP_T, cumpsgemm::col_major, CUBLAS_OP_N);
-	CASE(cumpsgemm::conjugate, CUBLAS_OP_C, cumpsgemm::col_major, CUBLAS_OP_N);
-	CASE(cumpsgemm::col_major, CUBLAS_OP_N, cumpsgemm::row_major, CUBLAS_OP_T);
-	CASE(cumpsgemm::row_major, CUBLAS_OP_T, cumpsgemm::row_major, CUBLAS_OP_T);
-	CASE(cumpsgemm::conjugate, CUBLAS_OP_C, cumpsgemm::row_major, CUBLAS_OP_T);
-	CASE(cumpsgemm::col_major, CUBLAS_OP_N, cumpsgemm::conjugate, CUBLAS_OP_C);
-	CASE(cumpsgemm::row_major, CUBLAS_OP_T, cumpsgemm::conjugate, CUBLAS_OP_C);
-	CASE(cumpsgemm::conjugate, CUBLAS_OP_C, cumpsgemm::conjugate, CUBLAS_OP_C);
-#undef CASE
+	kernel_ptr<<<grid_size, block_size, gemm_module.smem_size, cuda_stream>>>(
+			m, n, k,
+			alpha,
+			a_ptr, lda, stridea,
+			b_ptr, ldb, strideb,
+			beta,
+			c_ptr, ldc, stridec,
+			num_blocks_per_gemm
+			);
 }
 } // unnamed namespace
 
 template <class T>
 cublasStatus_t cumpsgemm::gemm(
+		cuMpSGEMM_handle_t handle,
 		const cublasOperation_t op_A,
 		const cublasOperation_t op_B,
 		const uint64_t m,
@@ -105,13 +123,25 @@ cublasStatus_t cumpsgemm::gemm(
 		const cuMpSGEMM_compute_mode_t compute_mode,
 		cudaStream_t cuda_stream
 		) {
-	switch (compute_mode) {
-	case CUMPSGEMM_FP16TC:   layout_selector<T, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, half                         , mtk::wmma::tcec::without_ec>(op_A, op_B, m, n, k, *alpha, a_dmem_ptr, lda, b_dmem_ptr, ldb, *beta, c_dmem_ptr, ldc, cuda_stream);break;
-	case CUMPSGEMM_FP16TCEC: layout_selector<T, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, half                         , mtk::wmma::tcec::with_ec   >(op_A, op_B, m, n, k, *alpha, a_dmem_ptr, lda, b_dmem_ptr, ldb, *beta, c_dmem_ptr, ldc, cuda_stream);break;
-	case CUMPSGEMM_TF32TC:   layout_selector<T, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, nvcuda::wmma::precision::tf32, mtk::wmma::tcec::without_ec>(op_A, op_B, m, n, k, *alpha, a_dmem_ptr, lda, b_dmem_ptr, ldb, *beta, c_dmem_ptr, ldc, cuda_stream);break;
-	case CUMPSGEMM_TF32TCEC: layout_selector<T, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, nvcuda::wmma::precision::tf32, mtk::wmma::tcec::with_ec   >(op_A, op_B, m, n, k, *alpha, a_dmem_ptr, lda, b_dmem_ptr, ldb, *beta, c_dmem_ptr, ldc, cuda_stream);break;
-	default:break;
+	const auto code = gen_module_code<T>(op_A, op_B, compute_mode);
+
+	const auto kernel_module_candidate_list = handle->gemm_module[code];
+
+	auto gemm_module = kernel_module_candidate_list[0];
+	for (unsigned module_id = 0; module_id < handle->num_kernel_candidates - 1; module_id++) {
+
 	}
+
+	launch_kernel<T>(
+			gemm_module,
+			m, n, k,
+			*alpha,
+			a_dmem_ptr, lda,
+			b_dmem_ptr, ldb,
+			*beta,
+			c_dmem_ptr, ldc,
+			cuda_stream
+			);
 
 	return CUBLAS_STATUS_SUCCESS;
 }
@@ -119,6 +149,7 @@ cublasStatus_t cumpsgemm::gemm(
 
 template <class T>
 cublasStatus_t cumpsgemm::gemm_stridedBatch(
+		cuMpSGEMM_handle_t handle,
 		const cublasOperation_t op_A,
 		const cublasOperation_t op_B,
 		const uint64_t m,
@@ -133,19 +164,33 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 		const cuMpSGEMM_compute_mode_t compute_mode,
 		cudaStream_t cuda_stream
 		) {
-	switch (compute_mode) {
-	case CUMPSGEMM_FP16TC:   stridedBatch_layout_selector<T, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, half                         , mtk::wmma::tcec::without_ec>(op_A, op_B, m, n, k, *alpha, a_dmem_ptr, lda, stridea, b_dmem_ptr, ldb, strideb, *beta, c_dmem_ptr, ldc, stridec, batch_count, cuda_stream);break;
-	case CUMPSGEMM_FP16TCEC: stridedBatch_layout_selector<T, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, half                         , mtk::wmma::tcec::with_ec   >(op_A, op_B, m, n, k, *alpha, a_dmem_ptr, lda, stridea, b_dmem_ptr, ldb, strideb, *beta, c_dmem_ptr, ldc, stridec, batch_count, cuda_stream);break;
-	case CUMPSGEMM_TF32TC:   stridedBatch_layout_selector<T, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, nvcuda::wmma::precision::tf32, mtk::wmma::tcec::without_ec>(op_A, op_B, m, n, k, *alpha, a_dmem_ptr, lda, stridea, b_dmem_ptr, ldb, strideb, *beta, c_dmem_ptr, ldc, stridec, batch_count, cuda_stream);break;
-	case CUMPSGEMM_TF32TCEC: stridedBatch_layout_selector<T, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, nvcuda::wmma::precision::tf32, mtk::wmma::tcec::with_ec   >(op_A, op_B, m, n, k, *alpha, a_dmem_ptr, lda, stridea, b_dmem_ptr, ldb, strideb, *beta, c_dmem_ptr, ldc, stridec, batch_count, cuda_stream);break;
-	default:break;
+	const auto code = gen_module_code<T>(op_A, op_B, compute_mode);
+
+	const auto kernel_module_candidate_list = handle->gemm_stridedBatch_module[code];
+
+	auto gemm_module = kernel_module_candidate_list[0];
+	for (unsigned module_id = 0; module_id < handle->num_kernel_candidates - 1; module_id++) {
+
 	}
+
+	launch_kernel<T>(
+			gemm_module,
+			m, n, k,
+			*alpha,
+			a_dmem_ptr, lda, stridea,
+			b_dmem_ptr, ldb, strideb,
+			*beta,
+			c_dmem_ptr, ldc, stridec,
+			batch_count,
+			cuda_stream
+			);
 
 	return CUBLAS_STATUS_SUCCESS;
 }
 
 extern "C" {
 cublasStatus_t cuMpSGEMM_sgemm(
+		cuMpSGEMM_handle_t handle,
 		const cublasOperation_t op_A,
 		const cublasOperation_t op_B,
 		const uint64_t m,
@@ -162,6 +207,7 @@ cublasStatus_t cuMpSGEMM_sgemm(
 	assert(op_A != CUBLAS_OP_C);
 	assert(op_B != CUBLAS_OP_C);
 	return cumpsgemm::gemm<float>(
+			handle,
 			op_A, op_B,
 			m, n, k,
 			alpha,
@@ -175,6 +221,7 @@ cublasStatus_t cuMpSGEMM_sgemm(
 }
 
 cublasStatus_t cuMpSGEMM_cgemm(
+		cuMpSGEMM_handle_t handle,
 		const cublasOperation_t op_A,
 		const cublasOperation_t op_B,
 		const uint64_t m,
@@ -189,6 +236,7 @@ cublasStatus_t cuMpSGEMM_cgemm(
 		cudaStream_t cuda_stream
 		) {
 	return cumpsgemm::gemm<cuComplex>(
+			handle,
 			op_A, op_B,
 			m, n, k,
 			alpha,
@@ -202,6 +250,7 @@ cublasStatus_t cuMpSGEMM_cgemm(
 }
 
 cublasStatus_t cuMpSGEMM_sgemm_strided_batch(
+		cuMpSGEMM_handle_t handle,
 		const cublasOperation_t op_A,
 		const cublasOperation_t op_B,
 		const uint64_t m,
@@ -219,6 +268,7 @@ cublasStatus_t cuMpSGEMM_sgemm_strided_batch(
 	assert(op_A != CUBLAS_OP_C);
 	assert(op_B != CUBLAS_OP_C);
 	return cumpsgemm::gemm_stridedBatch<float>(
+			handle,
 			op_A, op_B,
 			m, n, k,
 			alpha,
@@ -233,6 +283,7 @@ cublasStatus_t cuMpSGEMM_sgemm_strided_batch(
 }
 
 cublasStatus_t cuMpSGEMM_cgemm_strided_batch(
+		cuMpSGEMM_handle_t handle,
 		const cublasOperation_t op_A,
 		const cublasOperation_t op_B,
 		const uint64_t m,
@@ -248,6 +299,7 @@ cublasStatus_t cuMpSGEMM_cgemm_strided_batch(
 		cudaStream_t cuda_stream
 		) {
 	return cumpsgemm::gemm_stridedBatch<cuComplex>(
+			handle,
 			op_A, op_B,
 			m, n, k,
 			alpha,
@@ -260,4 +312,4 @@ cublasStatus_t cuMpSGEMM_cgemm_strided_batch(
 			cuda_stream
 			);
 }
-}
+} // extern "C"

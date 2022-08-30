@@ -4,6 +4,8 @@
 #include <dlfcn.h>
 #include <cumpsgemm/cumpsgemm.hpp>
 
+cuMpSGEMM_handle_t internal_global_cuMpSGEMM_handle = nullptr;
+
 namespace {
 const std::string info_env_name = "CUMPSGEMM_INFO";
 void cuMpSGEMM_log(
@@ -157,7 +159,12 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 		return (*func_ptr)(cublas_handle, op_A, op_B, m, n, k, alpha, a_dmem_ptr, ldb, b_dmem_ptr, ldb, beta, c_dmem_ptr, ldc);
 	}
 
+	if (internal_global_cuMpSGEMM_handle == nullptr) {
+		cuMpSGEMM_create(&internal_global_cuMpSGEMM_handle);
+	}
+
 	return cumpsgemm::gemm<T>(
+			internal_global_cuMpSGEMM_handle,
 			op_A, op_B,
 			m, n, k,
 			alpha,
@@ -214,7 +221,12 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 		return (*func_ptr)(cublas_handle, op_A, op_B, m, n, k, alpha, a_dmem_ptr, ldb, stridea, b_dmem_ptr, ldb, strideb, beta, c_dmem_ptr, ldc, stridec, batch_count);
 	}
 
+	if (internal_global_cuMpSGEMM_handle == nullptr) {
+		cuMpSGEMM_create(&internal_global_cuMpSGEMM_handle);
+	}
+
 	return cumpsgemm::gemm_stridedBatch<T>(
+			internal_global_cuMpSGEMM_handle,
 			op_A, op_B,
 			m, n, k,
 			alpha,

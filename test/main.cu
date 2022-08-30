@@ -295,6 +295,7 @@ void cublas_gemm_strided_batch(
 template <class T>
 int sgemm_test_core(
 		cublasHandle_t const cublas_handle,
+		cuMpSGEMM_handle_t const cuMpSGEMM_handle,
 		const cublasOperation_t op_A,
 		const cublasOperation_t op_B,
 		const unsigned m,
@@ -321,6 +322,7 @@ int sgemm_test_core(
 					);
 		} else {
 			cumpsgemm::gemm(
+					cuMpSGEMM_handle,
 					op_A, op_B,
 					m, n, k,
 					&alpha,
@@ -380,6 +382,7 @@ int sgemm_test_core(
 template <class T>
 int sgemm_strided_batch_test_core(
 		cublasHandle_t const cublas_handle,
+		cuMpSGEMM_handle_t const cuMpSGEMM_handle,
 		const cublasOperation_t op_A,
 		const cublasOperation_t op_B,
 		const unsigned m,
@@ -408,6 +411,7 @@ int sgemm_strided_batch_test_core(
 					);
 		} else {
 			cumpsgemm::gemm_stridedBatch(
+					cuMpSGEMM_handle,
 					op_A, op_B,
 					m, n, k,
 					&alpha,
@@ -508,12 +512,15 @@ void sgemm_test(const std::size_t min_N, const std::size_t max_N, const std::siz
 	unsigned num_tests = 0;
 	unsigned num_passed = 0;
 	auto cublas_handle_uptr = cutf::cublas::get_cublas_unique_ptr();
+	cuMpSGEMM_handle_t cuMpSGEMM_handle;
+	cuMpSGEMM_create(&cuMpSGEMM_handle);
 	for (const auto mode : modes) {
 		for (const auto op_A : sgemm_ops) {
 			for (const auto op_B : sgemm_ops) {
 				for (unsigned N = min_N; N <= max_N; N += interval) {
 					const auto res = sgemm_test_core(
 							*cublas_handle_uptr.get(),
+							cuMpSGEMM_handle,
 							op_A,
 							op_B,
 							N, N, N,
@@ -536,6 +543,7 @@ void sgemm_test(const std::size_t min_N, const std::size_t max_N, const std::siz
 				for (unsigned N = min_N; N <= max_N; N += interval) {
 					const auto res = sgemm_test_core(
 							*cublas_handle_uptr.get(),
+							cuMpSGEMM_handle,
 							op_A,
 							op_B,
 							N, N, N,
@@ -558,6 +566,8 @@ void sgemm_test(const std::size_t min_N, const std::size_t max_N, const std::siz
 			num_passed,
 			num_tests
 			);
+
+	cuMpSGEMM_destroy(cuMpSGEMM_handle);
 
 	cutf::memory::free(a_ptr);
 	cutf::memory::free(b_ptr);
@@ -603,12 +613,15 @@ void sgemm_strided_batch_test(const std::size_t min_N, const std::size_t max_N, 
 	unsigned num_tests = 0;
 	unsigned num_passed = 0;
 	auto cublas_handle_uptr = cutf::cublas::get_cublas_unique_ptr();
+	cuMpSGEMM_handle_t cuMpSGEMM_handle;
+	cuMpSGEMM_create(&cuMpSGEMM_handle);
 	for (const auto mode : modes) {
 		for (const auto op_A : sgemm_ops) {
 			for (const auto op_B : sgemm_ops) {
 				for (unsigned N = min_N; N <= max_N; N += interval) {
 					const auto res = sgemm_strided_batch_test_core(
 							*cublas_handle_uptr.get(),
+							cuMpSGEMM_handle,
 							op_A,
 							op_B,
 							N, N, N,
@@ -632,6 +645,7 @@ void sgemm_strided_batch_test(const std::size_t min_N, const std::size_t max_N, 
 				for (unsigned N = min_N; N <= max_N; N += interval) {
 					const auto res = sgemm_strided_batch_test_core(
 							*cublas_handle_uptr.get(),
+							cuMpSGEMM_handle,
 							op_A,
 							op_B,
 							N, N, N,
@@ -656,6 +670,8 @@ void sgemm_strided_batch_test(const std::size_t min_N, const std::size_t max_N, 
 			num_tests
 			);
 
+	cuMpSGEMM_destroy(cuMpSGEMM_handle);
+
 	cutf::memory::free(a_ptr);
 	cutf::memory::free(b_ptr);
 	cutf::memory::free(c_ptr);
@@ -671,6 +687,10 @@ void test_logged_shape(
 	}
 
 	auto cublas_handle_uptr = cutf::cublas::get_cublas_unique_ptr();
+
+	cuMpSGEMM_handle_t cuMpSGEMM_handle;
+	cuMpSGEMM_create(&cuMpSGEMM_handle);
+
 	std::size_t num_passed = 0;
 	std::size_t num_tested = 0;
 	std::printf("## %s\n", __func__);
@@ -744,6 +764,7 @@ void test_logged_shape(
 			if (func == "cublasSgemm_v2") {
 				res = sgemm_test_core(
 						*cublas_handle_uptr.get(),
+						cuMpSGEMM_handle,
 						op_A,
 						op_B,
 						m, n, k,
@@ -755,6 +776,7 @@ void test_logged_shape(
 			} else {
 				res = sgemm_test_core(
 						*cublas_handle_uptr.get(),
+						cuMpSGEMM_handle,
 						op_A,
 						op_B,
 						m, n, k,
@@ -808,6 +830,7 @@ void test_logged_shape(
 			if (func == "cublasSgemmStridedBatched") {
 				res = sgemm_strided_batch_test_core(
 						*cublas_handle_uptr.get(),
+						cuMpSGEMM_handle,
 						op_A,
 						op_B,
 						m, n, k,
@@ -820,6 +843,7 @@ void test_logged_shape(
 			} else {
 				res = sgemm_strided_batch_test_core(
 						*cublas_handle_uptr.get(),
+						cuMpSGEMM_handle,
 						op_A,
 						op_B,
 						m, n, k,
@@ -842,6 +866,8 @@ void test_logged_shape(
 	}
 	ifs.close();
 	std::printf("%lu / %lu passed\n", num_passed, num_tested);
+
+	cuMpSGEMM_destroy(cuMpSGEMM_handle);
 }
 
 void print_usage(const char* program_name) {

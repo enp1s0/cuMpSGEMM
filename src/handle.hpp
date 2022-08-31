@@ -34,6 +34,7 @@ struct gemm_module {
 	unsigned smem_m, smem_n, smem_k;
 	unsigned smem_size;
 	unsigned block_size;
+	unsigned num_active_blocks;
 };
 
 namespace kernel_module_code {

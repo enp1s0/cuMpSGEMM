@@ -748,6 +748,10 @@ cumpsgemm::gemm_module generate_gemm_module() {
 	mod.smem_k = SMEM_K;
 	CUTF_CHECK_ERROR(cudaFuncSetAttribute(kernel_func, cudaFuncAttributeMaxDynamicSharedMemorySize, mod.smem_size));
 
+	int num_active_blocks;
+	CUTF_CHECK_ERROR(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&num_active_blocks, kernel_func, BLOCK_SIZE, mod.smem_size));
+	mod.num_active_blocks = num_active_blocks;
+
 	return mod;
 }
 
@@ -776,6 +780,10 @@ cumpsgemm::gemm_module generate_gemm_stridedBatch_module() {
 	mod.smem_n = SMEM_N;
 	mod.smem_k = SMEM_K;
 	CUTF_CHECK_ERROR(cudaFuncSetAttribute(kernel_func, cudaFuncAttributeMaxDynamicSharedMemorySize, mod.smem_size));
+
+	int num_active_blocks;
+	CUTF_CHECK_ERROR(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&num_active_blocks, kernel_func, BLOCK_SIZE, mod.smem_size));
+	mod.num_active_blocks = num_active_blocks;
 
 	return mod;
 }

@@ -20,36 +20,41 @@ cublasStatus_t cuMpSGEMM_create(cuMpSGEMM_handle_t* const handle) {
 	if ((*handle = new cuMpSGEMM_handle) == nullptr) {
 		return CUBLAS_STATUS_INTERNAL_ERROR;
 	}
+
+	int num_sms;
+	cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, 0);
+	(*handle)->num_sms = num_sms;
+
 	using tf32 = nvcuda::wmma::precision::tf32;
 
 	// set kernel modules
 #ifdef COMPILE_SGEMM
-	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , half, with_ec   , col_major, col_major, 64, 64, 32, 32, 32, 16, 128, 2, s, 0);
-	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , half, with_ec   , col_major, col_major, 64, 64, 32, 32, 32, 16, 128, 2, s, 1);
+	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , half, with_ec   , col_major, col_major, 64, 128, 32, 32, 64, 32, 128, 1, s, 0);
+	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , half, with_ec   , col_major, col_major, 64, 64, 32, 32, 32, 32, 128, 1, s, 1);
 	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , tf32, with_ec   , col_major, col_major, 64, 64, 32, 32, 32, 16, 128, 2, s, 0);
 	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , tf32, with_ec   , col_major, col_major, 64, 64, 32, 32, 32, 16, 128, 2, s, 1);
 	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , half, without_ec, col_major, col_major, 64, 64, 32, 32, 32, 16, 128, 2, s, 0);
 	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , half, without_ec, col_major, col_major, 64, 64, 32, 32, 32, 16, 128, 2, s, 1);
 	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , tf32, without_ec, col_major, col_major, 64, 64, 32, 32, 32, 16, 128, 2, s, 0);
 	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , tf32, without_ec, col_major, col_major, 64, 64, 32, 32, 32, 16, 128, 2, s, 1);
-	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , half, with_ec   , row_major, col_major, 64, 64, 32, 32, 32, 16, 128, 2, s, 0);
-	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , half, with_ec   , row_major, col_major, 64, 64, 32, 32, 32, 16, 128, 2, s, 1);
+	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , half, with_ec   , row_major, col_major, 64, 128, 32, 32, 64, 32, 128, 1, s, 0);
+	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , half, with_ec   , row_major, col_major, 64, 64, 32, 32, 32, 32, 128, 1, s, 1);
 	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , tf32, with_ec   , row_major, col_major, 64, 64, 32, 32, 32, 16, 128, 2, s, 0);
 	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , tf32, with_ec   , row_major, col_major, 64, 64, 32, 32, 32, 16, 128, 2, s, 1);
 	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , half, without_ec, row_major, col_major, 64, 64, 32, 32, 32, 16, 128, 2, s, 0);
 	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , half, without_ec, row_major, col_major, 64, 64, 32, 32, 32, 16, 128, 2, s, 1);
 	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , tf32, without_ec, row_major, col_major, 64, 64, 32, 32, 32, 16, 128, 2, s, 0);
 	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , tf32, without_ec, row_major, col_major, 64, 64, 32, 32, 32, 16, 128, 2, s, 1);
-	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , half, with_ec   , col_major, row_major, 64, 64, 32, 32, 32, 16, 128, 2, s, 0);
-	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , half, with_ec   , col_major, row_major, 64, 64, 32, 32, 32, 16, 128, 2, s, 1);
+	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , half, with_ec   , col_major, row_major, 64, 128, 32, 64, 32, 32, 128, 1, s, 0);
+	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , half, with_ec   , col_major, row_major, 64, 64, 64, 32, 32, 32, 128, 2, s, 1);
 	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , tf32, with_ec   , col_major, row_major, 64, 64, 32, 32, 32, 16, 128, 2, s, 0);
 	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , tf32, with_ec   , col_major, row_major, 64, 64, 32, 32, 32, 16, 128, 2, s, 1);
 	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , half, without_ec, col_major, row_major, 64, 64, 32, 32, 32, 16, 128, 2, s, 0);
 	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , half, without_ec, col_major, row_major, 64, 64, 32, 32, 32, 16, 128, 2, s, 1);
 	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , tf32, without_ec, col_major, row_major, 64, 64, 32, 32, 32, 16, 128, 2, s, 0);
 	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , tf32, without_ec, col_major, row_major, 64, 64, 32, 32, 32, 16, 128, 2, s, 1);
-	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , half, with_ec   , row_major, row_major, 64, 64, 32, 32, 32, 16, 128, 2, s, 0);
-	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , half, with_ec   , row_major, row_major, 64, 64, 32, 32, 32, 16, 128, 2, s, 1);
+	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , half, with_ec   , row_major, row_major, 64, 128, 32, 64, 32, 32, 128, 1, s, 0);
+	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , half, with_ec   , row_major, row_major, 128, 64, 32, 64, 32, 32, 128, 1, s, 1);
 	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , tf32, with_ec   , row_major, row_major, 64, 64, 32, 32, 32, 16, 128, 2, s, 0);
 	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , tf32, with_ec   , row_major, row_major, 64, 64, 32, 32, 32, 16, 128, 2, s, 1);
 	SET_GEMM_KERNEL_MODULE((*handle)->gemm_module, float    , half, without_ec, row_major, row_major, 64, 64, 32, 32, 32, 16, 128, 2, s, 0);

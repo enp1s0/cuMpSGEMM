@@ -6,17 +6,24 @@
 
 namespace cumpsgemm {
 namespace device {
+namespace detail {
+template <class Use>
+struct use_layout_conv {using type = void;};
+template <>
+struct use_layout_conv<nvcuda::wmma::matrix_a> {using type = nvcuda::wmma::row_major;};
+template <>
+struct use_layout_conv<nvcuda::wmma::matrix_b> {using type = nvcuda::wmma::col_major;};
+} // namespace detail
 // fragment
 template <class T, class Use, unsigned M, unsigned N, unsigned K, class Layout, class TC_T, class EC>
 struct tc_fragment {
-	using frag_t = mtk::wmma::tcec::fragment<Use, M, N, K, TC_T, typename cumpsgemm::device::layout_conv<Layout>::type, typename mtk::wmma::tcec::default_policy<TC_T, EC>::type>;
+	using frag_t = mtk::wmma::tcec::fragment<Use, M, N, K, TC_T, typename detail::use_layout_conv<Use>::type, typename mtk::wmma::tcec::default_policy<TC_T, EC, mtk::wmma::tcec::op_mma>::type>;
 	frag_t frag;
 };
 
 template <class Use, unsigned M, unsigned N, unsigned K, class Layout, class TC_T, class EC>
 struct tc_fragment<cuComplex, Use, M, N, K, Layout, TC_T, EC> {
-	using frag_t = mtk::wmma::tcec::fragment_complex<Use, M, N, K, TC_T, typename cumpsgemm::device::layout_conv<Layout>::type, typename mtk::wmma::tcec::default_policy<TC_T, EC>::type>;
-
+	using frag_t = mtk::wmma::tcec::fragment_complex<Use, M, N, K, TC_T, typename detail::use_layout_conv<Use>::type, typename mtk::wmma::tcec::default_policy<TC_T, EC, mtk::wmma::tcec::op_mma>::type>;
 	frag_t frag;
 };
 
@@ -29,13 +36,13 @@ __device__ void fill_zero (
 }
 
 // fragment loader
-template <class MEM_Layout, class MEM_T, class Use, unsigned M, unsigned N, unsigned K, class TC_T, class Layout, class EC>
+template <class MEM_T, class Use, unsigned M, unsigned N, unsigned K, class TC_T, class Layout, class EC>
 __device__ void load_matrix(
 		tc_fragment<MEM_T, Use, M, N, K, Layout, TC_T, EC>& frag,
 		const MEM_T* const ptr,
 		const uint64_t ldm
 		) {
-	mtk::wmma::tcec::load_matrix_sync<typename cumpsgemm::device::layout_conv<MEM_Layout>::type>(frag.frag, ptr, ldm);
+	mtk::wmma::tcec::load_matrix_sync<typename cumpsgemm::device::layout_conv<Layout>::type>(frag.frag, ptr, ldm);
 }
 
 // fragment storer

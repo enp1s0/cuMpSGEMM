@@ -1,3 +1,4 @@
+#include <cstddef>
 #include <cumpsgemm/cumpsgemm.h>
 #include "handle.hpp"
 #include "cumpsgemm_kernel.cuh"

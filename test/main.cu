@@ -9,6 +9,10 @@
 #include <cutf/cublas.hpp>
 #include <cumpsgemm/cumpsgemm.hpp>
 
+enum gemm_type {
+	s, c
+};
+
 double error_threshold(
 		const cuMpSGEMM_compute_mode_t compute_mode,
 		const std::size_t N
@@ -474,9 +478,9 @@ int sgemm_strided_batch_test_core(
 	}
 }
 
-void sgemm_test(const std::size_t min_N, const std::size_t max_N, const std::size_t interval, const bool only_cublas) {
+void gemm_test(const std::size_t min_N, const std::size_t max_N, const std::size_t interval, const bool only_cublas, const gemm_type gemm) {
 	constexpr uint64_t seed = 0;
-	const std::size_t max_num_elements = max_N * max_N * 2;
+	const std::size_t max_num_elements = max_N * max_N * (gemm == gemm_type::c ? 2 : 1);
 	float* a_ptr = cutf::memory::malloc<float>(max_num_elements);
 	float* b_ptr = cutf::memory::malloc<float>(max_num_elements);
 	float* c_ptr = cutf::memory::malloc<float>(max_num_elements);
@@ -486,15 +490,15 @@ void sgemm_test(const std::size_t min_N, const std::size_t max_N, const std::siz
 	CUTF_CHECK_ERROR(cutf::curand::generate_uniform(*curand_gen.get(), a_ptr, max_num_elements));
 	CUTF_CHECK_ERROR(cutf::curand::generate_uniform(*curand_gen.get(), b_ptr, max_num_elements));
 
-	std::vector<cuMpSGEMM_compute_mode_t> modes = {
-		CUMPSGEMM_CUBLAS,
-	};
+	std::vector<cuMpSGEMM_compute_mode_t> modes;
 
 	if (!only_cublas) {
 		modes.push_back(CUMPSGEMM_FP16TCEC);
 		modes.push_back(CUMPSGEMM_FP16TC);
 		modes.push_back(CUMPSGEMM_TF32TCEC);
 		modes.push_back(CUMPSGEMM_TF32TC);
+	} else {
+		modes.push_back(CUMPSGEMM_CUBLAS);
 	}
 
 	std::vector<cublasOperation_t> sgemm_ops = {
@@ -514,47 +518,51 @@ void sgemm_test(const std::size_t min_N, const std::size_t max_N, const std::siz
 	auto cublas_handle_uptr = cutf::cublas::get_cublas_unique_ptr();
 	cuMpSGEMM_handle_t cuMpSGEMM_handle;
 	cuMpSGEMM_create(&cuMpSGEMM_handle);
-	for (const auto mode : modes) {
-		for (const auto op_A : sgemm_ops) {
-			for (const auto op_B : sgemm_ops) {
-				for (unsigned N = min_N; N <= max_N; N += interval) {
-					const auto res = sgemm_test_core(
-							*cublas_handle_uptr.get(),
-							cuMpSGEMM_handle,
-							op_A,
-							op_B,
-							N, N, N,
-							a_ptr, N,
-							b_ptr, N,
-							c_ptr, N,
-							mode
-							);
-					num_tests++;
-					if (res == 0) {
-						num_passed++;
+
+	if (gemm == gemm_type::s) {
+		for (const auto mode : modes) {
+			for (const auto op_A : sgemm_ops) {
+				for (const auto op_B : sgemm_ops) {
+					for (unsigned N = min_N; N <= max_N; N += interval) {
+						const auto res = sgemm_test_core(
+								*cublas_handle_uptr.get(),
+								cuMpSGEMM_handle,
+								op_A,
+								op_B,
+								N, N, N,
+								a_ptr, N,
+								b_ptr, N,
+								c_ptr, N,
+								mode
+								);
+						num_tests++;
+						if (res == 0) {
+							num_passed++;
+						}
 					}
 				}
 			}
 		}
-	}
-	for (const auto mode : modes) {
-		for (const auto op_A : cgemm_ops) {
-			for (const auto op_B : cgemm_ops) {
-				for (unsigned N = min_N; N <= max_N; N += interval) {
-					const auto res = sgemm_test_core(
-							*cublas_handle_uptr.get(),
-							cuMpSGEMM_handle,
-							op_A,
-							op_B,
-							N, N, N,
-							reinterpret_cast<cuComplex*>(a_ptr), N,
-							reinterpret_cast<cuComplex*>(b_ptr), N,
-							reinterpret_cast<cuComplex*>(c_ptr), N,
-							mode
-							);
-					num_tests++;
-					if (res == 0) {
-						num_passed++;
+	} else if (gemm == gemm_type::c) {
+		for (const auto mode : modes) {
+			for (const auto op_A : cgemm_ops) {
+				for (const auto op_B : cgemm_ops) {
+					for (unsigned N = min_N; N <= max_N; N += interval) {
+						const auto res = sgemm_test_core(
+								*cublas_handle_uptr.get(),
+								cuMpSGEMM_handle,
+								op_A,
+								op_B,
+								N, N, N,
+								reinterpret_cast<cuComplex*>(a_ptr), N,
+								reinterpret_cast<cuComplex*>(b_ptr), N,
+								reinterpret_cast<cuComplex*>(c_ptr), N,
+								mode
+								);
+						num_tests++;
+						if (res == 0) {
+							num_passed++;
+						}
 					}
 				}
 			}
@@ -574,9 +582,9 @@ void sgemm_test(const std::size_t min_N, const std::size_t max_N, const std::siz
 	cutf::memory::free(c_ptr);
 }
 
-void sgemm_strided_batch_test(const std::size_t min_N, const std::size_t max_N, const std::size_t interval, const std::size_t batch_count, const bool only_cublas) {
+void gemm_strided_batch_test(const std::size_t min_N, const std::size_t max_N, const std::size_t interval, const std::size_t batch_count, const bool only_cublas, const gemm_type gemm) {
 	constexpr uint64_t seed = 0;
-	const std::size_t max_num_elements = max_N * max_N * batch_count * 2;
+	const std::size_t max_num_elements = max_N * max_N * batch_count * (gemm == gemm_type::c ? 2 : 1);
 	float* a_ptr = cutf::memory::malloc<float>(max_num_elements);
 	float* b_ptr = cutf::memory::malloc<float>(max_num_elements);
 	float* c_ptr = cutf::memory::malloc<float>(max_num_elements);
@@ -587,15 +595,15 @@ void sgemm_strided_batch_test(const std::size_t min_N, const std::size_t max_N, 
 	CUTF_CHECK_ERROR(cutf::curand::generate_uniform(*curand_gen.get(), b_ptr, max_num_elements));
 
 
-	std::vector<cuMpSGEMM_compute_mode_t> modes = {
-		CUMPSGEMM_CUBLAS,
-	};
+	std::vector<cuMpSGEMM_compute_mode_t> modes;
 
 	if (!only_cublas) {
 		modes.push_back(CUMPSGEMM_FP16TCEC);
 		modes.push_back(CUMPSGEMM_FP16TC);
 		modes.push_back(CUMPSGEMM_TF32TCEC);
 		modes.push_back(CUMPSGEMM_TF32TC);
+	} else {
+		modes.push_back(CUMPSGEMM_CUBLAS);
 	}
 
 	std::vector<cublasOperation_t> sgemm_ops = {
@@ -615,49 +623,53 @@ void sgemm_strided_batch_test(const std::size_t min_N, const std::size_t max_N, 
 	auto cublas_handle_uptr = cutf::cublas::get_cublas_unique_ptr();
 	cuMpSGEMM_handle_t cuMpSGEMM_handle;
 	cuMpSGEMM_create(&cuMpSGEMM_handle);
-	for (const auto mode : modes) {
-		for (const auto op_A : sgemm_ops) {
-			for (const auto op_B : sgemm_ops) {
-				for (unsigned N = min_N; N <= max_N; N += interval) {
-					const auto res = sgemm_strided_batch_test_core(
-							*cublas_handle_uptr.get(),
-							cuMpSGEMM_handle,
-							op_A,
-							op_B,
-							N, N, N,
-							a_ptr, N, max_N * max_N,
-							b_ptr, N, max_N * max_N,
-							c_ptr, N, max_N * max_N,
-							batch_count,
-							mode
-							);
-					num_tests++;
-					if (res == 0) {
-						num_passed++;
+
+	if (gemm == gemm_type::s) {
+		for (const auto mode : modes) {
+			for (const auto op_A : sgemm_ops) {
+				for (const auto op_B : sgemm_ops) {
+					for (unsigned N = min_N; N <= max_N; N += interval) {
+						const auto res = sgemm_strided_batch_test_core(
+								*cublas_handle_uptr.get(),
+								cuMpSGEMM_handle,
+								op_A,
+								op_B,
+								N, N, N,
+								a_ptr, N, max_N * max_N,
+								b_ptr, N, max_N * max_N,
+								c_ptr, N, max_N * max_N,
+								batch_count,
+								mode
+								);
+						num_tests++;
+						if (res == 0) {
+							num_passed++;
+						}
 					}
 				}
 			}
 		}
-	}
-	for (const auto mode : modes) {
-		for (const auto op_A : cgemm_ops) {
-			for (const auto op_B : cgemm_ops) {
-				for (unsigned N = min_N; N <= max_N; N += interval) {
-					const auto res = sgemm_strided_batch_test_core(
-							*cublas_handle_uptr.get(),
-							cuMpSGEMM_handle,
-							op_A,
-							op_B,
-							N, N, N,
-							reinterpret_cast<cuComplex*>(a_ptr), N, max_N * max_N,
-							reinterpret_cast<cuComplex*>(b_ptr), N, max_N * max_N,
-							reinterpret_cast<cuComplex*>(c_ptr), N, max_N * max_N,
-							batch_count,
-							mode
-							);
-					num_tests++;
-					if (res == 0) {
-						num_passed++;
+	} else if (gemm == gemm_type::c) {
+		for (const auto mode : modes) {
+			for (const auto op_A : cgemm_ops) {
+				for (const auto op_B : cgemm_ops) {
+					for (unsigned N = min_N; N <= max_N; N += interval) {
+						const auto res = sgemm_strided_batch_test_core(
+								*cublas_handle_uptr.get(),
+								cuMpSGEMM_handle,
+								op_A,
+								op_B,
+								N, N, N,
+								reinterpret_cast<cuComplex*>(a_ptr), N, max_N * max_N,
+								reinterpret_cast<cuComplex*>(b_ptr), N, max_N * max_N,
+								reinterpret_cast<cuComplex*>(c_ptr), N, max_N * max_N,
+								batch_count,
+								mode
+								);
+						num_tests++;
+						if (res == 0) {
+							num_passed++;
+						}
 					}
 				}
 			}
@@ -872,12 +884,16 @@ void test_logged_shape(
 
 void print_usage(const char* program_name) {
 	std::fprintf(stderr,
-			"Usage : %s gemm [min_N] [max_N] [interval]\n"
-			"      : %s gemm_strided_batch [min_N] [max_N] [interval] [batch_count]\n"
-			"      : %s cublas_gemm [min_N] [max_N] [interval]\n"
-			"      : %s cublas_gemm_strided_batch [min_N] [max_N] [interval] [batch_count]\n"
+			"Usage : %s sgemm [min_N] [max_N] [interval]\n"
+			"      : %s cgemm [min_N] [max_N] [interval]\n"
+			"      : %s sgemm_strided_batch [min_N] [max_N] [interval] [batch_count]\n"
+			"      : %s cgemm_strided_batch [min_N] [max_N] [interval] [batch_count]\n"
+			"      : %s cublas_sgemm [min_N] [max_N] [interval]\n"
+			"      : %s cublas_cgemm [min_N] [max_N] [interval]\n"
+			"      : %s cublas_sgemm_strided_batch [min_N] [max_N] [interval] [batch_count]\n"
+			"      : %s cublas_cgemm_strided_batch [min_N] [max_N] [interval] [batch_count]\n"
 			"      : %s log [/path/to/log]\n",
-			program_name, program_name, program_name, program_name, program_name
+			program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name
 			);
 	std::fflush(stderr);
 }
@@ -890,30 +906,30 @@ int main(int argc, char** argv) {
 
 	const std::string command = argv[1];
 
-	if (command == "gemm") {
+	if (command == "sgemm" || command == "cgemm") {
 		if (argc < 1 + 1 + 3) {
 			print_usage(argv[0]);
 			return 1;
 		}
-		sgemm_test(std::stoi(argv[2]), std::stoi(argv[3]), std::stoi(argv[4]), false);
-	} else if (command == "gemm_strided_batch") {
+		gemm_test(std::stoi(argv[2]), std::stoi(argv[3]), std::stoi(argv[4]), false, (command == "sgemm" ? gemm_type::s : gemm_type::c));
+	} else if (command == "sgemm_strided_batch" || command == "cgemm_strided_batch") {
 		if (argc < 1 + 1 + 3 + 1) {
 			print_usage(argv[0]);
 			return 1;
 		}
-		sgemm_strided_batch_test(std::stoi(argv[2]), std::stoi(argv[3]), std::stoi(argv[4]), std::stoi(argv[5]), false);
-	} else if (command == "cublas_gemm") {
+		gemm_strided_batch_test(std::stoi(argv[2]), std::stoi(argv[3]), std::stoi(argv[4]), std::stoi(argv[5]), false, (command == "sgemm_strided_batch" ? gemm_type::s : gemm_type::c));
+	} else if (command == "cublas_sgemm" || command == "cublas_cgemm") {
 		if (argc < 1 + 1 + 3) {
 			print_usage(argv[0]);
 			return 1;
 		}
-		sgemm_test(std::stoi(argv[2]), std::stoi(argv[3]), std::stoi(argv[4]), true);
-	} else if (command == "cublas_gemm_strided_batch") {
+		gemm_test(std::stoi(argv[2]), std::stoi(argv[3]), std::stoi(argv[4]), true, (command == "cublas_sgemm" ? gemm_type::s : gemm_type::c));
+	} else if (command == "cublas_sgemm_strided_batch" || command == "cublas_cgemm_strided_batch") {
 		if (argc < 1 + 1 + 3 + 1) {
 			print_usage(argv[0]);
 			return 1;
 		}
-		sgemm_strided_batch_test(std::stoi(argv[2]), std::stoi(argv[3]), std::stoi(argv[4]), std::stoi(argv[5]), true);
+		gemm_strided_batch_test(std::stoi(argv[2]), std::stoi(argv[3]), std::stoi(argv[4]), std::stoi(argv[5]), true, (command == "cublas_sgemm_strided_batch" ? gemm_type::s : gemm_type::c));
 	} else if (command == "log") {
 		if (argc < 1 + 1 + 1) {
 			print_usage(argv[0]);

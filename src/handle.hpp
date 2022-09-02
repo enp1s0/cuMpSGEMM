@@ -5,26 +5,26 @@
 namespace cumpsgemm {
 template <class T>
 using gemm_kernel_func_t = void (*)(
-			const uint64_t,
-			const uint64_t,
-			const uint64_t,
+			const uint32_t,
+			const uint32_t,
+			const uint32_t,
 			const T,
-			const T* const, const uint64_t,
-			const T* const, const uint64_t,
+			const T* const, const uint32_t,
+			const T* const, const uint32_t,
 			const T,
-			T* const, const uint64_t
+			T* const, const uint32_t
 			);
 
 template <class T>
 using gemm_stridedBatch_kernel_func_t = void (*)(
-			const uint64_t,
-			const uint64_t,
-			const uint64_t,
+			const uint32_t,
+			const uint32_t,
+			const uint32_t,
 			const T,
-			const T* const, const uint64_t, const uint64_t,
-			const T* const, const uint64_t, const uint64_t,
+			const T* const, const uint32_t, const uint64_t,
+			const T* const, const uint32_t, const uint64_t,
 			const T,
-			T* const, const uint64_t, const uint64_t,
+			T* const, const uint32_t, const uint64_t,
 			const uint32_t
 			);
 
@@ -34,6 +34,7 @@ struct gemm_module {
 	unsigned smem_m, smem_n, smem_k;
 	unsigned smem_size;
 	unsigned block_size;
+	unsigned num_active_blocks;
 };
 
 namespace kernel_module_code {

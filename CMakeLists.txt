@@ -1,8 +1,6 @@
 cmake_minimum_required(VERSION 3.18)
 project(cuMpSGEMM LANGUAGES CXX CUDA)
 
-set(BUILD_STATIC_LIBRARY OFF)
-
 find_package(CUDA 11.0 REQUIRED)
 find_package(CUDAToolkit REQUIRED)
 
@@ -16,34 +14,15 @@ endforeach()
 # CUDA (1/2)
 SET(CMAKE_CUDA_ARCHITECTURES 80 86)
 
-# Generate template instance files
-set(GEN_CMD "${CMAKE_CURRENT_SOURCE_DIR}/src/instances/gencode.sh")
-message("GEN_CMD: ${GEN_CMD}")
-execute_process(COMMAND ${GEN_CMD} WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/src/instances")
-
 # Directories
 set(INCDIR include)
 set(SRCDIR src)
 set(SUBMODULEDIR submodules)
 
 file(GLOB HEADERS "${INCDIR}/cumpsgemm/*.hpp")
-file(GLOB INSTANCES "${SRCDIR}/instances/*.cu")
 
-if (BUILD_STATIC_LIBRARY)
-	## static library
-	add_library(cumpsgemm_static STATIC
-		${SRCDIR}/cumpsgemm.cu
-		${SRCDIR}/cumpsgemm_cublas.cu
-		${SRCDIR}/default_cumpsgemm_rule.cu
-		${SRCDIR}/handle.cu
-		${HEADERS}
-		)
-
-	target_include_directories(cumpsgemm_static PUBLIC ${INCDIR} ${SUBMODULEDIR}/cutf/include ${SUBMODULEDIR}/wmma_extension/include)
-endif()
-
-## shared library
-add_library(cumpsgemm SHARED
+set(
+	LIBSRCS
 	${SRCDIR}/cumpsgemm.cu
 	${SRCDIR}/cumpsgemm_cublas.cu
 	${SRCDIR}/default_cumpsgemm_rule.cu
@@ -51,7 +30,19 @@ add_library(cumpsgemm SHARED
 	${HEADERS}
 	)
 
-target_include_directories(cumpsgemm PUBLIC ${INCDIR} ${SUBMODULEDIR}/cutf/include ${SUBMODULEDIR}/wmma_extension/include)
+add_library(libobjs OBJECT ${LIBSRCS})
+set_property(TARGET libobjs PROPERTY POSITION_INDEPENDENT_CODE 1)
+target_include_directories(libobjs PUBLIC ${INCDIR} ${SUBMODULEDIR}/cutf/include ${SUBMODULEDIR}/wmma_extension/include)
+
+## static library
+add_library(cumpsgemm_static STATIC $<TARGET_OBJECTS:libobjs>)
+
+#target_include_directories(cumpsgemm_static PUBLIC ${INCDIR} ${SUBMODULEDIR}/cutf/include ${SUBMODULEDIR}/wmma_extension/include)
+
+## shared library
+add_library(cumpsgemm SHARED $<TARGET_OBJECTS:libobjs>)
+
+#target_include_directories(cumpsgemm PUBLIC ${INCDIR} ${SUBMODULEDIR}/cutf/include ${SUBMODULEDIR}/wmma_extension/include)
 target_link_libraries(cumpsgemm PRIVATE
 	cublas_static
 	cublasLt_static
@@ -77,7 +68,7 @@ add_executable(cumpsgemm_test ${TESTSRCDIR}/main.cu ${HEADERS})
 target_include_directories(cumpsgemm_test PRIVATE ${INCDIR} ${SUBMODULEDIR}/cutf/include ${SUBMODULEDIR}/wmma_extension/include)
 target_link_libraries(cumpsgemm_test PRIVATE
 	CUDA::cublas
-	cumpsgemm
+	cumpsgemm_static
 	cuda
 	curand
 	)

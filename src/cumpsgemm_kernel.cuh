@@ -70,7 +70,7 @@ __device__ void operator() (
 			cumpsgemm::device::tc_fragment<T, nvcuda::wmma::matrix_b, FRAG_M, FRAG_N, FRAG_K, OP_B, TC_T, EC> frag_b;
 			cumpsgemm::device::load_matrix(frag_b, b_smem_ptr + get_smem_index<SMEM_K, SMEM_N, smem_B_skew, OP_B>{}(k, bn * FRAG_N), get_smem_ld<SMEM_K, SMEM_N, smem_B_skew, OP_B>::value);
 
-			cumpsgemm::device::mma(frag_c[i], frag_a, frag_b, frag_c[i]);
+			cumpsgemm::device::mma(frag_c[i / (BLOCK_SIZE / warp_size)], frag_a, frag_b, frag_c[i / (BLOCK_SIZE / warp_size)]);
 		}
 	}
 }
@@ -227,7 +227,7 @@ __global__ void gemm_kernel(
 				smem + get_smem_index<SMEM_M, SMEM_N, smem_C_skew, cumpsgemm::col_major>{}(
 					bm * FRAG_M, bn * FRAG_N
 					),
-				frag_c[i],
+				frag_c[i / (BLOCK_SIZE / warp_size)],
 				SMEM_M + smem_C_skew
 				);
 	}

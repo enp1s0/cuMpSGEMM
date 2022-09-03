@@ -395,12 +395,6 @@ __global__ void gemm_kernel(
 	A_DMEM_LOADER a_dmem_loader;
 	B_DMEM_LOADER b_dmem_loader;
 
-	constexpr unsigned frag_c_array_size = SMEM_M * SMEM_N / (FRAG_M * FRAG_N) / (BLOCK_SIZE / warp_size);
-	cumpsgemm::device::tc_fragment<T, nvcuda::wmma::accumulator, FRAG_M, FRAG_N, FRAG_K, void, TC_T, EC> frag_c[frag_c_array_size];
-	for (unsigned i = 0; i < frag_c_array_size; i++) {
-		cumpsgemm::device::fill_zero(frag_c[i]);
-	}
-
 	const auto blockIdx_x = (blockIdx.x) % ((m + SMEM_M - 1) / SMEM_M);
 	const auto blockIdx_y = (blockIdx.x) / ((m + SMEM_M - 1) / SMEM_M);
 
@@ -418,6 +412,13 @@ __global__ void gemm_kernel(
 			0, blockIdx_y * SMEM_N,
 			k, n
 			);
+
+	constexpr unsigned frag_c_array_size = SMEM_M * SMEM_N / (FRAG_M * FRAG_N) / (BLOCK_SIZE / warp_size);
+	cumpsgemm::device::tc_fragment<T, nvcuda::wmma::accumulator, FRAG_M, FRAG_N, FRAG_K, void, TC_T, EC> frag_c[frag_c_array_size];
+	for (unsigned i = 0; i < frag_c_array_size; i++) {
+		cumpsgemm::device::fill_zero(frag_c[i]);
+	}
+
 	unsigned bk = 0;
 #pragma unroll NUM_UNROLLINGS
 	for (bk += SMEM_K; bk < k; bk += SMEM_K) {

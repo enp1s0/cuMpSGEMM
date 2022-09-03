@@ -50,7 +50,6 @@ template <> struct size_of<cuComplex> {static constexpr unsigned value = 8;};
 // Dmem loader
 template <class T, unsigned SMEM_M, unsigned SMEM_N, unsigned SKEW, unsigned BLOCK_SIZE>
 struct dmem_loader_core {
-	__device__ dmem_loader_core(){}
 	__device__ void operator() (
 			T* const smem_ptr,
 			const T* const dmem_ptr,
@@ -112,7 +111,6 @@ struct dmem_loader_core {
 template <class _Layout, class T, unsigned SMEM_M, unsigned SMEM_N, unsigned SKEW, unsigned BLOCK_SIZE>
 struct dmem_loader {
 	using Layout = _Layout;
-	__device__ dmem_loader(){}
 	__device__ void operator() (
 			T* const smem_ptr,
 			const T* const dmem_ptr,
@@ -135,7 +133,6 @@ struct dmem_loader {
 template <class T, unsigned SMEM_M, unsigned SMEM_N, unsigned SKEW, unsigned BLOCK_SIZE>
 struct dmem_loader<cumpsgemm::row_major, T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE> {
 	using Layout = cumpsgemm::row_major;
-	__device__ dmem_loader(){}
 	__device__ void operator() (
 			T* const smem_ptr,
 			const T* const dmem_ptr,
@@ -157,7 +154,6 @@ struct dmem_loader<cumpsgemm::row_major, T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE> {
 
 template <unsigned SMEM_M, unsigned SMEM_N, unsigned SKEW, unsigned BLOCK_SIZE>
 struct dmem_loader_conj_core {
-	__device__ dmem_loader_conj_core(){}
 	__device__ void operator() (
 			cuComplex* const smem_ptr,
 			const cuComplex* const dmem_ptr,
@@ -200,7 +196,6 @@ struct dmem_loader_conj_core {
 template <unsigned SMEM_M, unsigned SMEM_N, unsigned SKEW, unsigned BLOCK_SIZE>
 struct dmem_loader<cumpsgemm::conjugate, cuComplex, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE> {
 	using Layout = cumpsgemm::row_major;
-	__device__ dmem_loader(){}
 	__device__ void operator() (
 			cuComplex* const smem_ptr,
 			const cuComplex* const dmem_ptr,
@@ -223,7 +218,6 @@ struct dmem_loader<cumpsgemm::conjugate, cuComplex, SMEM_M, SMEM_N, SKEW, BLOCK_
 template <unsigned SMEM_M, unsigned SMEM_N, unsigned SKEW, unsigned BLOCK_SIZE>
 struct dmem_loader<cumpsgemm::conjugate, float, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE> {
 	using Layout = cumpsgemm::col_major;
-	__device__ dmem_loader(){}
 	__device__ void operator() (
 			float* const,
 			const float* const,
@@ -269,7 +263,6 @@ __device__ bool is_zero(const cuComplex& v) {
 
 template <class T, unsigned SMEM_M, unsigned SMEM_N, unsigned SKEW, unsigned BLOCK_SIZE>
 struct dmem_storer {
-	__device__ dmem_storer(){}
 	__device__ void operator() (
 			T* const dmem_ptr,
 			const unsigned ld,

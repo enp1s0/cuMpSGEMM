@@ -54,11 +54,11 @@ struct dmem_loader_core {
 	__device__ void operator() (
 			T* const smem_ptr,
 			const T* const dmem_ptr,
-			const std::size_t ld,
-			const std::size_t start_m,
-			const std::size_t start_n,
-			const std::size_t size_m,
-			const std::size_t size_n
+			const unsigned ld,
+			const unsigned start_m,
+			const unsigned start_n,
+			const unsigned size_m,
+			const unsigned size_n
 			) {
 		if (start_m + SMEM_M < size_m && start_n + SMEM_N < size_n) {
 			if (ld % (16 / size_of<T>::value) == 0) {
@@ -67,7 +67,7 @@ struct dmem_loader_core {
 					const auto m = index % SMEM_M;
 					const auto n = index / SMEM_M;
 					const auto smem_index = m + n * (SMEM_M + SKEW);
-					const auto dmem_index = (start_m + m) + (start_n + n) * ld;
+					const auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
 					cutf::cp_async::cp_async<16>(&smem_ptr[smem_index], &dmem_ptr[dmem_index]);
 				}
 			} else if ((ld % (8 / size_of<T>::value) == 0)) {
@@ -76,7 +76,7 @@ struct dmem_loader_core {
 					const auto m = index % SMEM_M;
 					const auto n = index / SMEM_M;
 					const auto smem_index = m + n * (SMEM_M + SKEW);
-					const auto dmem_index = (start_m + m) + (start_n + n) * ld;
+					const auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
 					cutf::cp_async::cp_async<8>(&smem_ptr[smem_index], &dmem_ptr[dmem_index]);
 				}
 			} else if ((4 / size_of<T>::value != 0) && (ld % (4 / size_of<T>::value) == 0)) {
@@ -85,7 +85,7 @@ struct dmem_loader_core {
 					const auto m = index % SMEM_M;
 					const auto n = index / SMEM_M;
 					const auto smem_index = m + n * (SMEM_M + SKEW);
-					const auto dmem_index = (start_m + m) + (start_n + n) * ld;
+					const auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
 					cutf::cp_async::cp_async<4>(&smem_ptr[smem_index], &dmem_ptr[dmem_index]);
 				}
 			}
@@ -95,7 +95,7 @@ struct dmem_loader_core {
 				const auto m = index % SMEM_M;
 				const auto n = index / SMEM_M;
 				const auto smem_index = m + n * (SMEM_M + SKEW);
-				const auto dmem_index = (start_m + m) + (start_n + n) * ld;
+				const auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
 
 				T v = zero<T>();
 				if ((start_m + m) < size_m && (start_n + n) < size_n) {
@@ -116,11 +116,11 @@ struct dmem_loader {
 	__device__ void operator() (
 			T* const smem_ptr,
 			const T* const dmem_ptr,
-			const std::size_t ld,
-			const std::size_t start_m,
-			const std::size_t start_n,
-			const std::size_t size_m,
-			const std::size_t size_n
+			const unsigned ld,
+			const unsigned start_m,
+			const unsigned start_n,
+			const unsigned size_m,
+			const unsigned size_n
 			) {
 		dmem_loader_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE>{}(
 				smem_ptr,
@@ -139,11 +139,11 @@ struct dmem_loader<cumpsgemm::row_major, T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE> {
 	__device__ void operator() (
 			T* const smem_ptr,
 			const T* const dmem_ptr,
-			const std::size_t ld,
-			const std::size_t start_m,
-			const std::size_t start_n,
-			const std::size_t size_m,
-			const std::size_t size_n
+			const unsigned ld,
+			const unsigned start_m,
+			const unsigned start_n,
+			const unsigned size_m,
+			const unsigned size_n
 			) {
 		dmem_loader_core<T, SMEM_N, SMEM_M, SKEW, BLOCK_SIZE>{}(
 				smem_ptr,
@@ -161,11 +161,11 @@ struct dmem_loader_conj_core {
 	__device__ void operator() (
 			cuComplex* const smem_ptr,
 			const cuComplex* const dmem_ptr,
-			const std::size_t ld,
-			const std::size_t start_m,
-			const std::size_t start_n,
-			const std::size_t size_m,
-			const std::size_t size_n
+			const unsigned ld,
+			const unsigned start_m,
+			const unsigned start_n,
+			const unsigned size_m,
+			const unsigned size_n
 			) {
 		if (start_m + SMEM_M < size_m && start_n + SMEM_N < size_n) {
 			for (unsigned offset = 0; offset < SMEM_M * SMEM_N; offset += BLOCK_SIZE) {
@@ -173,7 +173,7 @@ struct dmem_loader_conj_core {
 				const auto m = index % SMEM_M;
 				const auto n = index / SMEM_M;
 				const auto smem_index = m + n * (SMEM_M + SKEW);
-				const auto dmem_index = (start_m + m) + (start_n + n) * ld;
+				const auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
 				const auto v = dmem_ptr[dmem_index];
 				smem_ptr[smem_index] = make_cuComplex(v.x, -v.y);
 			}
@@ -183,7 +183,7 @@ struct dmem_loader_conj_core {
 				const auto m = index % SMEM_M;
 				const auto n = index / SMEM_M;
 				const auto smem_index = m + n * (SMEM_M + SKEW);
-				const auto dmem_index = (start_m + m) + (start_n + n) * ld;
+				const auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
 
 				auto v = zero<cuComplex>();
 				if ((start_m + m) < size_m && (start_n + n) < size_n) {
@@ -204,11 +204,11 @@ struct dmem_loader<cumpsgemm::conjugate, cuComplex, SMEM_M, SMEM_N, SKEW, BLOCK_
 	__device__ void operator() (
 			cuComplex* const smem_ptr,
 			const cuComplex* const dmem_ptr,
-			const std::size_t ld,
-			const std::size_t start_m,
-			const std::size_t start_n,
-			const std::size_t size_m,
-			const std::size_t size_n
+			const unsigned ld,
+			const unsigned start_m,
+			const unsigned start_n,
+			const unsigned size_m,
+			const unsigned size_n
 			) {
 		dmem_loader_conj_core<SMEM_N, SMEM_M, SKEW, BLOCK_SIZE>{}(
 				smem_ptr,
@@ -227,11 +227,11 @@ struct dmem_loader<cumpsgemm::conjugate, float, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE
 	__device__ void operator() (
 			float* const,
 			const float* const,
-			const std::size_t,
-			const std::size_t,
-			const std::size_t,
-			const std::size_t,
-			const std::size_t
+			const unsigned,
+			const unsigned,
+			const unsigned,
+			const unsigned,
+			const unsigned
 			) {
 		// Do nothing, only for suppressing compilation error.
 	}
@@ -272,11 +272,11 @@ struct dmem_storer {
 	__device__ dmem_storer(){}
 	__device__ void operator() (
 			T* const dmem_ptr,
-			const std::size_t ld,
-			const std::size_t start_m,
-			const std::size_t start_n,
-			const std::size_t size_m,
-			const std::size_t size_n,
+			const unsigned ld,
+			const unsigned start_m,
+			const unsigned start_n,
+			const unsigned size_m,
+			const unsigned size_n,
 			const T* const smem_ptr,
 			const T alpha, const T beta
 			) {
@@ -287,7 +287,7 @@ struct dmem_storer {
 					const auto m = index % SMEM_M;
 					const auto n = index / SMEM_M;
 					const auto smem_index = m + n * (SMEM_M + SKEW);
-					const auto dmem_index = (start_m + m) + (start_n + n) * ld;
+					const auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
 					dmem_ptr[dmem_index] = mul(smem_ptr[smem_index], alpha);
 				}
 			} else {
@@ -296,7 +296,7 @@ struct dmem_storer {
 					const auto m = index % SMEM_M;
 					const auto n = index / SMEM_M;
 					const auto smem_index = m + n * (SMEM_M + SKEW);
-					const auto dmem_index = (start_m + m) + (start_n + n) * ld;
+					const auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
 
 					if ((start_m + m) < size_m && (start_n + n) < size_n) {
 						dmem_ptr[dmem_index] = mul(smem_ptr[smem_index], alpha);
@@ -311,7 +311,7 @@ struct dmem_storer {
 					const auto m = index % SMEM_M;
 					const auto n = index / SMEM_M;
 					const auto smem_index = m + n * (SMEM_M + SKEW);
-					const auto dmem_index = (start_m + m) + (start_n + n) * ld;
+					const auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
 					dmem_ptr[dmem_index] = mad(smem_ptr[smem_index], alpha, mul(dmem_ptr[dmem_index], beta));
 				}
 			} else {
@@ -320,7 +320,7 @@ struct dmem_storer {
 					const auto m = index % SMEM_M;
 					const auto n = index / SMEM_M;
 					const auto smem_index = m + n * (SMEM_M + SKEW);
-					const auto dmem_index = (start_m + m) + (start_n + n) * ld;
+					const auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
 
 					if ((start_m + m) < size_m && (start_n + n) < size_n) {
 						dmem_ptr[dmem_index] = mad(smem_ptr[smem_index], alpha, mul(dmem_ptr[dmem_index], beta));
@@ -385,14 +385,14 @@ template <
 	class EC
 >
 __global__ void gemm_kernel(
-		const uint32_t m,
-		const uint32_t n,
-		const uint32_t k,
+		const unsigned m,
+		const unsigned n,
+		const unsigned k,
 		const T alpha,
-		const T* const a_dmem_ptr, const uint32_t lda,
-		const T* const b_dmem_ptr, const uint32_t ldb,
+		const T* const a_dmem_ptr, const unsigned lda,
+		const T* const b_dmem_ptr, const unsigned ldb,
 		const T beta,
-		T* const c_dmem_ptr, const uint32_t ldc
+		T* const c_dmem_ptr, const unsigned ldc
 		) {
 	extern __shared__ uint8_t smem_base[];
 	T* smem = reinterpret_cast<T*>(smem_base);
@@ -519,14 +519,14 @@ template <
 	class EC
 >
 __global__ void gemm_batchStrided_kernel(
-		const uint32_t m,
-		const uint32_t n,
-		const uint32_t k,
+		const unsigned m,
+		const unsigned n,
+		const unsigned k,
 		const T alpha,
-		const T* const a_ptr, const uint32_t lda, const uint64_t stridea,
-		const T* const b_ptr, const uint32_t ldb, const uint64_t strideb,
+		const T* const a_ptr, const unsigned lda, const uint64_t stridea,
+		const T* const b_ptr, const unsigned ldb, const uint64_t strideb,
 		const T beta,
-		T* const c_ptr, const uint32_t ldc, const uint64_t stridec,
+		T* const c_ptr, const unsigned ldc, const uint64_t stridec,
 		const unsigned num_blocks_per_gemm
 		) {
 	extern __shared__ uint8_t smem_base[];

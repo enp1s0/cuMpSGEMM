@@ -110,15 +110,15 @@ __device__ void operator() (
 			cumpsgemm::device::load_matrix(frag_a[(k / FRAG_K) & 0x1], a_smem_ptr + get_smem_index<SMEM_M, SMEM_K, smem_A_skew, OP_A>{}(bm * FRAG_M, k), get_smem_ld<SMEM_M, SMEM_K, smem_A_skew, OP_A>::value);
 			cumpsgemm::device::load_matrix(frag_b[(k / FRAG_K) & 0x1], b_smem_ptr + get_smem_index<SMEM_K, SMEM_N, smem_B_skew, OP_B>{}(k, bn * FRAG_N), get_smem_ld<SMEM_K, SMEM_N, smem_B_skew, OP_B>::value);
 
-			cumpsgemm::device::mma(frag_c[i],
+			cumpsgemm::device::mma(frag_c[i / (BLOCK_SIZE / warp_size)],
 					frag_a[1 - ((k / FRAG_K) & 0x1)],
 					frag_b[1 - ((k / FRAG_K) & 0x1)],
-					frag_c[i]);
+					frag_c[i / (BLOCK_SIZE / warp_size)]);
 		}
-		cumpsgemm::device::mma(frag_c[i],
+		cumpsgemm::device::mma(frag_c[i / (BLOCK_SIZE / warp_size)],
 				frag_a[1 - ((k / FRAG_K) & 0x1)],
 				frag_b[1 - ((k / FRAG_K) & 0x1)],
-				frag_c[i]);
+				frag_c[i / (BLOCK_SIZE / warp_size)]);
 	}
 }
 };

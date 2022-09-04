@@ -76,7 +76,6 @@ struct dmem_loader_core {
 				smem_ptr[smem_index] = v;
 			}
 		}
-		cutf::cp_async::commit();
 	}
 };
 

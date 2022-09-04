@@ -703,7 +703,7 @@ cumpsgemm::gemm_module generate_gemm_module() {
 	mod.smem_m = SMEM_M;
 	mod.smem_n = SMEM_N;
 	mod.smem_k = SMEM_K;
-	CUTF_CHECK_ERROR(cudaFuncSetAttribute(kernel_func, cudaFuncAttributeMaxDynamicSharedMemorySize, mod.smem_size));
+	CUTF_CHECK_ERROR_M(cudaFuncSetAttribute(kernel_func, cudaFuncAttributeMaxDynamicSharedMemorySize, mod.smem_size), ("requested shared memory size = " + std::to_string(mod.smem_size) + " [B]").c_str());
 
 	int num_active_blocks;
 	CUTF_CHECK_ERROR(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&num_active_blocks, kernel_func, BLOCK_SIZE, mod.smem_size));
@@ -743,7 +743,7 @@ cumpsgemm::gemm_module generate_gemm_stridedBatch_module() {
 	mod.smem_m = SMEM_M;
 	mod.smem_n = SMEM_N;
 	mod.smem_k = SMEM_K;
-	CUTF_CHECK_ERROR(cudaFuncSetAttribute(kernel_func, cudaFuncAttributeMaxDynamicSharedMemorySize, mod.smem_size));
+	CUTF_CHECK_ERROR_M(cudaFuncSetAttribute(kernel_func, cudaFuncAttributeMaxDynamicSharedMemorySize, mod.smem_size), ("requested shared memory size = " + std::to_string(mod.smem_size) + " [B]").c_str());
 
 	int num_active_blocks;
 	CUTF_CHECK_ERROR(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&num_active_blocks, kernel_func, BLOCK_SIZE, mod.smem_size));

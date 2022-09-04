@@ -12,9 +12,9 @@
 	cumpsgemm::generate_gemm_stridedBatch_module<io_t,smem_m,smem_n,smem_k,frag_m,frag_n,frag_k,block_size,num_unrollings,num_stages,cumpsgemm::op_a,cumpsgemm::op_b,tc_t,mtk::wmma::tcec::ec, pipelined>();
 
 #define COMPILE_SGEMM
-//#define COMPILE_CGEMM
-//#define COMPILE_SGEMM_STRIDEDBATCH
-//#define COMPILE_CGEMM_STRIDEDBATCH
+#define COMPILE_CGEMM
+#define COMPILE_SGEMM_STRIDEDBATCH
+#define COMPILE_CGEMM_STRIDEDBATCH
 
 extern "C" {
 cublasStatus_t cuMpSGEMM_create(cuMpSGEMM_handle_t* const handle) {

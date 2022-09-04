@@ -202,25 +202,34 @@ struct dmem_storer {
 			) {
 		if (is_zero(beta)) {
 			if (start_m + SMEM_M < size_m && start_n + SMEM_N < size_n) {
-				for (unsigned offset = 0; offset < SMEM_M * SMEM_N; offset += BLOCK_SIZE) {
-					const auto index = offset + threadIdx.x;
-					const auto m = index % SMEM_M;
-					const auto n = index / SMEM_M;
-					const auto smem_index = m + n * (SMEM_M + SKEW);
-					const auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
+				const auto index = threadIdx.x;
+				const auto m = index % SMEM_M;
+				const auto n = index / SMEM_M;
+				auto smem_index = m + n * (SMEM_M + SKEW);
+				auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
+				dmem_ptr[dmem_index] = mul(smem_ptr[smem_index], alpha);
+
+				for (unsigned offset = 1; offset < SMEM_M * SMEM_N / BLOCK_SIZE; offset++) {
+					smem_index += (SMEM_M + SKEW) * (BLOCK_SIZE / SMEM_M);
+					dmem_index += ld * (BLOCK_SIZE / SMEM_M);
+
 					dmem_ptr[dmem_index] = mul(smem_ptr[smem_index], alpha);
 				}
 			} else {
-				for (unsigned offset = 0; offset < SMEM_M * SMEM_N; offset += BLOCK_SIZE) {
-					const auto index = offset + threadIdx.x;
-					const auto m = index % SMEM_M;
-					const auto n = index / SMEM_M;
-					const auto smem_index = m + n * (SMEM_M + SKEW);
-					const auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
+				const auto index = threadIdx.x;
+				const auto m = index % SMEM_M;
+				auto n = index / SMEM_M;
+				auto smem_index = m + n * (SMEM_M + SKEW);
+				auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
 
+				for (unsigned offset = 0; offset < SMEM_M * SMEM_N; offset += BLOCK_SIZE) {
 					if ((start_m + m) < size_m && (start_n + n) < size_n) {
 						dmem_ptr[dmem_index] = mul(smem_ptr[smem_index], alpha);
 					}
+					n += (BLOCK_SIZE / SMEM_M);
+
+					smem_index += (SMEM_M + SKEW) * (BLOCK_SIZE / SMEM_M);
+					dmem_index += ld * (BLOCK_SIZE / SMEM_M);
 					__syncwarp();
 				}
 			}

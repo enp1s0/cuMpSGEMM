@@ -14,6 +14,47 @@ template <class CUMPSGEMM_OP>
 struct layout_conv {using type = void;};
 template <> struct layout_conv<cumpsgemm::col_major> {using type = nvcuda::wmma::col_major;};
 template <> struct layout_conv<cumpsgemm::row_major> {using type = nvcuda::wmma::row_major;};
+
+// zero
+template <class T>
+__device__ inline T zero() {return 0;}
+template <> __device__ inline cuComplex zero<cuComplex>() {return make_cuComplex(0, 0);}
+
+template <class T>
+struct size_of {static constexpr unsigned value = 0;};
+template <> struct size_of<float    > {static constexpr unsigned value = 4;};
+template <> struct size_of<cuComplex> {static constexpr unsigned value = 8;};
+
+template <class T>
+__device__ inline T mul(const T a, const T alpha) {
+	return a * alpha;
+}
+template <>
+__device__ inline cuComplex mul<cuComplex>(const cuComplex a, const cuComplex alpha) {
+	return make_cuComplex(a.x * alpha.x - a.y * alpha.y, a.y * alpha.x + a.x * alpha.y);
+}
+
+template <class T>
+__device__ T inline mad(const T a, const T alpha, const T b) {
+	return a * alpha + b;
+}
+template <>
+__device__ cuComplex inline mad<cuComplex>(const cuComplex a, const cuComplex alpha, const cuComplex b) {
+	return make_cuComplex(
+			a.x * alpha.x - a.y * alpha.y + b.x,
+			a.y * alpha.x + a.x * alpha.y + b.y
+			);
+}
+
+template<class T>
+__device__ bool inline is_zero(const T& v) {
+	return v == 0;
+}
+template <>
+__device__ bool inline is_zero(const cuComplex& v) {
+	return v.x == 0 && v.y == 0;
+}
+
 } // namespace device
 } // namespace cumpsgemm
 #endif

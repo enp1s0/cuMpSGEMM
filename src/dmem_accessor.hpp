@@ -18,31 +18,46 @@ struct dmem_loader_core {
 			) {
 		if (start_m + SMEM_M < size_m && start_n + SMEM_N < size_n) {
 			if (ld % (16 / size_of<T>::value) == 0) {
-				for (unsigned offset = 0; offset < SMEM_M * SMEM_N; offset += BLOCK_SIZE * (16 / size_of<T>::value)) {
-					const auto index = offset + threadIdx.x * (16 / size_of<T>::value);
-					const auto m = index % SMEM_M;
-					const auto n = index / SMEM_M;
-					const auto smem_index = m + n * (SMEM_M + SKEW);
-					const auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
-					cutf::cp_async::cp_async<16>(&smem_ptr[smem_index], &dmem_ptr[dmem_index]);
+				constexpr unsigned v_bit_len = 16;
+				const auto index = threadIdx.x * (v_bit_len / size_of<T>::value);
+				const auto m = index % SMEM_M;
+				const auto n = index / SMEM_M;
+				auto smem_index = m + n * (SMEM_M + SKEW);
+				auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
+				cutf::cp_async::cp_async<v_bit_len>(&smem_ptr[smem_index], &dmem_ptr[dmem_index]);
+
+				for (unsigned offset = 1; offset < SMEM_M * SMEM_N / (BLOCK_SIZE * (v_bit_len/ size_of<T>::value)); offset++) {
+					smem_index += (SMEM_M + SKEW) * (v_bit_len / size_of<T>::value) * BLOCK_SIZE / SMEM_M;
+					dmem_index += static_cast<std::size_t>((v_bit_len / size_of<T>::value) * BLOCK_SIZE / SMEM_M) * ld;
+					cutf::cp_async::cp_async<v_bit_len>(&smem_ptr[smem_index], &dmem_ptr[dmem_index]);
 				}
 			} else if ((ld % (8 / size_of<T>::value) == 0)) {
-				for (unsigned offset = 0; offset < SMEM_M * SMEM_N; offset += BLOCK_SIZE * (8 / size_of<T>::value)) {
-					const auto index = offset + threadIdx.x * (8 / size_of<T>::value);
-					const auto m = index % SMEM_M;
-					const auto n = index / SMEM_M;
-					const auto smem_index = m + n * (SMEM_M + SKEW);
-					const auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
-					cutf::cp_async::cp_async<8>(&smem_ptr[smem_index], &dmem_ptr[dmem_index]);
+				constexpr unsigned v_bit_len = 8;
+				const auto index = threadIdx.x * (v_bit_len / size_of<T>::value);
+				const auto m = index % SMEM_M;
+				const auto n = index / SMEM_M;
+				auto smem_index = m + n * (SMEM_M + SKEW);
+				auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
+				cutf::cp_async::cp_async<v_bit_len>(&smem_ptr[smem_index], &dmem_ptr[dmem_index]);
+
+				for (unsigned offset = 1; offset < SMEM_M * SMEM_N / (BLOCK_SIZE * (v_bit_len/ size_of<T>::value)); offset++) {
+					smem_index += (SMEM_M + SKEW) * (v_bit_len / size_of<T>::value) * BLOCK_SIZE / SMEM_M;
+					dmem_index += static_cast<std::size_t>((v_bit_len / size_of<T>::value) * BLOCK_SIZE / SMEM_M) * ld;
+					cutf::cp_async::cp_async<v_bit_len>(&smem_ptr[smem_index], &dmem_ptr[dmem_index]);
 				}
 			} else if ((4 / size_of<T>::value != 0) && (ld % (4 / size_of<T>::value) == 0)) {
-				for (unsigned offset = 0; offset < SMEM_M * SMEM_N; offset += BLOCK_SIZE * (4 / size_of<T>::value)) {
-					const auto index = offset + threadIdx.x * (4 / size_of<T>::value);
-					const auto m = index % SMEM_M;
-					const auto n = index / SMEM_M;
-					const auto smem_index = m + n * (SMEM_M + SKEW);
-					const auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
-					cutf::cp_async::cp_async<4>(&smem_ptr[smem_index], &dmem_ptr[dmem_index]);
+				constexpr unsigned v_bit_len = 4;
+				const auto index = threadIdx.x * (v_bit_len / size_of<T>::value);
+				const auto m = index % SMEM_M;
+				const auto n = index / SMEM_M;
+				auto smem_index = m + n * (SMEM_M + SKEW);
+				auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
+				cutf::cp_async::cp_async<v_bit_len>(&smem_ptr[smem_index], &dmem_ptr[dmem_index]);
+
+				for (unsigned offset = 1; offset < SMEM_M * SMEM_N / (BLOCK_SIZE * (v_bit_len/ size_of<T>::value)); offset++) {
+					smem_index += (SMEM_M + SKEW) * (v_bit_len / size_of<T>::value) * BLOCK_SIZE / SMEM_M;
+					dmem_index += static_cast<std::size_t>((v_bit_len / size_of<T>::value) * BLOCK_SIZE / SMEM_M) * ld;
+					cutf::cp_async::cp_async<v_bit_len>(&smem_ptr[smem_index], &dmem_ptr[dmem_index]);
 				}
 			}
 		} else {
@@ -202,25 +217,34 @@ struct dmem_storer {
 			) {
 		if (is_zero(beta)) {
 			if (start_m + SMEM_M < size_m && start_n + SMEM_N < size_n) {
-				for (unsigned offset = 0; offset < SMEM_M * SMEM_N; offset += BLOCK_SIZE) {
-					const auto index = offset + threadIdx.x;
-					const auto m = index % SMEM_M;
-					const auto n = index / SMEM_M;
-					const auto smem_index = m + n * (SMEM_M + SKEW);
-					const auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
+				const auto index = threadIdx.x;
+				const auto m = index % SMEM_M;
+				const auto n = index / SMEM_M;
+				auto smem_index = m + n * (SMEM_M + SKEW);
+				auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
+				dmem_ptr[dmem_index] = mul(smem_ptr[smem_index], alpha);
+
+				for (unsigned offset = 1; offset < SMEM_M * SMEM_N / BLOCK_SIZE; offset++) {
+					smem_index += (SMEM_M + SKEW) * (BLOCK_SIZE / SMEM_M);
+					dmem_index += ld * (BLOCK_SIZE / SMEM_M);
+
 					dmem_ptr[dmem_index] = mul(smem_ptr[smem_index], alpha);
 				}
 			} else {
-				for (unsigned offset = 0; offset < SMEM_M * SMEM_N; offset += BLOCK_SIZE) {
-					const auto index = offset + threadIdx.x;
-					const auto m = index % SMEM_M;
-					const auto n = index / SMEM_M;
-					const auto smem_index = m + n * (SMEM_M + SKEW);
-					const auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
+				const auto index = threadIdx.x;
+				const auto m = index % SMEM_M;
+				auto n = index / SMEM_M;
+				auto smem_index = m + n * (SMEM_M + SKEW);
+				auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
 
+				for (unsigned offset = 0; offset < SMEM_M * SMEM_N; offset += BLOCK_SIZE) {
 					if ((start_m + m) < size_m && (start_n + n) < size_n) {
 						dmem_ptr[dmem_index] = mul(smem_ptr[smem_index], alpha);
 					}
+					n += (BLOCK_SIZE / SMEM_M);
+
+					smem_index += (SMEM_M + SKEW) * (BLOCK_SIZE / SMEM_M);
+					dmem_index += ld * (BLOCK_SIZE / SMEM_M);
 					__syncwarp();
 				}
 			}

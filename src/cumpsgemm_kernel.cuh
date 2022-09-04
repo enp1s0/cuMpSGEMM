@@ -140,7 +140,8 @@ template <
 	class TC_T,
 	class EC
 >
-__device__ void gemm_core(
+struct gemm_core {
+__device__ void operator() (
 		const unsigned m,
 		const unsigned n,
 		const unsigned k,
@@ -241,6 +242,7 @@ __device__ void gemm_core(
 			alpha, beta
 			);
 }
+};
 
 template <
 	class T,
@@ -272,7 +274,7 @@ __global__ void gemm_kernel(
 	const auto blockIdx_x = (blockIdx.x) % ((m + SMEM_M - 1) / SMEM_M);
 	const auto blockIdx_y = (blockIdx.x) / ((m + SMEM_M - 1) / SMEM_M);
 
-	gemm_core<T, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, NUM_UNROLLINGS, A_DMEM_LOADER, B_DMEM_LOADER, C_DMEM_STORER, MMA_SMEM, TC_T, EC>(
+	gemm_core<T, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, NUM_UNROLLINGS, A_DMEM_LOADER, B_DMEM_LOADER, C_DMEM_STORER, MMA_SMEM, TC_T, EC>{}(
 			m, n, k,
 			alpha,
 			a_dmem_ptr, lda,
@@ -319,7 +321,7 @@ __global__ void gemm_batchStrided_kernel(
 	const T* const b_dmem_ptr = b_ptr + gemm_id * strideb;
 	T* const c_dmem_ptr = c_ptr + gemm_id * stridec;
 
-	gemm_core<T, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, NUM_UNROLLINGS, A_DMEM_LOADER, B_DMEM_LOADER, C_DMEM_STORER, MMA_SMEM, TC_T, EC>(
+	gemm_core<T, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, NUM_UNROLLINGS, A_DMEM_LOADER, B_DMEM_LOADER, C_DMEM_STORER, MMA_SMEM, TC_T, EC>{}(
 			m, n, k,
 			alpha,
 			a_dmem_ptr, lda,

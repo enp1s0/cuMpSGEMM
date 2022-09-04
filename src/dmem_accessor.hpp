@@ -26,7 +26,7 @@ struct dmem_loader_core {
 				auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
 				cutf::cp_async::cp_async<v_bit_len>(&smem_ptr[smem_index], &dmem_ptr[dmem_index]);
 
-				for (unsigned offset = 1; offset < SMEM_M * SMEM_N / (BLOCK_SIZE * (v_bit_len/ size_of<T>::value)); offset++) {
+				for (unsigned offset = 1; offset < SMEM_M * SMEM_N / (BLOCK_SIZE * (v_bit_len / size_of<T>::value)); offset++) {
 					smem_index += (SMEM_M + SKEW) * (v_bit_len / size_of<T>::value) * BLOCK_SIZE / SMEM_M;
 					dmem_index += static_cast<std::size_t>((v_bit_len / size_of<T>::value) * BLOCK_SIZE / SMEM_M) * ld;
 					cutf::cp_async::cp_async<v_bit_len>(&smem_ptr[smem_index], &dmem_ptr[dmem_index]);
@@ -40,7 +40,7 @@ struct dmem_loader_core {
 				auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
 				cutf::cp_async::cp_async<v_bit_len>(&smem_ptr[smem_index], &dmem_ptr[dmem_index]);
 
-				for (unsigned offset = 1; offset < SMEM_M * SMEM_N / (BLOCK_SIZE * (v_bit_len/ size_of<T>::value)); offset++) {
+				for (unsigned offset = 1; offset < SMEM_M * SMEM_N / (BLOCK_SIZE * (v_bit_len / size_of<T>::value)); offset++) {
 					smem_index += (SMEM_M + SKEW) * (v_bit_len / size_of<T>::value) * BLOCK_SIZE / SMEM_M;
 					dmem_index += static_cast<std::size_t>((v_bit_len / size_of<T>::value) * BLOCK_SIZE / SMEM_M) * ld;
 					cutf::cp_async::cp_async<v_bit_len>(&smem_ptr[smem_index], &dmem_ptr[dmem_index]);
@@ -54,7 +54,7 @@ struct dmem_loader_core {
 				auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
 				cutf::cp_async::cp_async<v_bit_len>(&smem_ptr[smem_index], &dmem_ptr[dmem_index]);
 
-				for (unsigned offset = 1; offset < SMEM_M * SMEM_N / (BLOCK_SIZE * (v_bit_len/ size_of<T>::value)); offset++) {
+				for (unsigned offset = 1; offset < SMEM_M * SMEM_N / (BLOCK_SIZE * (v_bit_len / size_of<T>::value)); offset++) {
 					smem_index += (SMEM_M + SKEW) * (v_bit_len / size_of<T>::value) * BLOCK_SIZE / SMEM_M;
 					dmem_index += static_cast<std::size_t>((v_bit_len / size_of<T>::value) * BLOCK_SIZE / SMEM_M) * ld;
 					cutf::cp_async::cp_async<v_bit_len>(&smem_ptr[smem_index], &dmem_ptr[dmem_index]);

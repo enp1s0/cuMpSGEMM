@@ -161,63 +161,108 @@ __device__ void operator() (
 	A_DMEM_LOADER a_dmem_loader;
 	B_DMEM_LOADER b_dmem_loader;
 
-	a_dmem_loader(
-			a_smem_ptr,
-			a_dmem_ptr,
-			lda,
-			blockIdx_x * SMEM_M, 0,
-			m, k
-			);
-	cutf::cp_async::commit();
-	b_dmem_loader(
-			b_smem_ptr,
-			b_dmem_ptr,
-			ldb,
-			0, blockIdx_y * SMEM_N,
-			k, n
-			);
-	cutf::cp_async::commit();
-
 	constexpr unsigned frag_c_array_size = SMEM_M * SMEM_N / (FRAG_M * FRAG_N) / (BLOCK_SIZE / warp_size);
 	cumpsgemm::device::tc_fragment<T, nvcuda::wmma::accumulator, FRAG_M, FRAG_N, FRAG_K, void, TC_T, EC> frag_c[frag_c_array_size];
-	for (unsigned i = 0; i < frag_c_array_size; i++) {
-		cumpsgemm::device::fill_zero(frag_c[i]);
-	}
-
-	cutf::cp_async::wait_all();
-	__syncthreads();
-	unsigned bk = SMEM_K;
+	if (k / SMEM_K >= NUM_STAGES - 1) {
+		unsigned bk = 0;
 #pragma unroll NUM_UNROLLINGS
-	for (; bk < k; bk += SMEM_K) {
-		const auto smem_buffer_id = (bk / SMEM_K) % 2;
-		a_dmem_loader(
-				a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * smem_buffer_id,
-				a_dmem_ptr,
-				lda,
-				blockIdx_x * SMEM_M, bk,
-				m, k
-				);
-		b_dmem_loader(
-				b_smem_ptr + get_smem_size<SMEM_K, SMEM_N, smem_B_skew, typename B_DMEM_LOADER::Layout>::value * smem_buffer_id,
-				b_dmem_ptr,
-				ldb,
-				bk, blockIdx_y * SMEM_N,
-				k, n
-				);
-		MMA_SMEM{}(
+		for (; (bk / SMEM_K) < NUM_STAGES - 1; bk += SMEM_K) {
+			a_dmem_loader(
+					a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * (bk / SMEM_K),
+					a_dmem_ptr,
+					lda,
+					blockIdx_x * SMEM_M, bk,
+					m, k
+					);
+			cutf::cp_async::commit();
+			b_dmem_loader(
+					b_smem_ptr + get_smem_size<SMEM_K, SMEM_N, smem_B_skew, typename B_DMEM_LOADER::Layout>::value * (bk / SMEM_K),
+					b_dmem_ptr,
+					ldb,
+					bk, blockIdx_y * SMEM_N,
+					k, n
+					);
+			cutf::cp_async::commit();
+		}
+
+		for (unsigned i = 0; i < frag_c_array_size; i++) {
+			cumpsgemm::device::fill_zero(frag_c[i]);
+		}
+
+		unsigned mma_count = 0;
+#pragma unroll NUM_UNROLLINGS
+		for (; bk < k; bk += SMEM_K) {
+			cutf::cp_async::wait_group<2 * (NUM_STAGES - 2)>();
+			__syncthreads();
+			MMA_SMEM{}(
 					frag_c,
-					a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * (1 - smem_buffer_id),
-					b_smem_ptr + get_smem_size<SMEM_K, SMEM_N, smem_B_skew, typename B_DMEM_LOADER::Layout>::value * (1 - smem_buffer_id)
-				 );
+					a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * (mma_count % NUM_STAGES),
+					b_smem_ptr + get_smem_size<SMEM_K, SMEM_N, smem_B_skew, typename B_DMEM_LOADER::Layout>::value * (mma_count % NUM_STAGES)
+					);
+			mma_count++;
+			const auto smem_buffer_id = (bk / SMEM_K) % NUM_STAGES;
+			a_dmem_loader(
+					a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * smem_buffer_id,
+					a_dmem_ptr,
+					lda,
+					blockIdx_x * SMEM_M, bk,
+					m, k
+					);
+			cutf::cp_async::commit();
+			b_dmem_loader(
+					b_smem_ptr + get_smem_size<SMEM_K, SMEM_N, smem_B_skew, typename B_DMEM_LOADER::Layout>::value * smem_buffer_id,
+					b_dmem_ptr,
+					ldb,
+					bk, blockIdx_y * SMEM_N,
+					k, n
+					);
+			cutf::cp_async::commit();
+		}
 		cutf::cp_async::wait_all();
 		__syncthreads();
+		for (unsigned i = 0; i < NUM_STAGES - 1; i++, mma_count++) {
+			MMA_SMEM{}(
+					frag_c,
+					a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * (mma_count % NUM_STAGES),
+					b_smem_ptr + get_smem_size<SMEM_K, SMEM_N, smem_B_skew, typename B_DMEM_LOADER::Layout>::value * (mma_count % NUM_STAGES)
+					);
+		}
+	} else {
+#pragma unroll NUM_UNROLLINGS
+		for (unsigned bk = 0; bk < k; bk += SMEM_K) {
+			a_dmem_loader(
+					a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * (bk / SMEM_K),
+					a_dmem_ptr,
+					lda,
+					blockIdx_x * SMEM_M, bk,
+					m, k
+					);
+			cutf::cp_async::commit();
+			b_dmem_loader(
+					b_smem_ptr + get_smem_size<SMEM_K, SMEM_N, smem_B_skew, typename B_DMEM_LOADER::Layout>::value * (bk / SMEM_K),
+					b_dmem_ptr,
+					ldb,
+					bk, blockIdx_y * SMEM_N,
+					k, n
+					);
+			cutf::cp_async::commit();
+		}
+
+		for (unsigned i = 0; i < frag_c_array_size; i++) {
+			cumpsgemm::device::fill_zero(frag_c[i]);
+		}
+
+		cutf::cp_async::wait_all();
+		__syncthreads();
+
+		for (unsigned bk = 0; bk < k; bk += SMEM_K) {
+			MMA_SMEM{}(
+					frag_c,
+					a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * (bk / SMEM_K),
+					b_smem_ptr + get_smem_size<SMEM_K, SMEM_N, smem_B_skew, typename B_DMEM_LOADER::Layout>::value * (bk / SMEM_K)
+					);
+		}
 	}
-	const auto smem_buffer_id = 1 - ((bk / SMEM_K) % 2);
-	MMA_SMEM{}(
-				frag_c,
-				a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * smem_buffer_id,
-				b_smem_ptr + get_smem_size<SMEM_K, SMEM_N, smem_B_skew, typename B_DMEM_LOADER::Layout>::value * smem_buffer_id
-			 );
 	__syncthreads();
 
 	// register to smem
@@ -318,6 +363,7 @@ __device__ void operator() (
 				blockIdx_x * SMEM_M, bk,
 				m, k
 				);
+		cutf::cp_async::commit();
 		b_dmem_loader(
 				b_smem_ptr + get_smem_size<SMEM_K, SMEM_N, smem_B_skew, typename B_DMEM_LOADER::Layout>::value * smem_buffer_id,
 				b_dmem_ptr,
@@ -325,6 +371,7 @@ __device__ void operator() (
 				bk, blockIdx_y * SMEM_N,
 				k, n
 				);
+		cutf::cp_async::commit();
 		MMA_SMEM{}(
 					frag_c,
 					a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * (1 - smem_buffer_id),

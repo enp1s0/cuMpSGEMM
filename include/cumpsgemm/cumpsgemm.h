@@ -14,6 +14,11 @@ extern "C" cublasStatus_t cuMpSGEMM_destroy(
 		cuMpSGEMM_handle_t handle
 		);
 
+extern "C" cublasStatus_t cuMpSGEMM_set_stream(
+		cuMpSGEMM_handle_t handle,
+		const cudaStream_t cuda_stream
+		);
+
 enum cuMpSGEMM_compute_mode_t {
 	CUMPSGEMM_CUBLAS   = 0,
 	CUMPSGEMM_FP16TCEC = 1,

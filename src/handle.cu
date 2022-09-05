@@ -254,4 +254,9 @@ cublasStatus_t cuMpSGEMM_destroy(cuMpSGEMM_handle_t handle) {
 	delete handle;
 	return CUBLAS_STATUS_SUCCESS;
 }
+
+cublasStatus_t cuMpSGEMM_set_stream(cuMpSGEMM_handle_t handle, const cudaStream_t cuda_stream) {
+	handle->cuda_stream = cuda_stream;
+	return CUBLAS_STATUS_SUCCESS;
+}
 }

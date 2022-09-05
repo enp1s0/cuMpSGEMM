@@ -9,6 +9,8 @@
 #include <cutf/cublas.hpp>
 #include <cumpsgemm/cumpsgemm.hpp>
 
+constexpr unsigned test_count = 32;
+
 enum gemm_type {
 	s, c
 };
@@ -312,6 +314,7 @@ int sgemm_test_core(
 		) {
 	const auto alpha = one<T>(), beta = zero<T>();
 
+	unsigned module_stage = 0;
 	auto gemm_func = [&]() {
 		if (compute_mode == CUMPSGEMM_CUBLAS) {
 			cublas_gemm(
@@ -334,7 +337,8 @@ int sgemm_test_core(
 					b_ptr, ldb,
 					&beta,
 					c_ptr, ldc,
-					compute_mode
+					compute_mode,
+					&module_stage
 					);
 		}
 	};
@@ -353,7 +357,6 @@ int sgemm_test_core(
 	const auto check = residual < error_threshold(compute_mode, k);
 
 	// Throughput
-	constexpr unsigned test_count = 16;
 	CUTF_CHECK_ERROR(cudaDeviceSynchronize());
 	const auto start_clock = std::chrono::system_clock::now();
 	for (unsigned i = 0; i < test_count; i++) {
@@ -364,7 +367,7 @@ int sgemm_test_core(
 	const auto elapsed_time = std::chrono::duration_cast<std::chrono::microseconds>(end_clock - start_clock).count() * 1e-6;
 	const auto throughput = 2lu * m * n * k * (std::is_same<float, T>::value ? 1 : 4) / (elapsed_time / test_count);
 
-	std::printf("%s,%s,%s,%s,%u,%u,%u,%e,%e,%s\n",
+	std::printf("%s,%s,%s,%s,%u,%u,%u,%e,%e,%s,%u\n",
 			(std::is_same<float, T>::value ? "sgemm" : "cgemm"),
 			cuMpSGEMM_get_compute_mode_string(compute_mode),
 			(op_A == CUBLAS_OP_N) ? "N" : ((op_A == CUBLAS_OP_T) ? "T" : "C"),
@@ -372,7 +375,8 @@ int sgemm_test_core(
 			m, n, k,
 			throughput * 1e-12,
 			residual,
-			(check ? "OK" : "NG")
+			(check ? "OK" : "NG"),
+			module_stage
 			);
 	std::fflush(stdout);
 
@@ -400,6 +404,8 @@ int sgemm_strided_batch_test_core(
 		) {
 	const auto alpha = one<T>(), beta = zero<T>();
 
+	unsigned module_stage = 0;
+
 	auto gemm_func = [&]() {
 		if (compute_mode == CUMPSGEMM_CUBLAS) {
 			cublas_gemm_strided_batch(
@@ -424,7 +430,8 @@ int sgemm_strided_batch_test_core(
 					&beta,
 					c_ptr, ldc, stride_c,
 					batch_count,
-					compute_mode
+					compute_mode,
+					&module_stage
 					);
 		}
 	};
@@ -447,7 +454,6 @@ int sgemm_strided_batch_test_core(
 	const auto check = residual < error_threshold(compute_mode, m);
 
 	// Throughput
-	constexpr unsigned test_count = 16;
 	CUTF_CHECK_ERROR(cudaDeviceSynchronize());
 	const auto start_clock = std::chrono::system_clock::now();
 	for (unsigned i = 0; i < test_count; i++) {
@@ -458,7 +464,7 @@ int sgemm_strided_batch_test_core(
 	const auto elapsed_time = std::chrono::duration_cast<std::chrono::microseconds>(end_clock - start_clock).count() * 1e-6;
 	const auto throughput = 2lu * m * n * k * batch_count * (std::is_same<float, T>::value ? 1 : 4) / (elapsed_time / test_count);
 
-	std::printf("%s,%s,%s,%s,%u,%u,%u,%lld,%e,%e,%s\n",
+	std::printf("%s,%s,%s,%s,%u,%u,%u,%lld,%e,%e,%s,%u\n",
 			(std::is_same<float, T>::value ? "sgemm" : "cgemm"),
 			cuMpSGEMM_get_compute_mode_string(compute_mode),
 			(op_A == CUBLAS_OP_N) ? "N" : ((op_A == CUBLAS_OP_T) ? "T" : "C"),
@@ -467,7 +473,8 @@ int sgemm_strided_batch_test_core(
 			batch_count,
 			throughput * 1e-12,
 			residual,
-			(check ? "OK" : "NG")
+			(check ? "OK" : "NG"),
+			module_stage
 			);
 	std::fflush(stdout);
 
@@ -512,7 +519,7 @@ void gemm_test(const std::size_t min_N, const std::size_t max_N, const std::size
 	};
 
 	std::printf("## %s\n", __func__);
-	std::printf("type,mode,op_A,op_B,m,n,k,throughput_in_tflops,residual,check\n");
+	std::printf("type,mode,op_A,op_B,m,n,k,throughput_in_tflops,residual,check,module_stage\n");
 	unsigned num_tests = 0;
 	unsigned num_passed = 0;
 	auto cublas_handle_uptr = cutf::cublas::get_cublas_unique_ptr();
@@ -617,7 +624,7 @@ void gemm_strided_batch_test(const std::size_t min_N, const std::size_t max_N, c
 	};
 
 	std::printf("## %s\n", __func__);
-	std::printf("type,mode,op_A,op_B,m,n,k,batch_count,throughput_in_tflops,residual,check\n");
+	std::printf("type,mode,op_A,op_B,m,n,k,batch_count,throughput_in_tflops,residual,check,module_stage\n");
 	unsigned num_tests = 0;
 	unsigned num_passed = 0;
 	auto cublas_handle_uptr = cutf::cublas::get_cublas_unique_ptr();

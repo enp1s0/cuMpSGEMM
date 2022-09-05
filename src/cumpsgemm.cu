@@ -120,7 +120,7 @@ cublasStatus_t cumpsgemm::gemm(
 		const T* beta,
 		T* const c_dmem_ptr, const uint64_t ldc,
 		const cuMpSGEMM_compute_mode_t compute_mode,
-		int* const used_kernel_modeule_id
+		unsigned* const used_kernel_modeule_id
 		) {
 	const auto code = gen_module_code<T>(op_A, op_B, compute_mode);
 
@@ -166,7 +166,7 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 		T* const c_dmem_ptr, const uint64_t ldc, const uint64_t stridec,
 		const uint64_t batch_count,
 		const cuMpSGEMM_compute_mode_t compute_mode,
-		int* const used_kernel_modeule_id
+		unsigned* const used_kernel_modeule_id
 		) {
 	const auto code = gen_module_code<T>(op_A, op_B, compute_mode);
 

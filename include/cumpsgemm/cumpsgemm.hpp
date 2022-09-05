@@ -17,7 +17,7 @@ cublasStatus_t gemm(
 		const T* beta,
 		T* const c_dmem_ptr, const uint64_t ldc,
 		const cuMpSGEMM_compute_mode_t compute_mode,
-		int* const used_kernel_module_id = nullptr
+		unsigned* const used_kernel_module_id = nullptr
 		);
 template <class T>
 cublasStatus_t gemm_stridedBatch(
@@ -34,7 +34,7 @@ cublasStatus_t gemm_stridedBatch(
 		T* const c_dmem_ptr, const uint64_t ldc, const uint64_t stridec,
 		const uint64_t batch_count,
 		const cuMpSGEMM_compute_mode_t compute_mode,
-		int* const used_kernel_module_id = nullptr
+		unsigned* const used_kernel_module_id = nullptr
 		);
 } // namespace cumpsgemm
 #endif

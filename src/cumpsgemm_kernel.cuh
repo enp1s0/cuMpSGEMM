@@ -105,18 +105,21 @@ __device__ void operator() (
 		cumpsgemm::device::load_matrix(frag_a[0], a_smem_ptr + get_smem_index<SMEM_M, SMEM_K, smem_A_skew, OP_A>{}(bm * FRAG_M, 0), get_smem_ld<SMEM_M, SMEM_K, smem_A_skew, OP_A>::value);
 		cumpsgemm::device::load_matrix(frag_b[0], b_smem_ptr + get_smem_index<SMEM_K, SMEM_N, smem_B_skew, OP_B>{}(0, bn * FRAG_N), get_smem_ld<SMEM_K, SMEM_N, smem_B_skew, OP_B>::value);
 		unsigned k = FRAG_K;
+		auto frag_index = 1u;
 		for (; k < SMEM_K; k += FRAG_K) {
-			cumpsgemm::device::load_matrix(frag_a[(k / FRAG_K) & 0x1], a_smem_ptr + get_smem_index<SMEM_M, SMEM_K, smem_A_skew, OP_A>{}(bm * FRAG_M, k), get_smem_ld<SMEM_M, SMEM_K, smem_A_skew, OP_A>::value);
-			cumpsgemm::device::load_matrix(frag_b[(k / FRAG_K) & 0x1], b_smem_ptr + get_smem_index<SMEM_K, SMEM_N, smem_B_skew, OP_B>{}(k, bn * FRAG_N), get_smem_ld<SMEM_K, SMEM_N, smem_B_skew, OP_B>::value);
+			cumpsgemm::device::load_matrix(frag_a[frag_index], a_smem_ptr + get_smem_index<SMEM_M, SMEM_K, smem_A_skew, OP_A>{}(bm * FRAG_M, k), get_smem_ld<SMEM_M, SMEM_K, smem_A_skew, OP_A>::value);
+			cumpsgemm::device::load_matrix(frag_b[frag_index], b_smem_ptr + get_smem_index<SMEM_K, SMEM_N, smem_B_skew, OP_B>{}(k, bn * FRAG_N), get_smem_ld<SMEM_K, SMEM_N, smem_B_skew, OP_B>::value);
 
+			frag_index = 1 - frag_index;
 			cumpsgemm::device::mma(frag_c[i / (BLOCK_SIZE / warp_size)],
-					frag_a[1 - ((k / FRAG_K) & 0x1)],
-					frag_b[1 - ((k / FRAG_K) & 0x1)],
+					frag_a[frag_index],
+					frag_b[frag_index],
 					frag_c[i / (BLOCK_SIZE / warp_size)]);
 		}
+		frag_index = 1 - frag_index;
 		cumpsgemm::device::mma(frag_c[i / (BLOCK_SIZE / warp_size)],
-				frag_a[1 - ((k / FRAG_K) & 0x1)],
-				frag_b[1 - ((k / FRAG_K) & 0x1)],
+				frag_a[frag_index],
+				frag_b[frag_index],
 				frag_c[i / (BLOCK_SIZE / warp_size)]);
 	}
 }

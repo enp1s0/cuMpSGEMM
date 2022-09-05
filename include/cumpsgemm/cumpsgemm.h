@@ -47,8 +47,7 @@ extern "C" cublasStatus_t cuMpSGEMM_sgemm(
 		const float* const b_dmem_ptr, const uint64_t ldb,
 		const float* beta,
 		float* const c_dmem_ptr, const uint64_t ldc,
-		const cuMpSGEMM_compute_mode_t compute_mode,
-		cudaStream_t cuda_stream = 0
+		const cuMpSGEMM_compute_mode_t compute_mode
 		);
 
 extern "C" cublasStatus_t cuMpSGEMM_cgemm(
@@ -63,8 +62,7 @@ extern "C" cublasStatus_t cuMpSGEMM_cgemm(
 		const cuComplex* const b_dmem_ptr, const uint64_t ldb,
 		const cuComplex* beta,
 		cuComplex* const c_dmem_ptr, const uint64_t ldc,
-		const cuMpSGEMM_compute_mode_t compute_mode,
-		cudaStream_t cuda_stream = 0
+		const cuMpSGEMM_compute_mode_t compute_mode
 		);
 
 extern "C" cublasStatus_t cuMpSGEMM_sgemm_strided_batch(
@@ -80,8 +78,7 @@ extern "C" cublasStatus_t cuMpSGEMM_sgemm_strided_batch(
 		const float* beta,
 		float* const c_dmem_ptr, const uint64_t ldc, const uint64_t stridec,
 		const uint64_t batch_count,
-		const cuMpSGEMM_compute_mode_t compute_mode,
-		cudaStream_t cuda_stream = 0
+		const cuMpSGEMM_compute_mode_t compute_mode
 		);
 
 extern "C" cublasStatus_t cuMpSGEMM_cgemm_strided_batch(
@@ -97,8 +94,7 @@ extern "C" cublasStatus_t cuMpSGEMM_cgemm_strided_batch(
 		const cuComplex* beta,
 		cuComplex* const c_dmem_ptr, const uint64_t ldc, const uint64_t stridec,
 		const uint64_t batch_count,
-		const cuMpSGEMM_compute_mode_t compute_mode,
-		cudaStream_t cuda_stream = 0
+		const cuMpSGEMM_compute_mode_t compute_mode
 		);
 
 #endif

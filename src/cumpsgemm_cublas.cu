@@ -156,6 +156,9 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 				cublas_lib_name.c_str(),
 				func_name
 				);
+		if (func_ptr == nullptr) {
+			cuMpSGEMM_error(std::string("Could not load cuBLAS function \"") + func_name + "\"");
+		}
 		return (*func_ptr)(cublas_handle, op_A, op_B, m, n, k, alpha, a_dmem_ptr, ldb, b_dmem_ptr, ldb, beta, c_dmem_ptr, ldc);
 	}
 
@@ -172,8 +175,7 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 			b_dmem_ptr, ldb,
 			beta,
 			c_dmem_ptr, ldc,
-			compute_mode,
-			cuda_stream
+			compute_mode
 			);
 }
 
@@ -218,6 +220,9 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 				cublas_lib_name.c_str(),
 				func_name
 				);
+		if (func_ptr == nullptr) {
+			cuMpSGEMM_error(std::string("Could not load cuBLAS function \"") + func_name + "\"");
+		}
 		return (*func_ptr)(cublas_handle, op_A, op_B, m, n, k, alpha, a_dmem_ptr, ldb, stridea, b_dmem_ptr, ldb, strideb, beta, c_dmem_ptr, ldc, stridec, batch_count);
 	}
 
@@ -235,8 +240,7 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 			beta,
 			c_dmem_ptr, ldc, stridec,
 			batch_count,
-			compute_mode,
-			cuda_stream
+			compute_mode
 			);
 }
 

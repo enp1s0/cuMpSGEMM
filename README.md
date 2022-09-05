@@ -79,10 +79,14 @@ This is not the reverse engineering, decompiling or disassembling that is prohib
 
 ## Test
 ```
-Usage : ./build/cumpsgemm_test gemm [min_N] [max_N] [interval]
-      : ./build/cumpsgemm_test gemm_strided_batch [min_N] [max_N] [interval] [batch_count]
-      : ./build/cumpsgemm_test cublas_gemm [min_N] [max_N] [interval]
-      : ./build/cumpsgemm_test cublas_gemm_strided_batch [min_N] [max_N] [interval] [batch_count]
+Usage : ./build/cumpsgemm_test sgemm [exp2|seq] [min_N] [max_N] [interval]
+      : ./build/cumpsgemm_test cgemm [exp2|seq] [min_N] [max_N] [interval]
+      : ./build/cumpsgemm_test sgemm_strided_batch [exp2|seq] [min_N] [max_N] [interval] [batch_count]
+      : ./build/cumpsgemm_test cgemm_strided_batch [exp2|seq] [min_N] [max_N] [interval] [batch_count]
+      : ./build/cumpsgemm_test cublas_sgemm [exp2|seq] [min_N] [max_N] [interval]
+      : ./build/cumpsgemm_test cublas_cgemm [exp2|seq] [min_N] [max_N] [interval]
+      : ./build/cumpsgemm_test cublas_sgemm_strided_batch [exp2|seq] [min_N] [max_N] [interval] [batch_count]
+      : ./build/cumpsgemm_test cublas_cgemm_strided_batch [exp2|seq] [min_N] [max_N] [interval] [batch_count]
       : ./build/cumpsgemm_test log [/path/to/log]
 ```
 

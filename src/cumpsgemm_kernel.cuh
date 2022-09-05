@@ -217,14 +217,56 @@ __device__ void operator() (
 					);
 			cutf::cp_async::commit();
 		}
-		cutf::cp_async::wait_all();
-		__syncthreads();
-		for (unsigned i = 0; i < NUM_STAGES - 1; i++, mma_count++) {
+		if constexpr (NUM_STAGES == 3) {
+			cutf::cp_async::wait_group<2>();
+			__syncthreads();
 			MMA_SMEM{}(
 					frag_c,
 					a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * (mma_count % NUM_STAGES),
 					b_smem_ptr + get_smem_size<SMEM_K, SMEM_N, smem_B_skew, typename B_DMEM_LOADER::Layout>::value * (mma_count % NUM_STAGES)
 					);
+			mma_count++;
+			cutf::cp_async::wait_group<0>();
+			__syncthreads();
+			MMA_SMEM{}(
+					frag_c,
+					a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * (mma_count % NUM_STAGES),
+					b_smem_ptr + get_smem_size<SMEM_K, SMEM_N, smem_B_skew, typename B_DMEM_LOADER::Layout>::value * (mma_count % NUM_STAGES)
+					);
+		} else if constexpr (NUM_STAGES == 4) {
+			cutf::cp_async::wait_group<4>();
+			__syncthreads();
+			MMA_SMEM{}(
+					frag_c,
+					a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * (mma_count % NUM_STAGES),
+					b_smem_ptr + get_smem_size<SMEM_K, SMEM_N, smem_B_skew, typename B_DMEM_LOADER::Layout>::value * (mma_count % NUM_STAGES)
+					);
+			mma_count++;
+			cutf::cp_async::wait_group<2>();
+			__syncthreads();
+			MMA_SMEM{}(
+					frag_c,
+					a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * (mma_count % NUM_STAGES),
+					b_smem_ptr + get_smem_size<SMEM_K, SMEM_N, smem_B_skew, typename B_DMEM_LOADER::Layout>::value * (mma_count % NUM_STAGES)
+					);
+			mma_count++;
+			cutf::cp_async::wait_group<0>();
+			__syncthreads();
+			MMA_SMEM{}(
+					frag_c,
+					a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * (mma_count % NUM_STAGES),
+					b_smem_ptr + get_smem_size<SMEM_K, SMEM_N, smem_B_skew, typename B_DMEM_LOADER::Layout>::value * (mma_count % NUM_STAGES)
+					);
+		} else {
+			cutf::cp_async::wait_all();
+			__syncthreads();
+			for (unsigned i = 0; i < NUM_STAGES - 1; i++, mma_count++) {
+				MMA_SMEM{}(
+						frag_c,
+						a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * (mma_count % NUM_STAGES),
+						b_smem_ptr + get_smem_size<SMEM_K, SMEM_N, smem_B_skew, typename B_DMEM_LOADER::Layout>::value * (mma_count % NUM_STAGES)
+						);
+			}
 		}
 	} else {
 #pragma unroll NUM_UNROLLINGS

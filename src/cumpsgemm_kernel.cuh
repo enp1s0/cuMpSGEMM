@@ -10,7 +10,6 @@
 #include <cumpsgemm/cumpsgemm.h>
 #include <cumpsgemm/cumpsgemm.hpp>
 #include "device_tcec_wrapper.hpp"
-#include "cumpsgemm_internal.hpp"
 #include "handle.hpp"
 #include "dmem_accessor.hpp"
 

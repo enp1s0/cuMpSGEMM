@@ -4,7 +4,6 @@
 #include <cublas.h>
 #include <cumpsgemm/cumpsgemm.hpp>
 
-#include "cumpsgemm_internal.hpp"
 #include "handle.hpp"
 
 namespace {

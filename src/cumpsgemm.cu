@@ -4,7 +4,6 @@
 #include <cublas.h>
 #include <cumpsgemm/cumpsgemm.hpp>
 
-#include "cumpsgemm_internal.hpp"
 #include "handle.hpp"
 
 namespace {
@@ -121,15 +120,20 @@ cublasStatus_t cumpsgemm::gemm(
 		const T* beta,
 		T* const c_dmem_ptr, const uint64_t ldc,
 		const cuMpSGEMM_compute_mode_t compute_mode,
-		cudaStream_t cuda_stream
+		unsigned* const used_kernel_modeule_id
 		) {
 	const auto code = gen_module_code<T>(op_A, op_B, compute_mode);
 
 	const auto kernel_module_candidate_list = handle->gemm_module[code];
 
+	unsigned module_id;
 	auto gemm_module = kernel_module_candidate_list[0];
-	for (unsigned module_id = 0; module_id < handle->num_kernel_candidates - 1; module_id++) {
+	for (module_id = 0; module_id < handle->num_kernel_candidates - 1; module_id++) {
 
+	}
+
+	if (used_kernel_modeule_id != nullptr) {
+		*used_kernel_modeule_id = module_id;
 	}
 
 	launch_kernel<T>(
@@ -140,7 +144,7 @@ cublasStatus_t cumpsgemm::gemm(
 			b_dmem_ptr, ldb,
 			*beta,
 			c_dmem_ptr, ldc,
-			cuda_stream
+			handle->cuda_stream
 			);
 
 	return CUBLAS_STATUS_SUCCESS;
@@ -162,15 +166,20 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 		T* const c_dmem_ptr, const uint64_t ldc, const uint64_t stridec,
 		const uint64_t batch_count,
 		const cuMpSGEMM_compute_mode_t compute_mode,
-		cudaStream_t cuda_stream
+		unsigned* const used_kernel_modeule_id
 		) {
 	const auto code = gen_module_code<T>(op_A, op_B, compute_mode);
 
 	const auto kernel_module_candidate_list = handle->gemm_stridedBatch_module[code];
 
+	unsigned module_id;
 	auto gemm_module = kernel_module_candidate_list[0];
-	for (unsigned module_id = 0; module_id < handle->num_kernel_candidates - 1; module_id++) {
+	for (module_id = 0; module_id < handle->num_kernel_candidates - 1; module_id++) {
 
+	}
+
+	if (used_kernel_modeule_id != nullptr) {
+		*used_kernel_modeule_id = module_id;
 	}
 
 	launch_kernel<T>(
@@ -182,7 +191,7 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 			*beta,
 			c_dmem_ptr, ldc, stridec,
 			batch_count,
-			cuda_stream
+			handle->cuda_stream
 			);
 
 	return CUBLAS_STATUS_SUCCESS;
@@ -201,8 +210,7 @@ cublasStatus_t cuMpSGEMM_sgemm(
 		const float* const b_dmem_ptr, const uint64_t ldb,
 		const float* beta,
 		float* const c_dmem_ptr, const uint64_t ldc,
-		const cuMpSGEMM_compute_mode_t compute_mode,
-		cudaStream_t cuda_stream
+		const cuMpSGEMM_compute_mode_t compute_mode
 		) {
 	assert(op_A != CUBLAS_OP_C);
 	assert(op_B != CUBLAS_OP_C);
@@ -215,8 +223,7 @@ cublasStatus_t cuMpSGEMM_sgemm(
 			b_dmem_ptr, ldb,
 			beta,
 			c_dmem_ptr, ldc,
-			compute_mode,
-			cuda_stream
+			compute_mode
 			);
 }
 
@@ -232,8 +239,7 @@ cublasStatus_t cuMpSGEMM_cgemm(
 		const cuComplex* const b_dmem_ptr, const uint64_t ldb,
 		const cuComplex* beta,
 		cuComplex* const c_dmem_ptr, const uint64_t ldc,
-		const cuMpSGEMM_compute_mode_t compute_mode,
-		cudaStream_t cuda_stream
+		const cuMpSGEMM_compute_mode_t compute_mode
 		) {
 	return cumpsgemm::gemm<cuComplex>(
 			handle,
@@ -244,8 +250,7 @@ cublasStatus_t cuMpSGEMM_cgemm(
 			b_dmem_ptr, ldb,
 			beta,
 			c_dmem_ptr, ldc,
-			compute_mode,
-			cuda_stream
+			compute_mode
 			);
 }
 
@@ -262,8 +267,7 @@ cublasStatus_t cuMpSGEMM_sgemm_strided_batch(
 		const float* beta,
 		float* const c_dmem_ptr, const uint64_t ldc, const uint64_t stridec,
 		const uint64_t batch_count,
-		const cuMpSGEMM_compute_mode_t compute_mode,
-		cudaStream_t cuda_stream
+		const cuMpSGEMM_compute_mode_t compute_mode
 		) {
 	assert(op_A != CUBLAS_OP_C);
 	assert(op_B != CUBLAS_OP_C);
@@ -277,8 +281,7 @@ cublasStatus_t cuMpSGEMM_sgemm_strided_batch(
 			beta,
 			c_dmem_ptr, ldc, stridec,
 			batch_count,
-			compute_mode,
-			cuda_stream
+			compute_mode
 			);
 }
 
@@ -295,8 +298,7 @@ cublasStatus_t cuMpSGEMM_cgemm_strided_batch(
 		const cuComplex* beta,
 		cuComplex* const c_dmem_ptr, const uint64_t ldc, const uint64_t stridec,
 		const uint64_t batch_count,
-		const cuMpSGEMM_compute_mode_t compute_mode,
-		cudaStream_t cuda_stream
+		const cuMpSGEMM_compute_mode_t compute_mode
 		) {
 	return cumpsgemm::gemm_stridedBatch<cuComplex>(
 			handle,
@@ -308,8 +310,7 @@ cublasStatus_t cuMpSGEMM_cgemm_strided_batch(
 			beta,
 			c_dmem_ptr, ldc, stridec,
 			batch_count,
-			compute_mode,
-			cuda_stream
+			compute_mode
 			);
 }
 } // extern "C"

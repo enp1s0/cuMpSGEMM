@@ -63,4 +63,7 @@ struct cuMpSGEMM_handle {
 
 	cumpsgemm::gemm_module gemm_module             [cumpsgemm::kernel_module_code::max_code][num_kernel_candidates];
 	cumpsgemm::gemm_module gemm_stridedBatch_module[cumpsgemm::kernel_module_code::max_code][num_kernel_candidates];
+
+	// cuda stream
+	cudaStream_t cuda_stream = 0;
 };

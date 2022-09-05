@@ -45,19 +45,22 @@ struct dmem_loader_core {
 					dmem_index += static_cast<std::size_t>((v_bit_len / size_of<T>::value) * BLOCK_SIZE / SMEM_M) * ld;
 					cutf::cp_async::cp_async<v_bit_len>(&smem_ptr[smem_index], &dmem_ptr[dmem_index]);
 				}
-			} else if ((4 / size_of<T>::value != 0) && (ld % (4 / size_of<T>::value) == 0)) {
+			} else {
 				constexpr unsigned v_bit_len = 4;
-				const auto index = threadIdx.x * (v_bit_len / size_of<T>::value);
-				const auto m = index % SMEM_M;
-				const auto n = index / SMEM_M;
-				auto smem_index = m + n * (SMEM_M + SKEW);
-				auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
-				cutf::cp_async::cp_async<v_bit_len>(&smem_ptr[smem_index], &dmem_ptr[dmem_index]);
 
-				for (unsigned offset = 1; offset < SMEM_M * SMEM_N / (BLOCK_SIZE * (v_bit_len / size_of<T>::value)); offset++) {
-					smem_index += (SMEM_M + SKEW) * (v_bit_len / size_of<T>::value) * BLOCK_SIZE / SMEM_M;
-					dmem_index += static_cast<std::size_t>((v_bit_len / size_of<T>::value) * BLOCK_SIZE / SMEM_M) * ld;
+				if constexpr ((v_bit_len / size_of<T>::value) != 0) {
+					const auto index = threadIdx.x * (v_bit_len / size_of<T>::value);
+					const auto m = index % SMEM_M;
+					const auto n = index / SMEM_M;
+					auto smem_index = m + n * (SMEM_M + SKEW);
+					auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
 					cutf::cp_async::cp_async<v_bit_len>(&smem_ptr[smem_index], &dmem_ptr[dmem_index]);
+
+					for (unsigned offset = 1; offset < SMEM_M * SMEM_N / (BLOCK_SIZE * (v_bit_len / size_of<T>::value)); offset++) {
+						smem_index += (SMEM_M + SKEW) * (v_bit_len / size_of<T>::value) * BLOCK_SIZE / SMEM_M;
+						dmem_index += static_cast<std::size_t>((v_bit_len / size_of<T>::value) * BLOCK_SIZE / SMEM_M) * ld;
+						cutf::cp_async::cp_async<v_bit_len>(&smem_ptr[smem_index], &dmem_ptr[dmem_index]);
+					}
 				}
 			}
 		} else {

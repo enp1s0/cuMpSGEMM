@@ -42,7 +42,7 @@ __device__ void load_matrix(
 		const MEM_T* const ptr,
 		const uint64_t ldm
 		) {
-	mtk::wmma::tcec::load_matrix_sync<typename cumpsgemm::device::layout_conv<Layout>::type>(frag.frag, ptr, ldm);
+	mtk::wmma::tcec::load_matrix_sync<typename cumpsgemm::device::layout_conv<Layout>::type>(frag.frag, ptr, ldm, false);
 }
 
 // fragment storer
@@ -52,7 +52,7 @@ __device__ void store_matrix(
 		tc_fragment<MEM_T, Use, M, N, K, void, TC_T, EC>& frag,
 		const uint64_t ldm
 		) {
-	mtk::wmma::tcec::store_matrix_sync<nvcuda::wmma::col_major>(ptr, frag.frag, ldm);
+	mtk::wmma::tcec::store_matrix_sync<nvcuda::wmma::col_major>(ptr, frag.frag, ldm, false);
 }
 
 // mma

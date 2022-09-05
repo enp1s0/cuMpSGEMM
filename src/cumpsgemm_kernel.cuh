@@ -58,7 +58,8 @@ __device__ void operator() (
 		const T* const b_smem_ptr
 		) {
 	static_assert((SMEM_M / FRAG_M) * (SMEM_N / FRAG_N) >= (BLOCK_SIZE / warp_size));
-	for (unsigned i = threadIdx.x / warp_size; i < (SMEM_M / FRAG_M) * (SMEM_N / FRAG_N); i += BLOCK_SIZE / warp_size) {
+	for (unsigned j = 0; j < (SMEM_M / FRAG_M) * (SMEM_N / FRAG_N); j += BLOCK_SIZE / warp_size) {
+		const auto i = j + threadIdx.x / warp_size;
 		const unsigned bm = i % (SMEM_M / FRAG_M);
 		const unsigned bn = i / (SMEM_M / FRAG_M);
 
@@ -96,7 +97,8 @@ __device__ void operator() (
 		const T* const b_smem_ptr
 		) {
 	static_assert((SMEM_M / FRAG_M) * (SMEM_N / FRAG_N) >= (BLOCK_SIZE / warp_size));
-	for (unsigned i = threadIdx.x / warp_size; i < (SMEM_M / FRAG_M) * (SMEM_N / FRAG_N); i += BLOCK_SIZE / warp_size) {
+	for (unsigned j = 0; j < (SMEM_M / FRAG_M) * (SMEM_N / FRAG_N); j += BLOCK_SIZE / warp_size) {
+		const auto i = j + threadIdx.x / warp_size;
 		const unsigned bm = i % (SMEM_M / FRAG_M);
 		const unsigned bn = i / (SMEM_M / FRAG_M);
 		cumpsgemm::device::tc_fragment<T, nvcuda::wmma::matrix_a, FRAG_M, FRAG_N, FRAG_K, OP_A, TC_T, EC> frag_a[2];
@@ -167,7 +169,6 @@ __device__ void operator() (
 	cumpsgemm::device::tc_fragment<T, nvcuda::wmma::accumulator, FRAG_M, FRAG_N, FRAG_K, void, TC_T, EC> frag_c[frag_c_array_size];
 	if (k / SMEM_K >= NUM_STAGES - 1) {
 		unsigned bk = 0;
-#pragma unroll NUM_UNROLLINGS
 		for (; (bk / SMEM_K) < NUM_STAGES - 1; bk += SMEM_K) {
 			a_dmem_loader(
 					a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * (bk / SMEM_K),

@@ -59,12 +59,12 @@ struct dmem_loader_core {
 				const auto smem_index = m + n * (SMEM_M + SKEW);
 				const auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
 
-				T v = zero<T>();
 				if ((start_m + m) < size_m && (start_n + n) < size_n) {
-					v = dmem_ptr[dmem_index];
+					cutf::cp_async::cp_async<size_of<T>::value>(&smem_ptr[smem_index], &dmem_ptr[dmem_index]);
+				} else {
+					smem_ptr[smem_index] = zero<T>();
 				}
 				__syncwarp();
-				smem_ptr[smem_index] = v;
 			}
 		}
 	}

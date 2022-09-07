@@ -22,8 +22,11 @@ template <> __device__ inline cuComplex zero<cuComplex>() {return make_cuComplex
 
 template <class T>
 struct size_of {static constexpr unsigned value = 0;};
-template <> struct size_of<float    > {static constexpr unsigned value = 4;};
-template <> struct size_of<cuComplex> {static constexpr unsigned value = 8;};
+template <> struct size_of<ulong2   > {static constexpr unsigned value = 16;};
+template <> struct size_of<ulong1   > {static constexpr unsigned value = 8 ;};
+template <> struct size_of<uint1    > {static constexpr unsigned value = 4 ;};
+template <> struct size_of<float    > {static constexpr unsigned value = 4 ;};
+template <> struct size_of<cuComplex> {static constexpr unsigned value = 8 ;};
 
 template <class T>
 __device__ inline T mul(const T a, const T alpha) {

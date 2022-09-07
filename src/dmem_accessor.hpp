@@ -19,14 +19,14 @@ __device__ void load_core (
 		const auto index = threadIdx.x * (v_bit_len / size_of<T>::value);
 		const auto m = index % SMEM_M;
 		const auto n = index / SMEM_M;
-		auto smem_index = m + n * (SMEM_M + SKEW);
-		auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
-		cutf::cp_async::cp_async<v_bit_len>(&smem_ptr[smem_index], &dmem_ptr[dmem_index]);
+		auto smem_local_ptr = smem_ptr + (m + n * (SMEM_M + SKEW));
+		auto dmem_local_ptr = dmem_ptr + (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
+		cutf::cp_async::cp_async<v_bit_len>(smem_local_ptr, dmem_local_ptr);
 
 		for (unsigned offset = 1; offset < SMEM_M * SMEM_N / (BLOCK_SIZE * (v_bit_len / size_of<T>::value)); offset++) {
-			smem_index += (SMEM_M + SKEW) * (v_bit_len / size_of<T>::value) * BLOCK_SIZE / SMEM_M;
-			dmem_index += static_cast<std::size_t>((v_bit_len / size_of<T>::value) * BLOCK_SIZE / SMEM_M) * ld;
-			cutf::cp_async::cp_async<v_bit_len>(&smem_ptr[smem_index], &dmem_ptr[dmem_index]);
+			smem_local_ptr += (SMEM_M + SKEW) * (v_bit_len / size_of<T>::value) * BLOCK_SIZE / SMEM_M;
+			dmem_local_ptr += static_cast<std::size_t>((v_bit_len / size_of<T>::value) * BLOCK_SIZE / SMEM_M) * ld;
+			cutf::cp_async::cp_async<v_bit_len>(smem_local_ptr, dmem_local_ptr);
 		}
 	}
 }
@@ -43,7 +43,7 @@ struct dmem_loader_core {
 			const unsigned size_m,
 			const unsigned size_n
 			) {
-		if (start_m + SMEM_M < size_m && start_n + SMEM_N < size_n) {
+		if (start_m + SMEM_M <= size_m && start_n + SMEM_N <= size_n) {
 			if (ld % (16 / size_of<T>::value) == 0) {
 				load_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, 16>(smem_ptr, dmem_ptr, ld, start_m, start_n, size_m, size_n);
 			} else if ((ld % (8 / size_of<T>::value) == 0)) {
@@ -213,10 +213,10 @@ __device__ void dmem_store_core (
 		const auto index = threadIdx.x * (v_bit_len / size_of<T>::value);
 		const auto m = index % SMEM_M;
 		const auto n = index / SMEM_M;
-		auto smem_index = m + n * (SMEM_M + SKEW);
-		auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
+		auto smem_local_ptr = smem_ptr + (m + n * (SMEM_M + SKEW));
+		auto dmem_local_ptr = dmem_ptr + (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
 
-		auto v = *reinterpret_cast<const VEC_T*>(&smem_ptr[smem_index]);
+		auto v = *reinterpret_cast<const VEC_T*>(smem_local_ptr);
 		for (unsigned i = 0; i < v_bit_len / size_of<T>::value; i++) {
 			if constexpr (BETA) {
 				reinterpret_cast<T*>(&v)[i] = mad(reinterpret_cast<T*>(&v)[i], alpha, beta);
@@ -224,17 +224,17 @@ __device__ void dmem_store_core (
 				reinterpret_cast<T*>(&v)[i] = mul(reinterpret_cast<T*>(&v)[i], alpha);
 			}
 		}
-		*reinterpret_cast<VEC_T*>(&dmem_ptr[dmem_index]) = v;
+		*reinterpret_cast<VEC_T*>(dmem_local_ptr) = v;
 
 		for (unsigned offset = 1; offset < SMEM_M * SMEM_N / (BLOCK_SIZE * (v_bit_len / size_of<T>::value)); offset++) {
-			smem_index += (SMEM_M + SKEW) * (v_bit_len / size_of<T>::value) * BLOCK_SIZE / SMEM_M;
-			dmem_index += static_cast<std::size_t>((v_bit_len / size_of<T>::value) * BLOCK_SIZE / SMEM_M) * ld;
+			smem_local_ptr += (SMEM_M + SKEW) * (v_bit_len / size_of<T>::value) * BLOCK_SIZE / SMEM_M;
+			dmem_local_ptr += static_cast<std::size_t>((v_bit_len / size_of<T>::value) * BLOCK_SIZE / SMEM_M) * ld;
 
-			auto v = *reinterpret_cast<const VEC_T*>(&smem_ptr[smem_index]);
+			auto v = *reinterpret_cast<const VEC_T*>(smem_local_ptr);
 			for (unsigned i = 0; i < v_bit_len / size_of<T>::value; i++) {
 				reinterpret_cast<T*>(&v)[i] = mul(reinterpret_cast<T*>(&v)[i], alpha);
 			}
-			*reinterpret_cast<VEC_T*>(&dmem_ptr[dmem_index]) = v;
+			*reinterpret_cast<VEC_T*>(dmem_local_ptr) = v;
 		}
 	}
 }
@@ -253,7 +253,7 @@ struct dmem_storer {
 			const T alpha, const T beta
 			) {
 		if (is_zero(beta)) {
-			if (start_m + SMEM_M < size_m && start_n + SMEM_N < size_n) {
+			if (start_m + SMEM_M <= size_m && start_n + SMEM_N <= size_n) {
 				if (ld % (16 / size_of<T>::value) == 0) {
 					detail::dmem_store_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, ulong2, false>(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha, beta);
 				} else if ((ld % (8 / size_of<T>::value) == 0)) {

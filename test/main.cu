@@ -653,6 +653,8 @@ void gemm_strided_batch_test(const std::size_t min_N, const std::size_t max_N, c
 	cuMpSGEMM_handle_t cuMpSGEMM_handle;
 	cuMpSGEMM_create(&cuMpSGEMM_handle);
 
+	const auto stride = is_seq ? max_N * max_N : (1lu << (2 * max_N));
+
 	if (gemm == gemm_type::s) {
 		for (const auto mode : modes) {
 			for (const auto op_A : sgemm_ops) {
@@ -664,9 +666,9 @@ void gemm_strided_batch_test(const std::size_t min_N, const std::size_t max_N, c
 								op_A,
 								op_B,
 								N, N, N,
-								a_ptr, N, max_N * max_N,
-								b_ptr, N, max_N * max_N,
-								c_ptr, N, max_N * max_N,
+								a_ptr, N, stride,
+								b_ptr, N, stride,
+								c_ptr, N, stride,
 								batch_count,
 								mode
 								);
@@ -689,9 +691,9 @@ void gemm_strided_batch_test(const std::size_t min_N, const std::size_t max_N, c
 								op_A,
 								op_B,
 								N, N, N,
-								reinterpret_cast<cuComplex*>(a_ptr), N, max_N * max_N,
-								reinterpret_cast<cuComplex*>(b_ptr), N, max_N * max_N,
-								reinterpret_cast<cuComplex*>(c_ptr), N, max_N * max_N,
+								reinterpret_cast<cuComplex*>(a_ptr), N, stride,
+								reinterpret_cast<cuComplex*>(b_ptr), N, stride,
+								reinterpret_cast<cuComplex*>(c_ptr), N, stride,
 								batch_count,
 								mode
 								);

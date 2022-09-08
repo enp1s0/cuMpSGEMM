@@ -445,9 +445,9 @@ int sgemm_strided_batch_test_core(
 	 	residual += calc_matmul_residual(
 					op_A, op_B,
 					m, n, k,
-					a_ptr + stride_a, lda,
-					b_ptr + stride_b, ldb,
-					c_ptr + stride_c, ldc
+					a_ptr + stride_a * b, lda,
+					b_ptr + stride_b * b, ldb,
+					c_ptr + stride_c * b, ldc
 			);
 	}
 	residual /= batch_count;
@@ -602,7 +602,7 @@ void gemm_test(const std::size_t min_N, const std::size_t max_N, const std::size
 
 void gemm_strided_batch_test(const std::size_t min_N, const std::size_t max_N, const std::size_t interval, const std::size_t batch_count, const bool only_cublas, const gemm_type gemm, const bool is_seq) {
 	constexpr uint64_t seed = 0;
-	const std::size_t max_num_elements = (is_seq ? max_N * max_N : (1lu << (2 * max_N))) * (gemm == gemm_type::c ? 2 : 1);
+	const std::size_t max_num_elements = (is_seq ? max_N * max_N : (1lu << (2 * max_N))) * (gemm == gemm_type::c ? 2 : 1) * batch_count;
 	float* a_ptr = cutf::memory::malloc<float>(max_num_elements);
 	float* b_ptr = cutf::memory::malloc<float>(max_num_elements);
 	float* c_ptr = cutf::memory::malloc<float>(max_num_elements);

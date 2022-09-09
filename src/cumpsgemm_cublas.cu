@@ -89,6 +89,10 @@ extern "C" const char* cuMpSGEMM_get_compute_mode_string (
 		return "TF32TC";
 	case CUMPSGEMM_TF32TCEC:
 		return "TF32TCEC";
+	case CUMPSGEMM_CUBLAS_FP16TC:
+		return "CUBLAS_FP16TC";
+	case CUMPSGEMM_CUBLAS_TF32TC:
+		return "CUBLAS_TF32TC";
 	}
 	return "Unknown";
 }

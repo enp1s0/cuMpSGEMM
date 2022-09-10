@@ -174,18 +174,18 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 
 	if (m * n > (1lu << 24)) {
 		for (std::uint64_t i = 0; i < batch_count; i++) {
-		cumpsgemm::gemm(
-				handle,
-				op_A, op_B,
-				m, n, k,
-				alpha,
-				a_dmem_ptr + i * stridea, lda,
-				b_dmem_ptr + i * strideb, ldb,
-				beta,
-				c_dmem_ptr + i * stridec, ldc,
-				compute_mode,
-				used_kernel_modeule_id
-				);
+			cumpsgemm::gemm(
+					handle,
+					op_A, op_B,
+					m, n, k,
+					alpha,
+					a_dmem_ptr + i * stridea, lda,
+					b_dmem_ptr + i * strideb, ldb,
+					beta,
+					c_dmem_ptr + i * stridec, ldc,
+					compute_mode,
+					used_kernel_modeule_id
+					);
 		}
 		return CUBLAS_STATUS_SUCCESS;
 	}

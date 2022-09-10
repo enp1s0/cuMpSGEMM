@@ -176,6 +176,24 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 
 	const auto kernel_module_candidate_list = handle->gemm_stridedBatch_module[code];
 
+	if (m * n > (1lu << 24)) {
+		for (std::uint64_t i = 0; i < batch_count; i++) {
+			cumpsgemm::gemm(
+					handle,
+					op_A, op_B,
+					m, n, k,
+					alpha,
+					a_dmem_ptr + i * stridea, lda,
+					b_dmem_ptr + i * strideb, ldb,
+					beta,
+					c_dmem_ptr + i * stridec, ldc,
+					compute_mode,
+					used_kernel_modeule_id
+					);
+		}
+		return CUBLAS_STATUS_SUCCESS;
+	}
+
 	unsigned module_id;
 	auto gemm_module = kernel_module_candidate_list[handle->num_kernel_candidates - 1];
 	for (module_id = 0; module_id < handle->num_kernel_candidates - 1; module_id++) {

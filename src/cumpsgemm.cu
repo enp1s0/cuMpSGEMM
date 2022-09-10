@@ -127,9 +127,13 @@ cublasStatus_t cumpsgemm::gemm(
 	const auto kernel_module_candidate_list = handle->gemm_module[code];
 
 	unsigned module_id;
-	auto gemm_module = kernel_module_candidate_list[0];
+	auto gemm_module = kernel_module_candidate_list[handle->num_kernel_candidates - 1];
 	for (module_id = 0; module_id < handle->num_kernel_candidates - 1; module_id++) {
-
+		const auto module = kernel_module_candidate_list[module_id];
+		if (m * n / (module.smem_m * module.smem_n) > handle->num_sms * 32 /*A magic number :) */) {
+			gemm_module = module;
+			break;
+		}
 	}
 
 	if (used_kernel_modeule_id != nullptr) {
@@ -173,9 +177,13 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 	const auto kernel_module_candidate_list = handle->gemm_stridedBatch_module[code];
 
 	unsigned module_id;
-	auto gemm_module = kernel_module_candidate_list[0];
+	auto gemm_module = kernel_module_candidate_list[handle->num_kernel_candidates - 1];
 	for (module_id = 0; module_id < handle->num_kernel_candidates - 1; module_id++) {
-
+		const auto module = kernel_module_candidate_list[module_id];
+		if (m * n / (module.smem_m * module.smem_n) * batch_count > handle->num_sms * 32 /*A magic number :) */) {
+			gemm_module = module;
+			break;
+		}
 	}
 
 	if (used_kernel_modeule_id != nullptr) {

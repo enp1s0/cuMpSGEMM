@@ -25,8 +25,9 @@ enum cuMpSGEMM_compute_mode_t {
 	CUMPSGEMM_TF32TCEC        = 2,
 	CUMPSGEMM_FP16TC          = 3,
 	CUMPSGEMM_TF32TC          = 4,
-	CUMPSGEMM_CUBLAS_FP16TC   = 5,
-	CUMPSGEMM_CUBLAS_TF32TC   = 6,
+	CUMPSGEMM_CUBLAS_SIMT     = 5,
+	CUMPSGEMM_CUBLAS_FP16TC   = 6,
+	CUMPSGEMM_CUBLAS_TF32TC   = 7,
 };
 
 extern "C" const char* cuMpSGEMM_get_compute_mode_string (

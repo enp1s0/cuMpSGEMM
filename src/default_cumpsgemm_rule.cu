@@ -22,6 +22,12 @@ extern "C" cuMpSGEMM_compute_mode_t cuMpSGEMM_get_compute_mode (
 			return CUMPSGEMM_FP16TC;
 		if (env_val_str == "TF32TC")
 			return CUMPSGEMM_TF32TC;
+		if (env_val_str == "CUBLAS_TF32TC")
+			return CUMPSGEMM_CUBLAS_TF32TC;
+		if (env_val_str == "CUBLAS_FP16TC")
+			return CUMPSGEMM_CUBLAS_FP16TC;
+		if (env_val_str == "CUBLAS_SIMT")
+			return CUMPSGEMM_CUBLAS_SIMT;
 	}
 
 	return CUMPSGEMM_CUBLAS;

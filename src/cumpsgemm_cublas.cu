@@ -89,6 +89,12 @@ extern "C" const char* cuMpSGEMM_get_compute_mode_string (
 		return "TF32TC";
 	case CUMPSGEMM_TF32TCEC:
 		return "TF32TCEC";
+	case CUMPSGEMM_CUBLAS_SIMT:
+		return "CUBLAS_SIMT";
+	case CUMPSGEMM_CUBLAS_FP16TC:
+		return "CUBLAS_FP16TC";
+	case CUMPSGEMM_CUBLAS_TF32TC:
+		return "CUBLAS_TF32TC";
 	}
 	return "Unknown";
 }
@@ -150,7 +156,17 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 	cuMpSGEMM_log(std::string(func_name) + " op=(" + get_cublas_op_str(op_A) + ", " + get_cublas_op_str(op_B) +
 			"), shape=(" + std::to_string(m) + ", " + std::to_string(n) + ", " + std::to_string(k) + "), mode=" + cuMpSGEMM_get_compute_mode_string(compute_mode));
 
-	if (compute_mode == CUMPSGEMM_CUBLAS) {
+	if (compute_mode == CUMPSGEMM_CUBLAS || compute_mode == CUMPSGEMM_CUBLAS_FP16TC || compute_mode == CUMPSGEMM_CUBLAS_TF32TC || compute_mode == CUMPSGEMM_CUBLAS_SIMT) {
+		cublasMath_t math_mode;
+		cublasGetMathMode(cublas_handle, &math_mode);
+		if (compute_mode == CUMPSGEMM_CUBLAS_TF32TC) {
+			cublasSetMathMode(cublas_handle, CUBLAS_TF32_TENSOR_OP_MATH);
+		} else if (compute_mode == CUMPSGEMM_CUBLAS_FP16TC) {
+			cublasSetMathMode(cublas_handle, CUBLAS_TENSOR_OP_MATH);
+		} else if (compute_mode == CUMPSGEMM_CUBLAS_SIMT) {
+			cublasSetMathMode(cublas_handle, CUBLAS_DEFAULT_MATH);
+		}
+
 		cublasStatus_t (*func_ptr)(cublasHandle_t, cublasOperation_t, cublasOperation_t, int, int, int, const T*, const T*, int, const T*, int, const T*, T*, int);
 		*(void**)(&func_ptr) = cuMpSGEMM_get_function_pointer(
 				cublas_lib_name.c_str(),
@@ -159,7 +175,11 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 		if (func_ptr == nullptr) {
 			cuMpSGEMM_error(std::string("Could not load cuBLAS function \"") + func_name + "\"");
 		}
-		return (*func_ptr)(cublas_handle, op_A, op_B, m, n, k, alpha, a_dmem_ptr, ldb, b_dmem_ptr, ldb, beta, c_dmem_ptr, ldc);
+		const auto res = (*func_ptr)(cublas_handle, op_A, op_B, m, n, k, alpha, a_dmem_ptr, ldb, b_dmem_ptr, ldb, beta, c_dmem_ptr, ldc);
+
+		// restore math mode
+		cublasSetMathMode(cublas_handle, math_mode);
+		return res;
 	}
 
 	if (internal_global_cuMpSGEMM_handle == nullptr) {
@@ -214,7 +234,17 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 	cuMpSGEMM_log(std::string(func_name) + " op=(" + get_cublas_op_str(op_A) + ", " + get_cublas_op_str(op_B) +
 			"), shape=(" + std::to_string(m) + ", " + std::to_string(n) + ", " + std::to_string(k) + "), batch=" + std::to_string(batch_count) + ", mode=" + cuMpSGEMM_get_compute_mode_string(compute_mode));
 
-	if (compute_mode == CUMPSGEMM_CUBLAS) {
+	if (compute_mode == CUMPSGEMM_CUBLAS || compute_mode == CUMPSGEMM_CUBLAS_FP16TC || compute_mode == CUMPSGEMM_CUBLAS_TF32TC || compute_mode == CUMPSGEMM_CUBLAS_SIMT) {
+		cublasMath_t math_mode;
+		cublasGetMathMode(cublas_handle, &math_mode);
+		if (compute_mode == CUMPSGEMM_CUBLAS_TF32TC) {
+			cublasSetMathMode(cublas_handle, CUBLAS_TF32_TENSOR_OP_MATH);
+		} else if (compute_mode == CUMPSGEMM_CUBLAS_FP16TC) {
+			cublasSetMathMode(cublas_handle, CUBLAS_TENSOR_OP_MATH);
+		} else if (compute_mode == CUMPSGEMM_CUBLAS_SIMT) {
+			cublasSetMathMode(cublas_handle, CUBLAS_DEFAULT_MATH);
+		}
+
 		cublasStatus_t (*func_ptr)(cublasHandle_t, cublasOperation_t, cublasOperation_t, int, int, int, const T*, const T*, int, long long int, const T*, int, long long int, const T*, T*, int, long long int, int);
 		*(void**)(&func_ptr) = cuMpSGEMM_get_function_pointer(
 				cublas_lib_name.c_str(),
@@ -223,7 +253,9 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 		if (func_ptr == nullptr) {
 			cuMpSGEMM_error(std::string("Could not load cuBLAS function \"") + func_name + "\"");
 		}
-		return (*func_ptr)(cublas_handle, op_A, op_B, m, n, k, alpha, a_dmem_ptr, ldb, stridea, b_dmem_ptr, ldb, strideb, beta, c_dmem_ptr, ldc, stridec, batch_count);
+		const auto res = (*func_ptr)(cublas_handle, op_A, op_B, m, n, k, alpha, a_dmem_ptr, ldb, stridea, b_dmem_ptr, ldb, strideb, beta, c_dmem_ptr, ldc, stridec, batch_count);
+		cublasSetMathMode(cublas_handle, math_mode);
+		return res;
 	}
 
 	if (internal_global_cuMpSGEMM_handle == nullptr) {

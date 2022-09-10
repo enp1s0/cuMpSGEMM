@@ -13,6 +13,8 @@ The computing throughput is low since we don't optimize the kernel function.
 - `cublasGemmEx` (Only for single precision)
 
 ## Installation
+- For A100 (GA100) GPU
+
 ```
 git clone https://github.com/enp1s0/cuMpSGEMM.git --recursive
 cd cuMpSGEMM
@@ -22,6 +24,14 @@ cmake ..
 make -j4
 ./prepare_hijacking.sh build
 ```
+
+- For other Ampere GPUs
+Comment out the following line in `src/handle.cu`.
+```
+#define ENABLE_A100_OPTIMAZED_PARAMETERS
+```
+Without this modification, an error may occur in dynamic shared memory size configuration step in runtime.
+The GA100 architecture has more shared memory size than other Ampere GPUs and the optimization for GA100 is besed on the shared memory size.
 
 ## Usage
 

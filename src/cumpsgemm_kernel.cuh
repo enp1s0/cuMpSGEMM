@@ -330,7 +330,9 @@ __device__ void operator() (
 			blockIdx_x * SMEM_M, blockIdx_y * SMEM_N,
 			m, n,
 			smem,
-			alpha, beta
+			alpha, beta,
+			0, 0,
+			nullptr, nullptr
 			);
 }
 };
@@ -453,7 +455,9 @@ __device__ void operator() (
 			blockIdx_x * SMEM_M, blockIdx_y * SMEM_N,
 			m, n,
 			smem,
-			alpha, beta
+			alpha, beta,
+			0, 0,
+			nullptr, nullptr
 			);
 }
 };

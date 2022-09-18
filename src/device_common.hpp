@@ -58,6 +58,10 @@ __device__ bool inline is_zero(const cuComplex& v) {
 	return v.x == 0 && v.y == 0;
 }
 
+template <class T>
+struct element_t_conv {using type = T;};
+template <> struct element_t_conv<float2 > {using type = float;};
+
 } // namespace device
 } // namespace cumpsgemm
 #endif

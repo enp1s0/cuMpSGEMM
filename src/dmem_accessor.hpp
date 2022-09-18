@@ -197,7 +197,47 @@ struct dmem_loader<cumpsgemm::conjugate, float, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE
 };
 
 namespace detail {
-template <class T, unsigned SMEM_M, unsigned SMEM_N, unsigned SKEW, unsigned BLOCK_SIZE, class VEC_T, bool BETA>
+template <class T>
+__device__ void exp_stats(
+		const T v,
+		const typename cumpsgemm::device::element_t_conv<T>::type ignore_threshold,
+		const typename cumpsgemm::device::element_t_conv<T>::type target_threshold,
+		unsigned* const local_total_counter,
+		unsigned* const local_target_counter
+		) {
+	if (v > ignore_threshold) {
+		(*local_total_counter)++;
+		if (v < target_threshold) {
+			(*local_target_counter)++;
+		}
+	}
+	__syncwarp();
+}
+
+template <>
+__device__ void exp_stats<cuComplex>(
+		const cuComplex v,
+		const typename cumpsgemm::device::element_t_conv<cuComplex>::type ignore_threshold,
+		const typename cumpsgemm::device::element_t_conv<cuComplex>::type target_threshold,
+		unsigned* const local_total_counter,
+		unsigned* const local_target_counter
+		) {
+	if (v.x > ignore_threshold) {
+		(*local_total_counter)++;
+		if (v.x < target_threshold) {
+			(*local_target_counter)++;
+		}
+	}
+	if (v.y > ignore_threshold) {
+		(*local_total_counter)++;
+		if (v.y < target_threshold) {
+			(*local_target_counter)++;
+		}
+	}
+	__syncwarp();
+}
+
+template <class T, unsigned SMEM_M, unsigned SMEM_N, unsigned SKEW, unsigned BLOCK_SIZE, class VEC_T, bool BETA, bool EXP_STATS>
 __device__ void dmem_store_core (
 			T* const dmem_ptr,
 			const unsigned ld,
@@ -206,7 +246,11 @@ __device__ void dmem_store_core (
 			const unsigned size_m,
 			const unsigned size_n,
 			const T* const smem_ptr,
-			const T alpha, const T beta
+			const T alpha, const T beta,
+			const typename cumpsgemm::device::element_t_conv<T>::type ignore_threshold,
+			const typename cumpsgemm::device::element_t_conv<T>::type target_threshold,
+			unsigned* const local_total_counter,
+			unsigned* const local_target_counter
 		){
 	constexpr unsigned v_bit_len = size_of<VEC_T>::value;
 	if constexpr ((v_bit_len / size_of<T>::value) != 0) {
@@ -218,10 +262,14 @@ __device__ void dmem_store_core (
 
 		auto v = *reinterpret_cast<const VEC_T*>(smem_local_ptr);
 		for (unsigned i = 0; i < v_bit_len / size_of<T>::value; i++) {
+			auto& w = reinterpret_cast<T*>(&v)[i];
 			if constexpr (BETA) {
-				reinterpret_cast<T*>(&v)[i] = mad(reinterpret_cast<T*>(&v)[i], alpha, beta);
+				w = mad(w, alpha, beta);
 			} else {
-				reinterpret_cast<T*>(&v)[i] = mul(reinterpret_cast<T*>(&v)[i], alpha);
+				w = mul(w, alpha);
+			}
+			if constexpr (EXP_STATS) {
+				exp_stats(w, ignore_threshold, target_threshold, local_total_counter, local_target_counter);
 			}
 		}
 		*reinterpret_cast<VEC_T*>(dmem_local_ptr) = v;
@@ -232,13 +280,92 @@ __device__ void dmem_store_core (
 
 			auto v = *reinterpret_cast<const VEC_T*>(smem_local_ptr);
 			for (unsigned i = 0; i < v_bit_len / size_of<T>::value; i++) {
+				auto& w = reinterpret_cast<T*>(&v)[i];
 				if constexpr (BETA) {
-					reinterpret_cast<T*>(&v)[i] = mad(reinterpret_cast<T*>(&v)[i], alpha, beta);
+					w = mad(w, alpha, beta);
 				} else {
-					reinterpret_cast<T*>(&v)[i] = mul(reinterpret_cast<T*>(&v)[i], alpha);
+					w = mul(w, alpha);
+				}
+				if constexpr (EXP_STATS) {
+					exp_stats(w, ignore_threshold, target_threshold, local_total_counter, local_target_counter);
 				}
 			}
 			*reinterpret_cast<VEC_T*>(dmem_local_ptr) = v;
+		}
+	}
+}
+template <class T, unsigned SMEM_M, unsigned SMEM_N, unsigned SKEW, unsigned BLOCK_SIZE, bool EXP_STATS>
+__device__ void dmem_store_core_exp_stats_switch (
+			T* const dmem_ptr,
+			const unsigned ld,
+			const unsigned start_m,
+			const unsigned start_n,
+			const unsigned size_m,
+			const unsigned size_n,
+			const T* const smem_ptr,
+			const T alpha, const T beta,
+			const typename cumpsgemm::device::element_t_conv<T>::type ignore_threshold,
+			const typename cumpsgemm::device::element_t_conv<T>::type target_threshold,
+			unsigned* const local_total_counter,
+			unsigned* const local_target_counter
+		){
+	if (is_zero(beta)) {
+		if (start_m + SMEM_M <= size_m && start_n + SMEM_N <= size_n) {
+			if (ld % (16 / size_of<T>::value) == 0) {
+				detail::dmem_store_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, ulong2, false, EXP_STATS>(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha, beta, ignore_threshold, target_threshold, local_total_counter, local_target_counter);
+			} else if ((ld % (8 / size_of<T>::value) == 0)) {
+				detail::dmem_store_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, ulong1, false, EXP_STATS>(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha, beta, ignore_threshold, target_threshold, local_total_counter, local_target_counter);
+			} else {
+				detail::dmem_store_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, uint1 , false, EXP_STATS>(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha, beta, ignore_threshold, target_threshold, local_total_counter, local_target_counter);
+			}
+		} else {
+			const auto index = threadIdx.x;
+			const auto m = index % SMEM_M;
+			auto n = index / SMEM_M;
+			auto smem_index = m + n * (SMEM_M + SKEW);
+			auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
+
+			for (unsigned offset = 0; offset < SMEM_M * SMEM_N; offset += BLOCK_SIZE) {
+				if ((start_m + m) < size_m && (start_n + n) < size_n) {
+					const auto v = mul(smem_ptr[smem_index], alpha);
+					dmem_ptr[dmem_index] = v;
+					if constexpr (EXP_STATS) {
+						exp_stats(v, ignore_threshold, target_threshold, local_total_counter, local_target_counter);
+					}
+				}
+				n += (BLOCK_SIZE / SMEM_M);
+
+				smem_index += (SMEM_M + SKEW) * (BLOCK_SIZE / SMEM_M);
+				dmem_index += ld * (BLOCK_SIZE / SMEM_M);
+				__syncwarp();
+			}
+		}
+	} else {
+		if (start_m + SMEM_M < size_m && start_n + SMEM_N < size_n) {
+			if (ld % (16 / size_of<T>::value) == 0) {
+				detail::dmem_store_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, ulong2, true , EXP_STATS>(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha, beta, ignore_threshold, target_threshold, local_total_counter, local_target_counter);
+			} else if ((ld % (8 / size_of<T>::value) == 0)) {
+				detail::dmem_store_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, ulong1, true , EXP_STATS>(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha, beta, ignore_threshold, target_threshold, local_total_counter, local_target_counter);
+			} else {
+				detail::dmem_store_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, uint1 , true , EXP_STATS>(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha, beta, ignore_threshold, target_threshold, local_total_counter, local_target_counter);
+			}
+		} else {
+			for (unsigned offset = 0; offset < SMEM_M * SMEM_N; offset += BLOCK_SIZE) {
+				const auto index = offset + threadIdx.x;
+				const auto m = index % SMEM_M;
+				const auto n = index / SMEM_M;
+				const auto smem_index = m + n * (SMEM_M + SKEW);
+				const auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
+
+				if ((start_m + m) < size_m && (start_n + n) < size_n) {
+					T v = mad(smem_ptr[smem_index], alpha, mul(dmem_ptr[dmem_index], beta));
+					dmem_ptr[dmem_index] = v;
+					if constexpr (EXP_STATS) {
+						exp_stats(v, ignore_threshold, target_threshold, local_total_counter, local_target_counter);
+					}
+				}
+				__syncwarp();
+			}
 		}
 	}
 }
@@ -254,58 +381,16 @@ struct dmem_storer {
 			const unsigned size_m,
 			const unsigned size_n,
 			const T* const smem_ptr,
-			const T alpha, const T beta
+			const T alpha, const T beta,
+			const typename cumpsgemm::device::element_t_conv<T>::type ignore_threshold,
+			const typename cumpsgemm::device::element_t_conv<T>::type target_threshold,
+			unsigned* const local_total_counter,
+			unsigned* const local_target_counter
 			) {
-		if (is_zero(beta)) {
-			if (start_m + SMEM_M <= size_m && start_n + SMEM_N <= size_n) {
-				if (ld % (16 / size_of<T>::value) == 0) {
-					detail::dmem_store_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, ulong2, false>(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha, beta);
-				} else if ((ld % (8 / size_of<T>::value) == 0)) {
-					detail::dmem_store_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, ulong1, false>(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha, beta);
-				} else {
-					detail::dmem_store_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, uint1 , false>(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha, beta);
-				}
-			} else {
-				const auto index = threadIdx.x;
-				const auto m = index % SMEM_M;
-				auto n = index / SMEM_M;
-				auto smem_index = m + n * (SMEM_M + SKEW);
-				auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
-
-				for (unsigned offset = 0; offset < SMEM_M * SMEM_N; offset += BLOCK_SIZE) {
-					if ((start_m + m) < size_m && (start_n + n) < size_n) {
-						dmem_ptr[dmem_index] = mul(smem_ptr[smem_index], alpha);
-					}
-					n += (BLOCK_SIZE / SMEM_M);
-
-					smem_index += (SMEM_M + SKEW) * (BLOCK_SIZE / SMEM_M);
-					dmem_index += ld * (BLOCK_SIZE / SMEM_M);
-					__syncwarp();
-				}
-			}
+		if (local_target_counter == nullptr) {
+			detail::dmem_store_core_exp_stats_switch<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, false>(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha, beta, ignore_threshold, target_threshold, local_total_counter, local_target_counter);
 		} else {
-			if (start_m + SMEM_M < size_m && start_n + SMEM_N < size_n) {
-				if (ld % (16 / size_of<T>::value) == 0) {
-					detail::dmem_store_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, ulong2, true >(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha, beta);
-				} else if ((ld % (8 / size_of<T>::value) == 0)) {
-					detail::dmem_store_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, ulong1, true >(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha, beta);
-				} else {
-					detail::dmem_store_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, uint1 , true >(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha, beta);
-				}
-			} else {
-				for (unsigned offset = 0; offset < SMEM_M * SMEM_N; offset += BLOCK_SIZE) {
-					const auto index = offset + threadIdx.x;
-					const auto m = index % SMEM_M;
-					const auto n = index / SMEM_M;
-					const auto smem_index = m + n * (SMEM_M + SKEW);
-					const auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
-
-					if ((start_m + m) < size_m && (start_n + n) < size_n) {
-						dmem_ptr[dmem_index] = mad(smem_ptr[smem_index], alpha, mul(dmem_ptr[dmem_index], beta));
-					}
-					__syncwarp();
-				}
-			}
+			detail::dmem_store_core_exp_stats_switch<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, true >(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha, beta, ignore_threshold, target_threshold, local_total_counter, local_target_counter);
 		}
 	}
 };

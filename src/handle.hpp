@@ -95,4 +95,5 @@ struct cuMpSGEMM_handle {
 	bool exp_stats_enabled;
 	std::uint32_t counter_length;
 	std::uint32_t counter_offset;
+	std::uint32_t last_stored_counter_length;
 };

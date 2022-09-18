@@ -683,6 +683,7 @@ cublasStatus_t cuMpSGEMM_create(cuMpSGEMM_handle_t* const handle) {
 	(*handle)->counter_offset = 0;
 	(*handle)->ignore_threshold = 0;
 	(*handle)->target_threshold = 0;
+	(*handle)->last_stored_counter_length = 0;
 	CUTF_CHECK_ERROR(cudaMalloc    (&((*handle)->dev_target_counter ), sizeof(cumpsgemm::counter_t) * (*handle)->counter_length));
 	CUTF_CHECK_ERROR(cudaMalloc    (&((*handle)->dev_total_counter  ), sizeof(cumpsgemm::counter_t) * (*handle)->counter_length));
 	CUTF_CHECK_ERROR(cudaMallocHost(&((*handle)->host_target_counter), sizeof(cumpsgemm::counter_t) * (*handle)->counter_length));

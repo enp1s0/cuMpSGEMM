@@ -2,6 +2,7 @@
 #include <cassert>
 #include <type_traits>
 #include <cublas.h>
+#include <cutf/memory.hpp>
 #include <cumpsgemm/cumpsgemm.hpp>
 
 #include "handle.hpp"
@@ -116,6 +117,50 @@ void launch_kernel (
 			total_counter, target_counter
 			);
 }
+
+void resize_counter(
+		cuMpSGEMM_handle_t& handle,
+		const std::size_t new_length
+		) {
+	CUTF_CHECK_ERROR(cudaFree    (handle->dev_target_counter ));
+	CUTF_CHECK_ERROR(cudaFree    (handle->dev_total_counter  ));
+	CUTF_CHECK_ERROR(cudaFreeHost(handle->host_target_counter));
+	CUTF_CHECK_ERROR(cudaFreeHost(handle->host_total_counter ));
+
+	handle->counter_length = new_length;
+
+	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->dev_target_counter ), sizeof(cumpsgemm::counter_t) * handle->counter_length));
+	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->dev_total_counter  ), sizeof(cumpsgemm::counter_t) * handle->counter_length));
+	CUTF_CHECK_ERROR(cudaMallocHost(&(handle->host_target_counter), sizeof(cumpsgemm::counter_t) * handle->counter_length));
+	CUTF_CHECK_ERROR(cudaMallocHost(&(handle->host_total_counter ), sizeof(cumpsgemm::counter_t) * handle->counter_length));
+}
+
+__global__ void init_counter_kernel(
+		cumpsgemm::counter_t* const total_counter_ptr,
+		cumpsgemm::counter_t* const target_counter_ptr,
+		const unsigned length
+		) {
+	const auto tid = blockIdx.x * blockDim.x + threadIdx.x;
+	if (tid >= length) {
+		return;
+	}
+	total_counter_ptr [tid] = 0;
+	target_counter_ptr[tid] = 0;
+}
+
+void init_counter (
+		cumpsgemm::counter_t* const total_counter_ptr,
+		cumpsgemm::counter_t* const target_counter_ptr,
+		const unsigned length,
+		cudaStream_t cuda_stream
+		) {
+	const auto block_size = 256u;
+	init_counter_kernel<<<(length + block_size - 1) / block_size, block_size, 0, cuda_stream>>>(
+			total_counter_ptr,
+			target_counter_ptr,
+			length
+			);
+}
 } // unnamed namespace
 
 template <class T>
@@ -157,6 +202,13 @@ cublasStatus_t cumpsgemm::gemm(
 	if (!handle->exp_stats_enabled) {
 		total_counter_ptr = nullptr;
 		target_counter_ptr = nullptr;
+	} else {
+		init_counter(
+				total_counter_ptr,
+				target_counter_ptr,
+				1,
+				handle->cuda_stream
+				);
 	}
 
 	launch_kernel<T>(
@@ -175,6 +227,7 @@ cublasStatus_t cumpsgemm::gemm(
 			);
 
 	handle->counter_offset = 0;
+	handle->last_stored_counter_length = 1;
 	return CUBLAS_STATUS_SUCCESS;
 }
 
@@ -198,6 +251,10 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 		) {
 	const auto code = gen_module_code<T>(op_A, op_B, compute_mode);
 
+	if ((batch_count > handle->counter_length) && handle->exp_stats_enabled) {
+		resize_counter(handle, batch_count);
+	}
+
 	const auto kernel_module_candidate_list = handle->gemm_stridedBatch_module[code];
 
 	if (m * n > (1lu << 24)) {
@@ -217,6 +274,7 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 					);
 		}
 		handle->counter_offset = 0;
+		handle->last_stored_counter_length = batch_count;
 		return CUBLAS_STATUS_SUCCESS;
 	}
 
@@ -239,6 +297,13 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 	if (!handle->exp_stats_enabled) {
 		total_counter_ptr = nullptr;
 		target_counter_ptr = nullptr;
+	} else {
+		init_counter(
+				total_counter_ptr,
+				target_counter_ptr,
+				batch_count,
+				handle->cuda_stream
+				);
 	}
 
 	launch_kernel<T>(
@@ -258,6 +323,7 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 			);
 
 	handle->counter_offset = 0;
+	handle->last_stored_counter_length = batch_count;
 	return CUBLAS_STATUS_SUCCESS;
 }
 

@@ -678,7 +678,7 @@ cublasStatus_t cuMpSGEMM_create(cuMpSGEMM_handle_t* const handle) {
 #endif
 #endif
 
-	(*handle)->exp_stats_enabled = true;
+	(*handle)->exp_stats_enabled = false;
 	(*handle)->counter_length = 1000;
 	(*handle)->counter_offset = 0;
 	(*handle)->ignore_threshold = 0;

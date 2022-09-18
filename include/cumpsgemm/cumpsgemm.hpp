@@ -1,5 +1,6 @@
 #ifndef __CUMPSGEMM_HPP__
 #define __CUMPSGEMM_HPP__
+#include <vector>
 #include "cumpsgemm.h"
 
 namespace cumpsgemm {
@@ -19,6 +20,7 @@ cublasStatus_t gemm(
 		const cuMpSGEMM_compute_mode_t compute_mode,
 		unsigned* const used_kernel_module_id = nullptr
 		);
+
 template <class T>
 cublasStatus_t gemm_stridedBatch(
 		cuMpSGEMM_handle_t handle,
@@ -35,6 +37,25 @@ cublasStatus_t gemm_stridedBatch(
 		const uint64_t batch_count,
 		const cuMpSGEMM_compute_mode_t compute_mode,
 		unsigned* const used_kernel_module_id = nullptr
+		);
+
+// get the list of [total_count, target_count]
+std::vector<std::pair<std::size_t, std::size_t>> get_last_exp_stats(
+		cuMpSGEMM_handle_t handle
+		);
+
+void set_exp_stats_params(
+		cuMpSGEMM_handle_t handle,
+		const float ignore_threshold,
+		const float target_threshold
+		);
+
+void enable_exp_stats(
+		cuMpSGEMM_handle_t handle
+		);
+
+void disable_exp_stats(
+		cuMpSGEMM_handle_t handle
 		);
 } // namespace cumpsgemm
 #endif

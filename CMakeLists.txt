@@ -23,6 +23,7 @@ file(GLOB HEADERS "${INCDIR}/cumpsgemm/*.hpp")
 
 set(
 	LIBSRCS
+	${SRCDIR}/exp_stats.cu
 	${SRCDIR}/cumpsgemm.cu
 	${SRCDIR}/cumpsgemm_cublas.cu
 	${SRCDIR}/default_cumpsgemm_rule.cu

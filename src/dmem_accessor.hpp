@@ -232,7 +232,11 @@ __device__ void dmem_store_core (
 
 			auto v = *reinterpret_cast<const VEC_T*>(smem_local_ptr);
 			for (unsigned i = 0; i < v_bit_len / size_of<T>::value; i++) {
-				reinterpret_cast<T*>(&v)[i] = mul(reinterpret_cast<T*>(&v)[i], alpha);
+				if constexpr (BETA) {
+					reinterpret_cast<T*>(&v)[i] = mad(reinterpret_cast<T*>(&v)[i], alpha, beta);
+				} else {
+					reinterpret_cast<T*>(&v)[i] = mul(reinterpret_cast<T*>(&v)[i], alpha);
+				}
 			}
 			*reinterpret_cast<VEC_T*>(dmem_local_ptr) = v;
 		}

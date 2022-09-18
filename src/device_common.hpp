@@ -9,7 +9,6 @@ struct row_major;
 struct conjugate;
 
 namespace device {
-
 template <class CUMPSGEMM_OP>
 struct layout_conv {using type = void;};
 template <> struct layout_conv<cumpsgemm::col_major> {using type = nvcuda::wmma::col_major;};
@@ -57,11 +56,6 @@ template <>
 __device__ bool inline is_zero(const cuComplex& v) {
 	return v.x == 0 && v.y == 0;
 }
-
-template <class T>
-struct element_t_conv {using type = T;};
-template <> struct element_t_conv<float2 > {using type = float;};
-
 } // namespace device
 } // namespace cumpsgemm
 #endif

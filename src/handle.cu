@@ -677,10 +677,25 @@ cublasStatus_t cuMpSGEMM_create(cuMpSGEMM_handle_t* const handle) {
 	SET_GEMM_STRIDEDBATCH_KERNEL_MODULE((*handle)->gemm_stridedBatch_module, cuComplex, tf32, without_ec, conjugate, conjugate, 64, 64, 32, 32, 32, 16, 128, 2, 2, false, c, 2); // Not optimized but works on any Ampere GPUs
 #endif
 #endif
+
+	(*handle)->exp_stats_enabled = true;
+	(*handle)->counter_length = 1000;
+	(*handle)->counter_offset = 0;
+	(*handle)->ignore_threshold = 0;
+	(*handle)->target_threshold = 0;
+	CUTF_CHECK_ERROR(cudaMalloc    (&((*handle)->dev_target_counter ), sizeof(cumpsgemm::counter_t) * (*handle)->counter_length));
+	CUTF_CHECK_ERROR(cudaMalloc    (&((*handle)->dev_total_counter  ), sizeof(cumpsgemm::counter_t) * (*handle)->counter_length));
+	CUTF_CHECK_ERROR(cudaMallocHost(&((*handle)->host_target_counter), sizeof(cumpsgemm::counter_t) * (*handle)->counter_length));
+	CUTF_CHECK_ERROR(cudaMallocHost(&((*handle)->host_total_counter ), sizeof(cumpsgemm::counter_t) * (*handle)->counter_length));
 	return CUBLAS_STATUS_SUCCESS;
 }
 
 cublasStatus_t cuMpSGEMM_destroy(cuMpSGEMM_handle_t handle) {
+	CUTF_CHECK_ERROR(cudaFree    (handle->dev_target_counter ));
+	CUTF_CHECK_ERROR(cudaFree    (handle->dev_total_counter  ));
+	CUTF_CHECK_ERROR(cudaFreeHost(handle->host_target_counter));
+	CUTF_CHECK_ERROR(cudaFreeHost(handle->host_total_counter ));
+
 	delete handle;
 	return CUBLAS_STATUS_SUCCESS;
 }

@@ -3,6 +3,14 @@
 #include <cuComplex.h>
 
 namespace cumpsgemm {
+namespace device {
+template <class T>
+struct element_t_conv {using type = T;};
+template <> struct element_t_conv<float2 > {using type = float;};
+} // namespace device
+// for exp stats
+using counter_t = unsigned long long int;
+
 template <class T>
 using gemm_kernel_func_t = void (*)(
 			const uint32_t,
@@ -12,7 +20,11 @@ using gemm_kernel_func_t = void (*)(
 			const T* const, const uint32_t,
 			const T* const, const uint32_t,
 			const T,
-			T* const, const uint32_t
+			T* const, const uint32_t,
+			const typename device::element_t_conv<T>::type,
+			const typename device::element_t_conv<T>::type,
+			counter_t* const,
+			counter_t* const
 			);
 
 template <class T>
@@ -25,7 +37,11 @@ using gemm_stridedBatch_kernel_func_t = void (*)(
 			const T* const, const uint32_t, const uint64_t,
 			const T,
 			T* const, const uint32_t, const uint64_t,
-			const uint32_t
+			const uint32_t,
+			const typename device::element_t_conv<T>::type,
+			const typename device::element_t_conv<T>::type,
+			counter_t* const,
+			counter_t* const
 			);
 
 struct gemm_module {
@@ -66,4 +82,17 @@ struct cuMpSGEMM_handle {
 
 	// cuda stream
 	cudaStream_t cuda_stream = 0;
+
+	// For exp stats
+	cumpsgemm::counter_t* dev_total_counter;
+	cumpsgemm::counter_t* dev_target_counter;
+	cumpsgemm::counter_t* host_total_counter;
+	cumpsgemm::counter_t* host_target_counter;
+
+	float ignore_threshold;
+	float target_threshold;
+
+	bool exp_stats_enabled;
+	std::uint32_t counter_length;
+	std::uint32_t counter_offset;
 };

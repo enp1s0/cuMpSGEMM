@@ -55,6 +55,10 @@ void launch_kernel (
 			const T* const b_ptr, const std::size_t ldb,
 			const T beta,
 			T* const c_ptr, const std::size_t ldc,
+			const typename cumpsgemm::device::element_t_conv<T>::type ignore_threshold,
+			const typename cumpsgemm::device::element_t_conv<T>::type target_threshold,
+			cumpsgemm::counter_t* const total_counter,
+			cumpsgemm::counter_t* const target_counter,
 			cudaStream_t cuda_stream
 		) {
 	const auto kernel_ptr = reinterpret_cast<cumpsgemm::gemm_kernel_func_t<T>>(gemm_module.kernel_func);
@@ -69,7 +73,9 @@ void launch_kernel (
 			a_ptr, lda,
 			b_ptr, ldb,
 			beta,
-			c_ptr, ldc
+			c_ptr, ldc,
+			ignore_threshold, target_threshold,
+			total_counter, target_counter
 			);
 }
 
@@ -85,6 +91,10 @@ void launch_kernel (
 			const T beta,
 			T* const c_ptr, const std::size_t ldc, const uint64_t stridec,
 			const uint64_t batch_count,
+			const typename cumpsgemm::device::element_t_conv<T>::type ignore_threshold,
+			const typename cumpsgemm::device::element_t_conv<T>::type target_threshold,
+			cumpsgemm::counter_t* const total_counter,
+			cumpsgemm::counter_t* const target_counter,
 			cudaStream_t cuda_stream
 		) {
 	const auto kernel_ptr = reinterpret_cast<cumpsgemm::gemm_stridedBatch_kernel_func_t<T>>(gemm_module.kernel_func);
@@ -101,7 +111,9 @@ void launch_kernel (
 			b_ptr, ldb, strideb,
 			beta,
 			c_ptr, ldc, stridec,
-			num_blocks_per_gemm
+			num_blocks_per_gemm,
+			ignore_threshold, target_threshold,
+			total_counter, target_counter
 			);
 }
 } // unnamed namespace
@@ -140,6 +152,13 @@ cublasStatus_t cumpsgemm::gemm(
 		*used_kernel_modeule_id = module_id;
 	}
 
+	auto total_counter_ptr  = handle->dev_total_counter  + handle->counter_offset;
+	auto target_counter_ptr = handle->dev_target_counter + handle->counter_offset;
+	if (!handle->exp_stats_enabled) {
+		total_counter_ptr = nullptr;
+		target_counter_ptr = nullptr;
+	}
+
 	launch_kernel<T>(
 			gemm_module,
 			m, n, k,
@@ -148,9 +167,14 @@ cublasStatus_t cumpsgemm::gemm(
 			b_dmem_ptr, ldb,
 			*beta,
 			c_dmem_ptr, ldc,
+			handle->ignore_threshold,
+			handle->target_threshold,
+			total_counter_ptr,
+			target_counter_ptr,
 			handle->cuda_stream
 			);
 
+	handle->counter_offset = 0;
 	return CUBLAS_STATUS_SUCCESS;
 }
 
@@ -178,6 +202,7 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 
 	if (m * n > (1lu << 24)) {
 		for (std::uint64_t i = 0; i < batch_count; i++) {
+			handle->counter_offset = i;
 			cumpsgemm::gemm(
 					handle,
 					op_A, op_B,
@@ -191,6 +216,7 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 					used_kernel_modeule_id
 					);
 		}
+		handle->counter_offset = 0;
 		return CUBLAS_STATUS_SUCCESS;
 	}
 
@@ -208,6 +234,13 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 		*used_kernel_modeule_id = module_id;
 	}
 
+	auto total_counter_ptr  = handle->dev_total_counter;
+	auto target_counter_ptr = handle->dev_target_counter;
+	if (!handle->exp_stats_enabled) {
+		total_counter_ptr = nullptr;
+		target_counter_ptr = nullptr;
+	}
+
 	launch_kernel<T>(
 			gemm_module,
 			m, n, k,
@@ -217,9 +250,14 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 			*beta,
 			c_dmem_ptr, ldc, stridec,
 			batch_count,
+			handle->ignore_threshold,
+			handle->target_threshold,
+			total_counter_ptr,
+			target_counter_ptr,
 			handle->cuda_stream
 			);
 
+	handle->counter_offset = 0;
 	return CUBLAS_STATUS_SUCCESS;
 }
 

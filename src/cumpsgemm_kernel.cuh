@@ -145,197 +145,7 @@ template <
 	class TC_T,
 	class EC
 >
-struct gemm_core {
-__device__ void operator() (
-		const unsigned m,
-		const unsigned n,
-		const unsigned k,
-		const T alpha,
-		const T* const a_dmem_ptr, const unsigned lda,
-		const T* const b_dmem_ptr, const unsigned ldb,
-		const T beta,
-		T* const c_dmem_ptr, const unsigned ldc,
-		const unsigned blockIdx_x, const unsigned blockIdx_y
-		) {
-	extern __shared__ uint8_t smem_base[];
-	T* smem = reinterpret_cast<T*>(smem_base);
-	T* const a_smem_ptr = smem;
-	T* const b_smem_ptr = smem + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * NUM_STAGES;
-
-	A_DMEM_LOADER a_dmem_loader;
-	B_DMEM_LOADER b_dmem_loader;
-
-	constexpr unsigned frag_c_array_size = SMEM_M * SMEM_N / (FRAG_M * FRAG_N) / (BLOCK_SIZE / warp_size);
-	cumpsgemm::device::tc_fragment<T, nvcuda::wmma::accumulator, FRAG_M, FRAG_N, FRAG_K, void, TC_T, EC> frag_c[frag_c_array_size];
-	if (k / SMEM_K >= NUM_STAGES - 1) {
-		unsigned bk = 0;
-		for (; (bk / SMEM_K) < NUM_STAGES - 1; bk += SMEM_K) {
-			a_dmem_loader(
-					a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * (bk / SMEM_K),
-					a_dmem_ptr,
-					lda,
-					blockIdx_x * SMEM_M, bk,
-					m, k
-					);
-			cutf::cp_async::commit();
-			b_dmem_loader(
-					b_smem_ptr + get_smem_size<SMEM_K, SMEM_N, smem_B_skew, typename B_DMEM_LOADER::Layout>::value * (bk / SMEM_K),
-					b_dmem_ptr,
-					ldb,
-					bk, blockIdx_y * SMEM_N,
-					k, n
-					);
-			cutf::cp_async::commit();
-		}
-
-		for (unsigned i = 0; i < frag_c_array_size; i++) {
-			cumpsgemm::device::fill_zero(frag_c[i]);
-		}
-
-		unsigned mma_count = 0;
-#pragma unroll NUM_UNROLLINGS
-		for (; bk < k; bk += SMEM_K) {
-			cutf::cp_async::wait_group<2 * (NUM_STAGES - 2)>();
-			__syncthreads();
-			MMA_SMEM{}(
-					frag_c,
-					a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * (mma_count % NUM_STAGES),
-					b_smem_ptr + get_smem_size<SMEM_K, SMEM_N, smem_B_skew, typename B_DMEM_LOADER::Layout>::value * (mma_count % NUM_STAGES)
-					);
-			mma_count++;
-			const auto smem_buffer_id = (bk / SMEM_K) % NUM_STAGES;
-			a_dmem_loader(
-					a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * smem_buffer_id,
-					a_dmem_ptr,
-					lda,
-					blockIdx_x * SMEM_M, bk,
-					m, k
-					);
-			cutf::cp_async::commit();
-			b_dmem_loader(
-					b_smem_ptr + get_smem_size<SMEM_K, SMEM_N, smem_B_skew, typename B_DMEM_LOADER::Layout>::value * smem_buffer_id,
-					b_dmem_ptr,
-					ldb,
-					bk, blockIdx_y * SMEM_N,
-					k, n
-					);
-			cutf::cp_async::commit();
-		}
-		if constexpr (NUM_STAGES == 3) {
-			cutf::cp_async::wait_group<2>();
-			__syncthreads();
-			MMA_SMEM{}(
-					frag_c,
-					a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * (mma_count % NUM_STAGES),
-					b_smem_ptr + get_smem_size<SMEM_K, SMEM_N, smem_B_skew, typename B_DMEM_LOADER::Layout>::value * (mma_count % NUM_STAGES)
-					);
-			mma_count++;
-			cutf::cp_async::wait_group<0>();
-			__syncthreads();
-			MMA_SMEM{}(
-					frag_c,
-					a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * (mma_count % NUM_STAGES),
-					b_smem_ptr + get_smem_size<SMEM_K, SMEM_N, smem_B_skew, typename B_DMEM_LOADER::Layout>::value * (mma_count % NUM_STAGES)
-					);
-		} else if constexpr (NUM_STAGES == 4) {
-			cutf::cp_async::wait_group<4>();
-			__syncthreads();
-			MMA_SMEM{}(
-					frag_c,
-					a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * (mma_count % NUM_STAGES),
-					b_smem_ptr + get_smem_size<SMEM_K, SMEM_N, smem_B_skew, typename B_DMEM_LOADER::Layout>::value * (mma_count % NUM_STAGES)
-					);
-			mma_count++;
-			cutf::cp_async::wait_group<2>();
-			__syncthreads();
-			MMA_SMEM{}(
-					frag_c,
-					a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * (mma_count % NUM_STAGES),
-					b_smem_ptr + get_smem_size<SMEM_K, SMEM_N, smem_B_skew, typename B_DMEM_LOADER::Layout>::value * (mma_count % NUM_STAGES)
-					);
-			mma_count++;
-			cutf::cp_async::wait_group<0>();
-			__syncthreads();
-			MMA_SMEM{}(
-					frag_c,
-					a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * (mma_count % NUM_STAGES),
-					b_smem_ptr + get_smem_size<SMEM_K, SMEM_N, smem_B_skew, typename B_DMEM_LOADER::Layout>::value * (mma_count % NUM_STAGES)
-					);
-		} else {
-			cutf::cp_async::wait_all();
-			__syncthreads();
-			for (unsigned i = 0; i < NUM_STAGES - 1; i++, mma_count++) {
-				MMA_SMEM{}(
-						frag_c,
-						a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * (mma_count % NUM_STAGES),
-						b_smem_ptr + get_smem_size<SMEM_K, SMEM_N, smem_B_skew, typename B_DMEM_LOADER::Layout>::value * (mma_count % NUM_STAGES)
-						);
-			}
-		}
-	} else {
-#pragma unroll NUM_UNROLLINGS
-		for (unsigned bk = 0; bk < k; bk += SMEM_K) {
-			a_dmem_loader(
-					a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * (bk / SMEM_K),
-					a_dmem_ptr,
-					lda,
-					blockIdx_x * SMEM_M, bk,
-					m, k
-					);
-			cutf::cp_async::commit();
-			b_dmem_loader(
-					b_smem_ptr + get_smem_size<SMEM_K, SMEM_N, smem_B_skew, typename B_DMEM_LOADER::Layout>::value * (bk / SMEM_K),
-					b_dmem_ptr,
-					ldb,
-					bk, blockIdx_y * SMEM_N,
-					k, n
-					);
-			cutf::cp_async::commit();
-		}
-
-		for (unsigned i = 0; i < frag_c_array_size; i++) {
-			cumpsgemm::device::fill_zero(frag_c[i]);
-		}
-
-		cutf::cp_async::wait_all();
-		__syncthreads();
-
-		for (unsigned bk = 0; bk < k; bk += SMEM_K) {
-			MMA_SMEM{}(
-					frag_c,
-					a_smem_ptr + get_smem_size<SMEM_M, SMEM_K, smem_A_skew, typename A_DMEM_LOADER::Layout>::value * (bk / SMEM_K),
-					b_smem_ptr + get_smem_size<SMEM_K, SMEM_N, smem_B_skew, typename B_DMEM_LOADER::Layout>::value * (bk / SMEM_K)
-					);
-		}
-	}
-	__syncthreads();
-
-	// register to smem
-	for (unsigned i = threadIdx.x / warp_size; i < (SMEM_M / FRAG_M) * (SMEM_N / FRAG_N); i += BLOCK_SIZE / warp_size) {
-		const unsigned bm = i % (SMEM_M / FRAG_M);
-		const unsigned bn = i / (SMEM_M / FRAG_M);
-		cumpsgemm::device::store_matrix(
-				smem + get_smem_index<SMEM_M, SMEM_N, smem_C_skew, cumpsgemm::col_major>{}(
-					bm * FRAG_M, bn * FRAG_N
-					),
-				frag_c[i / (BLOCK_SIZE / warp_size)],
-				SMEM_M + smem_C_skew
-				);
-	}
-	__syncthreads();
-
-	C_DMEM_STORER c_dmem_storer;
-	c_dmem_storer(
-			c_dmem_ptr, ldc,
-			blockIdx_x * SMEM_M, blockIdx_y * SMEM_N,
-			m, n,
-			smem,
-			alpha, beta,
-			0, 0,
-			nullptr, nullptr
-			);
-}
-};
+struct gemm_core;
 
 template <
 	class T,
@@ -364,7 +174,11 @@ __device__ void operator() (
 		const T* const b_dmem_ptr, const unsigned ldb,
 		const T beta,
 		T* const c_dmem_ptr, const unsigned ldc,
-		const unsigned blockIdx_x, const unsigned blockIdx_y
+		const unsigned blockIdx_x, const unsigned blockIdx_y,
+		const typename cumpsgemm::device::element_t_conv<T>::type ignore_threshold,
+		const typename cumpsgemm::device::element_t_conv<T>::type target_threshold,
+		cumpsgemm::counter_t* const total_counter,
+		cumpsgemm::counter_t* const target_counter
 		) {
 	extern __shared__ uint8_t smem_base[];
 	T* smem = reinterpret_cast<T*>(smem_base);
@@ -450,15 +264,61 @@ __device__ void operator() (
 	__syncthreads();
 
 	C_DMEM_STORER c_dmem_storer;
+	if (total_counter == nullptr) {
+		c_dmem_storer(
+				c_dmem_ptr, ldc,
+				blockIdx_x * SMEM_M, blockIdx_y * SMEM_N,
+				m, n,
+				smem,
+				alpha, beta,
+				0, 0,
+				nullptr, nullptr
+				);
+		return;
+	}
+
+	unsigned local_total_counter = 0;
+	unsigned local_target_counter = 0;
+
 	c_dmem_storer(
 			c_dmem_ptr, ldc,
 			blockIdx_x * SMEM_M, blockIdx_y * SMEM_N,
 			m, n,
 			smem,
 			alpha, beta,
-			0, 0,
-			nullptr, nullptr
+			ignore_threshold, target_threshold,
+			&local_total_counter, &local_target_counter
 			);
+
+	for (std::uint32_t offset = warp_size >> 1; offset >= 1; offset >>= 1) {
+		local_target_counter += __shfl_xor_sync(~0u, local_target_counter, offset);
+		local_total_counter  += __shfl_xor_sync(~0u, local_total_counter , offset);
+	}
+	__syncthreads();
+
+	unsigned *smem_target_counter_ptr = reinterpret_cast<unsigned*>(smem);
+	unsigned *smem_total_counter_ptr  = smem_target_counter_ptr + (BLOCK_SIZE / warp_size);
+
+	if ((threadIdx.x & 0x1f) == 0) {
+		smem_target_counter_ptr[threadIdx.x >> 5] = local_target_counter;
+		smem_total_counter_ptr [threadIdx.x >> 5] = local_total_counter;
+	}
+	__syncthreads();
+
+	if (threadIdx.x >= BLOCK_SIZE / warp_size) return;
+
+	local_total_counter  = smem_target_counter_ptr[threadIdx.x];
+	local_target_counter = smem_total_counter_ptr [threadIdx.x];
+
+	for (std::uint32_t offset = (BLOCK_SIZE / warp_size) >> 1; offset >= 1; offset >>= 1) {
+		local_target_counter += __shfl_xor_sync(~0u, local_target_counter, offset);
+		local_total_counter  += __shfl_xor_sync(~0u, local_total_counter , offset);
+	}
+
+	if (threadIdx.x == 0) {
+		atomicAdd(target_counter, local_target_counter);
+		atomicAdd(total_counter , local_total_counter);
+	}
 }
 };
 
@@ -488,7 +348,11 @@ __global__ void gemm_kernel(
 		const T* const a_dmem_ptr, const unsigned lda,
 		const T* const b_dmem_ptr, const unsigned ldb,
 		const T beta,
-		T* const c_dmem_ptr, const unsigned ldc
+		T* const c_dmem_ptr, const unsigned ldc,
+		const typename cumpsgemm::device::element_t_conv<T>::type ignore_threshold,
+		const typename cumpsgemm::device::element_t_conv<T>::type target_threshold,
+		cumpsgemm::counter_t* const total_counter,
+		cumpsgemm::counter_t* const target_counter
 		) {
 	const auto blockIdx_x = (blockIdx.x) % ((m + SMEM_M - 1) / SMEM_M);
 	const auto blockIdx_y = (blockIdx.x) / ((m + SMEM_M - 1) / SMEM_M);
@@ -500,7 +364,9 @@ __global__ void gemm_kernel(
 			b_dmem_ptr, ldb,
 			beta,
 			c_dmem_ptr, ldc,
-			blockIdx_x, blockIdx_y
+			blockIdx_x, blockIdx_y,
+			ignore_threshold, target_threshold,
+			total_counter, target_counter
 			);
 }
 
@@ -531,7 +397,11 @@ __global__ void gemm_batchStrided_kernel(
 		const T* const b_ptr, const unsigned ldb, const uint64_t strideb,
 		const T beta,
 		T* const c_ptr, const unsigned ldc, const uint64_t stridec,
-		const unsigned num_blocks_per_gemm
+		const unsigned num_blocks_per_gemm,
+		const typename cumpsgemm::device::element_t_conv<T>::type ignore_threshold,
+		const typename cumpsgemm::device::element_t_conv<T>::type target_threshold,
+		cumpsgemm::counter_t* const total_counter,
+		cumpsgemm::counter_t* const target_counter
 		) {
 	const auto gemm_id = blockIdx.x / num_blocks_per_gemm;
 	const auto blockIdx_x = (blockIdx.x % num_blocks_per_gemm) % ((m + SMEM_M - 1) / SMEM_M);
@@ -548,7 +418,9 @@ __global__ void gemm_batchStrided_kernel(
 			b_dmem_ptr, ldb,
 			beta,
 			c_dmem_ptr, ldc,
-			blockIdx_x, blockIdx_y
+			blockIdx_x, blockIdx_y,
+			ignore_threshold, target_threshold,
+			total_counter + gemm_id, target_counter + gemm_id
 			);
 }
 

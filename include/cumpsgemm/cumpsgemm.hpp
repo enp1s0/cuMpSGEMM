@@ -47,7 +47,7 @@ std::vector<std::pair<std::size_t, std::size_t>> get_last_exp_stats(
 void set_exp_stats_params(
 		cuMpSGEMM_handle_t handle,
 		const float ignore_threshold,
-		const float target_threshold
+		const float lost_threshold
 		);
 
 void enable_exp_stats(

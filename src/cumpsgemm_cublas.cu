@@ -3,10 +3,18 @@
 #include <unistd.h>
 #include <dlfcn.h>
 #include <cumpsgemm/cumpsgemm.hpp>
+#include <cumpsgemm/hijack_control.hpp>
+
+namespace {
 
 cuMpSGEMM_handle_t internal_global_cuMpSGEMM_handle = nullptr;
 
-namespace {
+enum hijack_control_t {
+	static_mode,
+	dynamic_mode
+} hijack_mode = dynamic_mode;
+cuMpSGEMM_compute_mode_t internal_global_compute_mode = CUMPSGEMM_CUBLAS;
+
 const std::string info_env_name = "CUMPSGEMM_INFO";
 void cuMpSGEMM_log(
 		const std::string str
@@ -71,6 +79,13 @@ std::string get_cublas_op_str(const cublasOperation_t op) {
 	}
 }
 
+cuMpSGEMM_handle_t cuMpSGEMM_get_internal_global_handle() {
+	if (internal_global_cuMpSGEMM_handle == nullptr) {
+		cuMpSGEMM_create(&internal_global_cuMpSGEMM_handle);
+	}
+	return internal_global_cuMpSGEMM_handle;
+}
+
 const std::string rule_lib_name = "libcumpsgemm_rule.so";
 const std::string cublas_lib_name = "libcublas.so";
 } // noname namespace
@@ -106,20 +121,23 @@ extern "C" cuMpSGEMM_compute_mode_t cuMpSGEMM_get_compute_mode_internal (
 		const cublasOperation_t op_B,
 		const unsigned m, const unsigned n, const unsigned k
 		) {
-	cuMpSGEMM_compute_mode_t (*func)(
-			const char* const func_name,
-			cublasHandle_t const cublas_handle,
-			const cublasOperation_t op_A,
-			const cublasOperation_t op_B,
-			const unsigned m, const unsigned n, const unsigned k
-			);
-	*(void**)(&func) = cuMpSGEMM_get_function_pointer(rule_lib_name, __func__);
+	if (hijack_mode == dynamic_mode) {
+		cuMpSGEMM_compute_mode_t (*func)(
+				const char* const func_name,
+				cublasHandle_t const cublas_handle,
+				const cublasOperation_t op_A,
+				const cublasOperation_t op_B,
+				const unsigned m, const unsigned n, const unsigned k
+				);
+		*(void**)(&func) = cuMpSGEMM_get_function_pointer(rule_lib_name, __func__);
 
-	if (func == nullptr) {
-		return cuMpSGEMM_get_compute_mode(func_name, cublas_handle, op_A, op_B, m, n, k);
+		if (func == nullptr) {
+			return cuMpSGEMM_get_compute_mode(func_name, cublas_handle, op_A, op_B, m, n, k);
+		}
+
+		return func(func_name, cublas_handle, op_A, op_B, m, n, k);
 	}
-
-	return func(func_name, cublas_handle, op_A, op_B, m, n, k);
+	return internal_global_compute_mode;
 }
 
 template <class T>
@@ -182,12 +200,8 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 		return res;
 	}
 
-	if (internal_global_cuMpSGEMM_handle == nullptr) {
-		cuMpSGEMM_create(&internal_global_cuMpSGEMM_handle);
-	}
-
 	return cumpsgemm::gemm<T>(
-			internal_global_cuMpSGEMM_handle,
+			cuMpSGEMM_get_internal_global_handle(),
 			op_A, op_B,
 			m, n, k,
 			alpha,
@@ -258,12 +272,8 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 		return res;
 	}
 
-	if (internal_global_cuMpSGEMM_handle == nullptr) {
-		cuMpSGEMM_create(&internal_global_cuMpSGEMM_handle);
-	}
-
 	return cumpsgemm::gemm_stridedBatch<T>(
-			internal_global_cuMpSGEMM_handle,
+			cuMpSGEMM_get_internal_global_handle(),
 			op_A, op_B,
 			m, n, k,
 			alpha,
@@ -320,9 +330,6 @@ cublasStatus_t cublasCgemm (
 		const cuComplex* beta,
 		cuComplex* c_dmem_ptr, int ldc
 		) {
-	cudaStream_t cuda_stream;
-	cublasGetStream(cublas_handle, &cuda_stream);
-
 	return cuMpSGEMM_hijack_core<cuComplex>(
 			__func__,
 			cublas_handle,
@@ -350,9 +357,6 @@ cublasStatus_t cublasSgemmStridedBatched (
 		float* c_dmem_ptr, int ldc, long long int stridec,
 		const int batch_count
 		) {
-	cudaStream_t cuda_stream;
-	cublasGetStream(cublas_handle, &cuda_stream);
-
 	return cuMpSGEMM_stridedBatched_hijack_core<float>(
 			__func__,
 			cublas_handle,
@@ -503,3 +507,18 @@ cublasStatus_t cublasGemmStridedBatchedEx(cublasHandle_t handle, cublasOperation
 	return (*func_ptr)(handle, transa, transb, m, n, k, alpha, A, Atype, lda, strideA, B, Btype, ldb, strideB, beta, C, Ctype, ldc, strideC, batch_count, computeType, algo);
 }
 } // extern "C"
+
+cuMpSGEMM_handle_t cumpsgemm::hijack_control::get_internal_global_handle() {
+	if (internal_global_cuMpSGEMM_handle == nullptr) {
+		cuMpSGEMM_create(&internal_global_cuMpSGEMM_handle);
+	}
+	return internal_global_cuMpSGEMM_handle;
+}
+
+void cumpsgemm::hijack_control::set_compute_mode(const cuMpSGEMM_compute_mode_t mode) {
+	internal_global_compute_mode = mode;
+	hijack_mode = static_mode;
+}
+void cumpsgemm::hijack_control::unset_compute_mode() {
+	hijack_mode = dynamic_mode;
+}

@@ -913,6 +913,64 @@ void test_logged_shape(
 	cuMpSGEMM_destroy(cuMpSGEMM_handle);
 }
 
+void exp_stats_test(
+		const std::size_t N,
+		const float ignore_threshold,
+		const float lose_threshold,
+		const gemm_type gemm
+		) {
+	constexpr uint64_t seed = 0;
+	const std::size_t max_num_elements = N * N * (gemm == gemm_type::c ? 2 : 1);
+	float* a_ptr = cutf::memory::malloc<float>(max_num_elements);
+	float* b_ptr = cutf::memory::malloc<float>(max_num_elements);
+	float* c_ptr = cutf::memory::malloc<float>(max_num_elements);
+
+	auto curand_gen = cutf::curand::get_curand_unique_ptr(CURAND_RNG_PSEUDO_PHILOX4_32_10);
+	CUTF_CHECK_ERROR(curandSetPseudoRandomGeneratorSeed(*curand_gen.get(), seed));
+	CUTF_CHECK_ERROR(cutf::curand::generate_uniform(*curand_gen.get(), a_ptr, max_num_elements));
+	CUTF_CHECK_ERROR(cutf::curand::generate_uniform(*curand_gen.get(), b_ptr, max_num_elements));
+
+	std::printf("## %s\n", __func__);
+	auto cublas_handle_uptr = cutf::cublas::get_cublas_unique_ptr();
+	cuMpSGEMM_handle_t cuMpSGEMM_handle;
+	cuMpSGEMM_create(&cuMpSGEMM_handle);
+	cumpsgemm::enable_exp_stats(cuMpSGEMM_handle);
+	cumpsgemm::set_exp_stats_params(cuMpSGEMM_handle, ignore_threshold, lose_threshold);
+
+	if (gemm == gemm_type::s) {
+		const float alpha = 1.0f, beta = 0.0f;
+		cumpsgemm::gemm(
+				cuMpSGEMM_handle,
+				CUBLAS_OP_N,
+				CUBLAS_OP_N,
+				N, N, N,
+				&alpha,
+				a_ptr, N,
+				b_ptr, N,
+				&beta,
+				c_ptr, N,
+				CUMPSGEMM_TF32TCEC
+				);
+	} else {
+		const cuComplex alpha = make_float2(1, 0);
+		const cuComplex beta = make_float2(1, 0);
+		cumpsgemm::gemm(
+				cuMpSGEMM_handle,
+				CUBLAS_OP_N,
+				CUBLAS_OP_N,
+				N, N, N,
+				&alpha,
+				reinterpret_cast<const cuComplex*>(a_ptr), N,
+				reinterpret_cast<const cuComplex*>(b_ptr), N,
+				&beta,
+				reinterpret_cast<cuComplex*>(c_ptr), N,
+				CUMPSGEMM_TF32TCEC
+				);
+	}
+	const auto exp_stats = cumpsgemm::get_last_exp_stats(cuMpSGEMM_handle);
+	std::printf("R_FP16TCEC = %lu / %lu (%6.2f)\n", exp_stats[0].first, exp_stats[0].second, static_cast<double>(exp_stats[0].first) / exp_stats[0].second);
+}
+
 void print_usage(const char* program_name) {
 	std::fprintf(stderr,
 			"Usage : %s sgemm [exp2|seq] [min_N] [max_N] [interval]\n"
@@ -924,7 +982,8 @@ void print_usage(const char* program_name) {
 			"      : %s cublas_sgemm_strided_batch [exp2|seq] [min_N] [max_N] [interval] [batch_count]\n"
 			"      : %s cublas_cgemm_strided_batch [exp2|seq] [min_N] [max_N] [interval] [batch_count]\n"
 			"      : %s log [/path/to/log]\n",
-			program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name
+			"      : %s exp_stats [N] [ignore_threshold] [lost_threshold]\n",
+			program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name
 			);
 	std::fflush(stderr);
 }
@@ -944,10 +1003,16 @@ int main(int argc, char** argv) {
 		}
 		test_logged_shape(argv[2]);
 		return 0;
+	} else if (command == "sgemm_exp_stats" || command == "cgemm_exp_stats") {
+		if (argc < 1 + 1 + 3) {
+			print_usage(argv[0]);
+			return 1;
+		}
+		exp_stats_test(std::stoi(argv[2]), std::stof(argv[3]), std::stof(argv[4]), (command == "sgemm_exp_stats" ? gemm_type::s : gemm_type::c));
 	}
 
 	if (argc < 3 || (std::string(argv[2]) != "exp2" && std::string(argv[2]) != "seq")) {
-		std::fprintf(stderr, "invalid argument\n");
+		std::fprintf(stderr, "[cuMpSGEMM test] invalid argument\n");
 		return 1;
 	}
 

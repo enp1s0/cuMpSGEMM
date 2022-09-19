@@ -2,9 +2,7 @@
 #define __CUMPSGEMM_H__
 #include <cublas_v2.h>
 #include <cstdint>
-
-struct cuMpSGEMM_handle;
-typedef cuMpSGEMM_handle* cuMpSGEMM_handle_t;
+#include "detail/common.h"
 
 extern "C" cublasStatus_t cuMpSGEMM_create(
 		cuMpSGEMM_handle_t* const handle
@@ -18,17 +16,6 @@ extern "C" cublasStatus_t cuMpSGEMM_set_stream(
 		cuMpSGEMM_handle_t handle,
 		const cudaStream_t cuda_stream
 		);
-
-enum cuMpSGEMM_compute_mode_t {
-	CUMPSGEMM_CUBLAS          = 0,
-	CUMPSGEMM_FP16TCEC        = 1,
-	CUMPSGEMM_TF32TCEC        = 2,
-	CUMPSGEMM_FP16TC          = 3,
-	CUMPSGEMM_TF32TC          = 4,
-	CUMPSGEMM_CUBLAS_SIMT     = 5,
-	CUMPSGEMM_CUBLAS_FP16TC   = 6,
-	CUMPSGEMM_CUBLAS_TF32TC   = 7,
-};
 
 extern "C" const char* cuMpSGEMM_get_compute_mode_string (
 		const cuMpSGEMM_compute_mode_t mode

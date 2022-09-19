@@ -57,9 +57,9 @@ void launch_kernel (
 			const T beta,
 			T* const c_ptr, const std::size_t ldc,
 			const typename cumpsgemm::device::element_t_conv<T>::type ignore_threshold,
-			const typename cumpsgemm::device::element_t_conv<T>::type target_threshold,
+			const typename cumpsgemm::device::element_t_conv<T>::type lost_threshold,
 			cumpsgemm::counter_t* const total_counter,
-			cumpsgemm::counter_t* const target_counter,
+			cumpsgemm::counter_t* const lost_counter,
 			cudaStream_t cuda_stream
 		) {
 	const auto kernel_ptr = reinterpret_cast<cumpsgemm::gemm_kernel_func_t<T>>(gemm_module.kernel_func);
@@ -75,8 +75,8 @@ void launch_kernel (
 			b_ptr, ldb,
 			beta,
 			c_ptr, ldc,
-			ignore_threshold, target_threshold,
-			total_counter, target_counter
+			ignore_threshold, lost_threshold,
+			total_counter, lost_counter
 			);
 }
 
@@ -93,9 +93,9 @@ void launch_kernel (
 			T* const c_ptr, const std::size_t ldc, const uint64_t stridec,
 			const uint64_t batch_count,
 			const typename cumpsgemm::device::element_t_conv<T>::type ignore_threshold,
-			const typename cumpsgemm::device::element_t_conv<T>::type target_threshold,
+			const typename cumpsgemm::device::element_t_conv<T>::type lost_threshold,
 			cumpsgemm::counter_t* const total_counter,
-			cumpsgemm::counter_t* const target_counter,
+			cumpsgemm::counter_t* const lost_counter,
 			cudaStream_t cuda_stream
 		) {
 	const auto kernel_ptr = reinterpret_cast<cumpsgemm::gemm_stridedBatch_kernel_func_t<T>>(gemm_module.kernel_func);
@@ -113,8 +113,8 @@ void launch_kernel (
 			beta,
 			c_ptr, ldc, stridec,
 			num_blocks_per_gemm,
-			ignore_threshold, target_threshold,
-			total_counter, target_counter
+			ignore_threshold, lost_threshold,
+			total_counter, lost_counter
 			);
 }
 
@@ -122,22 +122,22 @@ void resize_counter(
 		cuMpSGEMM_handle_t& handle,
 		const std::size_t new_length
 		) {
-	CUTF_CHECK_ERROR(cudaFree    (handle->dev_target_counter ));
+	CUTF_CHECK_ERROR(cudaFree    (handle->dev_lost_counter ));
 	CUTF_CHECK_ERROR(cudaFree    (handle->dev_total_counter  ));
-	CUTF_CHECK_ERROR(cudaFreeHost(handle->host_target_counter));
+	CUTF_CHECK_ERROR(cudaFreeHost(handle->host_lost_counter));
 	CUTF_CHECK_ERROR(cudaFreeHost(handle->host_total_counter ));
 
 	handle->counter_length = new_length;
 
-	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->dev_target_counter ), sizeof(cumpsgemm::counter_t) * handle->counter_length));
+	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->dev_lost_counter ), sizeof(cumpsgemm::counter_t) * handle->counter_length));
 	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->dev_total_counter  ), sizeof(cumpsgemm::counter_t) * handle->counter_length));
-	CUTF_CHECK_ERROR(cudaMallocHost(&(handle->host_target_counter), sizeof(cumpsgemm::counter_t) * handle->counter_length));
+	CUTF_CHECK_ERROR(cudaMallocHost(&(handle->host_lost_counter), sizeof(cumpsgemm::counter_t) * handle->counter_length));
 	CUTF_CHECK_ERROR(cudaMallocHost(&(handle->host_total_counter ), sizeof(cumpsgemm::counter_t) * handle->counter_length));
 }
 
 __global__ void init_counter_kernel(
 		cumpsgemm::counter_t* const total_counter_ptr,
-		cumpsgemm::counter_t* const target_counter_ptr,
+		cumpsgemm::counter_t* const lost_counter_ptr,
 		const unsigned length
 		) {
 	const auto tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -145,19 +145,19 @@ __global__ void init_counter_kernel(
 		return;
 	}
 	total_counter_ptr [tid] = 0;
-	target_counter_ptr[tid] = 0;
+	lost_counter_ptr[tid] = 0;
 }
 
 void init_counter (
 		cumpsgemm::counter_t* const total_counter_ptr,
-		cumpsgemm::counter_t* const target_counter_ptr,
+		cumpsgemm::counter_t* const lost_counter_ptr,
 		const unsigned length,
 		cudaStream_t cuda_stream
 		) {
 	const auto block_size = 256u;
 	init_counter_kernel<<<(length + block_size - 1) / block_size, block_size, 0, cuda_stream>>>(
 			total_counter_ptr,
-			target_counter_ptr,
+			lost_counter_ptr,
 			length
 			);
 }
@@ -198,14 +198,14 @@ cublasStatus_t cumpsgemm::gemm(
 	}
 
 	auto total_counter_ptr  = handle->dev_total_counter  + handle->counter_offset;
-	auto target_counter_ptr = handle->dev_target_counter + handle->counter_offset;
+	auto lost_counter_ptr = handle->dev_lost_counter + handle->counter_offset;
 	if (!handle->exp_stats_enabled) {
 		total_counter_ptr = nullptr;
-		target_counter_ptr = nullptr;
+		lost_counter_ptr = nullptr;
 	} else {
 		init_counter(
 				total_counter_ptr,
-				target_counter_ptr,
+				lost_counter_ptr,
 				1,
 				handle->cuda_stream
 				);
@@ -220,9 +220,9 @@ cublasStatus_t cumpsgemm::gemm(
 			*beta,
 			c_dmem_ptr, ldc,
 			handle->ignore_threshold,
-			handle->target_threshold,
+			handle->lost_threshold,
 			total_counter_ptr,
-			target_counter_ptr,
+			lost_counter_ptr,
 			handle->cuda_stream
 			);
 
@@ -293,14 +293,14 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 	}
 
 	auto total_counter_ptr  = handle->dev_total_counter;
-	auto target_counter_ptr = handle->dev_target_counter;
+	auto lost_counter_ptr = handle->dev_lost_counter;
 	if (!handle->exp_stats_enabled) {
 		total_counter_ptr = nullptr;
-		target_counter_ptr = nullptr;
+		lost_counter_ptr = nullptr;
 	} else {
 		init_counter(
 				total_counter_ptr,
-				target_counter_ptr,
+				lost_counter_ptr,
 				batch_count,
 				handle->cuda_stream
 				);
@@ -316,9 +316,9 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 			c_dmem_ptr, ldc, stridec,
 			batch_count,
 			handle->ignore_threshold,
-			handle->target_threshold,
+			handle->lost_threshold,
 			total_counter_ptr,
-			target_counter_ptr,
+			lost_counter_ptr,
 			handle->cuda_stream
 			);
 

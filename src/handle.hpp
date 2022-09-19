@@ -85,12 +85,12 @@ struct cuMpSGEMM_handle {
 
 	// For exp stats
 	cumpsgemm::counter_t* dev_total_counter;
-	cumpsgemm::counter_t* dev_target_counter;
+	cumpsgemm::counter_t* dev_lost_counter;
 	cumpsgemm::counter_t* host_total_counter;
-	cumpsgemm::counter_t* host_target_counter;
+	cumpsgemm::counter_t* host_lost_counter;
 
 	float ignore_threshold;
-	float target_threshold;
+	float lost_threshold;
 
 	bool exp_stats_enabled;
 	std::uint32_t counter_length;

@@ -201,14 +201,14 @@ template <class T>
 __device__ void exp_stats(
 		const T v,
 		const typename cumpsgemm::device::element_t_conv<T>::type ignore_threshold,
-		const typename cumpsgemm::device::element_t_conv<T>::type target_threshold,
+		const typename cumpsgemm::device::element_t_conv<T>::type lost_threshold,
 		unsigned* const local_total_counter,
-		unsigned* const local_target_counter
+		unsigned* const local_lost_counter
 		) {
 	if (v > ignore_threshold) {
 		(*local_total_counter)++;
-		if (v < target_threshold) {
-			(*local_target_counter)++;
+		if (v < lost_threshold) {
+			(*local_lost_counter)++;
 		}
 	}
 	__syncwarp();
@@ -218,20 +218,20 @@ template <>
 __device__ void exp_stats<cuComplex>(
 		const cuComplex v,
 		const typename cumpsgemm::device::element_t_conv<cuComplex>::type ignore_threshold,
-		const typename cumpsgemm::device::element_t_conv<cuComplex>::type target_threshold,
+		const typename cumpsgemm::device::element_t_conv<cuComplex>::type lost_threshold,
 		unsigned* const local_total_counter,
-		unsigned* const local_target_counter
+		unsigned* const local_lost_counter
 		) {
 	if (v.x > ignore_threshold) {
 		(*local_total_counter)++;
-		if (v.x < target_threshold) {
-			(*local_target_counter)++;
+		if (v.x < lost_threshold) {
+			(*local_lost_counter)++;
 		}
 	}
 	if (v.y > ignore_threshold) {
 		(*local_total_counter)++;
-		if (v.y < target_threshold) {
-			(*local_target_counter)++;
+		if (v.y < lost_threshold) {
+			(*local_lost_counter)++;
 		}
 	}
 	__syncwarp();
@@ -248,9 +248,9 @@ __device__ void dmem_store_core (
 			const T* const smem_ptr,
 			const T alpha, const T beta,
 			const typename cumpsgemm::device::element_t_conv<T>::type ignore_threshold,
-			const typename cumpsgemm::device::element_t_conv<T>::type target_threshold,
+			const typename cumpsgemm::device::element_t_conv<T>::type lost_threshold,
 			unsigned* const local_total_counter,
-			unsigned* const local_target_counter
+			unsigned* const local_lost_counter
 		){
 	constexpr unsigned v_bit_len = size_of<VEC_T>::value;
 	if constexpr ((v_bit_len / size_of<T>::value) != 0) {
@@ -269,7 +269,7 @@ __device__ void dmem_store_core (
 				w = mul(w, alpha);
 			}
 			if constexpr (EXP_STATS) {
-				exp_stats(w, ignore_threshold, target_threshold, local_total_counter, local_target_counter);
+				exp_stats(w, ignore_threshold, lost_threshold, local_total_counter, local_lost_counter);
 			}
 		}
 		*reinterpret_cast<VEC_T*>(dmem_local_ptr) = v;
@@ -287,7 +287,7 @@ __device__ void dmem_store_core (
 					w = mul(w, alpha);
 				}
 				if constexpr (EXP_STATS) {
-					exp_stats(w, ignore_threshold, target_threshold, local_total_counter, local_target_counter);
+					exp_stats(w, ignore_threshold, lost_threshold, local_total_counter, local_lost_counter);
 				}
 			}
 			*reinterpret_cast<VEC_T*>(dmem_local_ptr) = v;
@@ -305,18 +305,18 @@ __device__ void dmem_store_core_exp_stats_switch (
 			const T* const smem_ptr,
 			const T alpha, const T beta,
 			const typename cumpsgemm::device::element_t_conv<T>::type ignore_threshold,
-			const typename cumpsgemm::device::element_t_conv<T>::type target_threshold,
+			const typename cumpsgemm::device::element_t_conv<T>::type lost_threshold,
 			unsigned* const local_total_counter,
-			unsigned* const local_target_counter
+			unsigned* const local_lost_counter
 		){
 	if (is_zero(beta)) {
 		if (start_m + SMEM_M <= size_m && start_n + SMEM_N <= size_n) {
 			if (ld % (16 / size_of<T>::value) == 0) {
-				detail::dmem_store_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, ulong2, false, EXP_STATS>(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha, beta, ignore_threshold, target_threshold, local_total_counter, local_target_counter);
+				detail::dmem_store_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, ulong2, false, EXP_STATS>(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha, beta, ignore_threshold, lost_threshold, local_total_counter, local_lost_counter);
 			} else if ((ld % (8 / size_of<T>::value) == 0)) {
-				detail::dmem_store_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, ulong1, false, EXP_STATS>(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha, beta, ignore_threshold, target_threshold, local_total_counter, local_target_counter);
+				detail::dmem_store_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, ulong1, false, EXP_STATS>(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha, beta, ignore_threshold, lost_threshold, local_total_counter, local_lost_counter);
 			} else {
-				detail::dmem_store_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, uint1 , false, EXP_STATS>(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha, beta, ignore_threshold, target_threshold, local_total_counter, local_target_counter);
+				detail::dmem_store_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, uint1 , false, EXP_STATS>(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha, beta, ignore_threshold, lost_threshold, local_total_counter, local_lost_counter);
 			}
 		} else {
 			const auto index = threadIdx.x;
@@ -330,7 +330,7 @@ __device__ void dmem_store_core_exp_stats_switch (
 					const auto v = mul(smem_ptr[smem_index], alpha);
 					dmem_ptr[dmem_index] = v;
 					if constexpr (EXP_STATS) {
-						exp_stats(v, ignore_threshold, target_threshold, local_total_counter, local_target_counter);
+						exp_stats(v, ignore_threshold, lost_threshold, local_total_counter, local_lost_counter);
 					}
 				}
 				n += (BLOCK_SIZE / SMEM_M);
@@ -343,11 +343,11 @@ __device__ void dmem_store_core_exp_stats_switch (
 	} else {
 		if (start_m + SMEM_M < size_m && start_n + SMEM_N < size_n) {
 			if (ld % (16 / size_of<T>::value) == 0) {
-				detail::dmem_store_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, ulong2, true , EXP_STATS>(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha, beta, ignore_threshold, target_threshold, local_total_counter, local_target_counter);
+				detail::dmem_store_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, ulong2, true , EXP_STATS>(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha, beta, ignore_threshold, lost_threshold, local_total_counter, local_lost_counter);
 			} else if ((ld % (8 / size_of<T>::value) == 0)) {
-				detail::dmem_store_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, ulong1, true , EXP_STATS>(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha, beta, ignore_threshold, target_threshold, local_total_counter, local_target_counter);
+				detail::dmem_store_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, ulong1, true , EXP_STATS>(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha, beta, ignore_threshold, lost_threshold, local_total_counter, local_lost_counter);
 			} else {
-				detail::dmem_store_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, uint1 , true , EXP_STATS>(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha, beta, ignore_threshold, target_threshold, local_total_counter, local_target_counter);
+				detail::dmem_store_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, uint1 , true , EXP_STATS>(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha, beta, ignore_threshold, lost_threshold, local_total_counter, local_lost_counter);
 			}
 		} else {
 			for (unsigned offset = 0; offset < SMEM_M * SMEM_N; offset += BLOCK_SIZE) {
@@ -361,7 +361,7 @@ __device__ void dmem_store_core_exp_stats_switch (
 					T v = mad(smem_ptr[smem_index], alpha, mul(dmem_ptr[dmem_index], beta));
 					dmem_ptr[dmem_index] = v;
 					if constexpr (EXP_STATS) {
-						exp_stats(v, ignore_threshold, target_threshold, local_total_counter, local_target_counter);
+						exp_stats(v, ignore_threshold, lost_threshold, local_total_counter, local_lost_counter);
 					}
 				}
 				__syncwarp();
@@ -383,14 +383,14 @@ struct dmem_storer {
 			const T* const smem_ptr,
 			const T alpha, const T beta,
 			const typename cumpsgemm::device::element_t_conv<T>::type ignore_threshold,
-			const typename cumpsgemm::device::element_t_conv<T>::type target_threshold,
+			const typename cumpsgemm::device::element_t_conv<T>::type lost_threshold,
 			unsigned* const local_total_counter,
-			unsigned* const local_target_counter
+			unsigned* const local_lost_counter
 			) {
-		if (local_target_counter == nullptr) {
-			detail::dmem_store_core_exp_stats_switch<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, false>(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha, beta, ignore_threshold, target_threshold, local_total_counter, local_target_counter);
+		if (local_lost_counter == nullptr) {
+			detail::dmem_store_core_exp_stats_switch<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, false>(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha, beta, ignore_threshold, lost_threshold, local_total_counter, local_lost_counter);
 		} else {
-			detail::dmem_store_core_exp_stats_switch<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, true >(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha, beta, ignore_threshold, target_threshold, local_total_counter, local_target_counter);
+			detail::dmem_store_core_exp_stats_switch<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, true >(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha, beta, ignore_threshold, lost_threshold, local_total_counter, local_lost_counter);
 		}
 	}
 };

@@ -176,9 +176,9 @@ __device__ void operator() (
 		T* const c_dmem_ptr, const unsigned ldc,
 		const unsigned blockIdx_x, const unsigned blockIdx_y,
 		const typename cumpsgemm::device::element_t_conv<T>::type ignore_threshold,
-		const typename cumpsgemm::device::element_t_conv<T>::type target_threshold,
+		const typename cumpsgemm::device::element_t_conv<T>::type lost_threshold,
 		cumpsgemm::counter_t* const total_counter,
-		cumpsgemm::counter_t* const target_counter
+		cumpsgemm::counter_t* const lost_counter
 		) {
 	extern __shared__ uint8_t smem_base[];
 	T* smem = reinterpret_cast<T*>(smem_base);
@@ -278,7 +278,7 @@ __device__ void operator() (
 	}
 
 	unsigned local_total_counter = 0;
-	unsigned local_target_counter = 0;
+	unsigned local_lost_counter = 0;
 
 	c_dmem_storer(
 			c_dmem_ptr, ldc,
@@ -286,37 +286,37 @@ __device__ void operator() (
 			m, n,
 			smem,
 			alpha, beta,
-			ignore_threshold, target_threshold,
-			&local_total_counter, &local_target_counter
+			ignore_threshold, lost_threshold,
+			&local_total_counter, &local_lost_counter
 			);
 
 	for (std::uint32_t offset = warp_size >> 1; offset >= 1; offset >>= 1) {
-		local_target_counter += __shfl_xor_sync(~0u, local_target_counter, offset);
+		local_lost_counter += __shfl_xor_sync(~0u, local_lost_counter, offset);
 		local_total_counter  += __shfl_xor_sync(~0u, local_total_counter , offset);
 	}
 	__syncthreads();
 
-	unsigned *smem_target_counter_ptr = reinterpret_cast<unsigned*>(smem);
-	unsigned *smem_total_counter_ptr  = smem_target_counter_ptr + (BLOCK_SIZE / warp_size);
+	unsigned *smem_lost_counter_ptr = reinterpret_cast<unsigned*>(smem);
+	unsigned *smem_total_counter_ptr  = smem_lost_counter_ptr + (BLOCK_SIZE / warp_size);
 
 	if ((threadIdx.x & 0x1f) == 0) {
-		smem_target_counter_ptr[threadIdx.x >> 5] = local_target_counter;
+		smem_lost_counter_ptr[threadIdx.x >> 5] = local_lost_counter;
 		smem_total_counter_ptr [threadIdx.x >> 5] = local_total_counter;
 	}
 	__syncthreads();
 
 	if (threadIdx.x >= BLOCK_SIZE / warp_size) return;
 
-	local_total_counter  = smem_target_counter_ptr[threadIdx.x];
-	local_target_counter = smem_total_counter_ptr [threadIdx.x];
+	local_total_counter  = smem_lost_counter_ptr[threadIdx.x];
+	local_lost_counter = smem_total_counter_ptr [threadIdx.x];
 
 	for (std::uint32_t offset = (BLOCK_SIZE / warp_size) >> 1; offset >= 1; offset >>= 1) {
-		local_target_counter += __shfl_xor_sync(~0u, local_target_counter, offset);
+		local_lost_counter += __shfl_xor_sync(~0u, local_lost_counter, offset);
 		local_total_counter  += __shfl_xor_sync(~0u, local_total_counter , offset);
 	}
 
 	if (threadIdx.x == 0) {
-		atomicAdd(target_counter, local_target_counter);
+		atomicAdd(lost_counter, local_lost_counter);
 		atomicAdd(total_counter , local_total_counter);
 	}
 }
@@ -350,9 +350,9 @@ __global__ void gemm_kernel(
 		const T beta,
 		T* const c_dmem_ptr, const unsigned ldc,
 		const typename cumpsgemm::device::element_t_conv<T>::type ignore_threshold,
-		const typename cumpsgemm::device::element_t_conv<T>::type target_threshold,
+		const typename cumpsgemm::device::element_t_conv<T>::type lost_threshold,
 		cumpsgemm::counter_t* const total_counter,
-		cumpsgemm::counter_t* const target_counter
+		cumpsgemm::counter_t* const lost_counter
 		) {
 	const auto blockIdx_x = (blockIdx.x) % ((m + SMEM_M - 1) / SMEM_M);
 	const auto blockIdx_y = (blockIdx.x) / ((m + SMEM_M - 1) / SMEM_M);
@@ -365,8 +365,8 @@ __global__ void gemm_kernel(
 			beta,
 			c_dmem_ptr, ldc,
 			blockIdx_x, blockIdx_y,
-			ignore_threshold, target_threshold,
-			total_counter, target_counter
+			ignore_threshold, lost_threshold,
+			total_counter, lost_counter
 			);
 }
 
@@ -399,9 +399,9 @@ __global__ void gemm_batchStrided_kernel(
 		T* const c_ptr, const unsigned ldc, const uint64_t stridec,
 		const unsigned num_blocks_per_gemm,
 		const typename cumpsgemm::device::element_t_conv<T>::type ignore_threshold,
-		const typename cumpsgemm::device::element_t_conv<T>::type target_threshold,
+		const typename cumpsgemm::device::element_t_conv<T>::type lost_threshold,
 		cumpsgemm::counter_t* const total_counter,
-		cumpsgemm::counter_t* const target_counter
+		cumpsgemm::counter_t* const lost_counter
 		) {
 	const auto gemm_id = blockIdx.x / num_blocks_per_gemm;
 	const auto blockIdx_x = (blockIdx.x % num_blocks_per_gemm) % ((m + SMEM_M - 1) / SMEM_M);
@@ -419,8 +419,8 @@ __global__ void gemm_batchStrided_kernel(
 			beta,
 			c_dmem_ptr, ldc,
 			blockIdx_x, blockIdx_y,
-			ignore_threshold, target_threshold,
-			total_counter + gemm_id, target_counter + gemm_id
+			ignore_threshold, lost_threshold,
+			total_counter + gemm_id, lost_counter + gemm_id
 			);
 }
 

@@ -14,8 +14,8 @@ pybind11::list get_last_exp_stats() {
 	pybind11::list res;
 	for (const auto& r : result_list) {
 		pybind11::dict d;
-		d["total"] = r.first;
-		d["lost"]  = r.second;
+		d["lost"] = r.first;
+		d["total"]  = r.second;
 
 		res.append(d);
 	}

@@ -519,6 +519,19 @@ void cumpsgemm::hijack_control::set_compute_mode(const cuMpSGEMM_compute_mode_t 
 	internal_global_compute_mode = mode;
 	hijack_mode = static_mode;
 }
+
 void cumpsgemm::hijack_control::unset_compute_mode() {
 	hijack_mode = dynamic_mode;
+}
+
+std::vector<std::pair<std::size_t, std::size_t>> cumpsgemm::hijack_control::get_last_exp_stats() {
+	return cumpsgemm::get_last_exp_stats(get_internal_global_handle());
+}
+
+void cumpsgemm::hijack_control::enable_exp_stats() {
+	cumpsgemm::enable_exp_stats(get_internal_global_handle());
+}
+
+void cumpsgemm::hijack_control::disable_exp_stats() {
+	cumpsgemm::disable_exp_stats(get_internal_global_handle());
 }

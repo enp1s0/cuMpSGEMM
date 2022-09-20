@@ -11,6 +11,13 @@ compute_mode_list = [
         chc.CUMPSGEMM_TF32TC,
         ]
 
+chc.enable_exp_stats()
+
 for compute_mode in compute_mode_list:
     chc.set_compute_mode(compute_mode)
     cupy.matmul(a, b)
+
+    for e in chc.get_las_exp_stats():
+        print(e)
+
+chc.disable_exp_stats()

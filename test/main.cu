@@ -982,8 +982,9 @@ void print_usage(const char* program_name) {
 			"      : %s cublas_sgemm_strided_batch [exp2|seq] [min_N] [max_N] [interval] [batch_count]\n"
 			"      : %s cublas_cgemm_strided_batch [exp2|seq] [min_N] [max_N] [interval] [batch_count]\n"
 			"      : %s log [/path/to/log]\n"
-			"      : %s exp_stats [N] [ignore_threshold] [lost_threshold]\n",
-			program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name
+			"      : %s sgemm_exp_stats [N] [ignore_threshold] [lost_threshold]\n"
+			"      : %s cgemm_exp_stats [N] [ignore_threshold] [lost_threshold]\n",
+			program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name
 			);
 	std::fflush(stderr);
 }

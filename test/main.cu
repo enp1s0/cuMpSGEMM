@@ -1010,6 +1010,7 @@ int main(int argc, char** argv) {
 			return 1;
 		}
 		exp_stats_test(std::stoi(argv[2]), std::stof(argv[3]), std::stof(argv[4]), (command == "sgemm_exp_stats" ? gemm_type::s : gemm_type::c));
+		return 0;
 	}
 
 	if (argc < 3 || (std::string(argv[2]) != "exp2" && std::string(argv[2]) != "seq")) {

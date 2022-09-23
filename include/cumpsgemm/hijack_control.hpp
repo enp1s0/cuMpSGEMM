@@ -12,5 +12,9 @@ void unset_compute_mode();
 void enable_exp_stats();
 void disable_exp_stats();
 std::vector<std::pair<std::size_t, std::size_t>> get_last_exp_stats();
+void set_exp_stats_params(
+		const float ignore_threshold,
+		const float lost_threshold
+		);
 } // namespace hijack_control
 } // namespace cumpsgemm

@@ -535,3 +535,10 @@ void cumpsgemm::hijack_control::enable_exp_stats() {
 void cumpsgemm::hijack_control::disable_exp_stats() {
 	cumpsgemm::disable_exp_stats(get_internal_global_handle());
 }
+
+void cumpsgemm::hijack_control::set_exp_stats_params(
+		const float ignore_threshold,
+		const float lost_threshold
+		) {
+	cumpsgemm::set_exp_stats_params(get_internal_global_handle(), ignore_threshold, lost_threshold);
+}

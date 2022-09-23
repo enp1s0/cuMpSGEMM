@@ -12,6 +12,7 @@ compute_mode_list = [
         ]
 
 chc.enable_exp_stats()
+chc.set_exp_stats_params(1., 10.)
 
 for compute_mode in compute_mode_list:
     chc.set_compute_mode(compute_mode)

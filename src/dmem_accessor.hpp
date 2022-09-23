@@ -211,7 +211,6 @@ __device__ void exp_stats(
 			(*local_lost_counter)++;
 		}
 	}
-	__syncwarp();
 }
 
 template <>
@@ -234,7 +233,6 @@ __device__ void exp_stats<cuComplex>(
 			(*local_lost_counter)++;
 		}
 	}
-	__syncwarp();
 }
 
 template <class T, unsigned SMEM_M, unsigned SMEM_N, unsigned SKEW, unsigned BLOCK_SIZE, class VEC_T, bool BETA, bool EXP_STATS>

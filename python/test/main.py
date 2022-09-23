@@ -12,7 +12,7 @@ compute_mode_list = [
         ]
 
 chc.enable_exp_stats()
-chc.set_exp_stats_params(1., 10.)
+chc.set_exp_stats_params(1., 250.)
 
 for compute_mode in compute_mode_list:
     chc.set_compute_mode(compute_mode)
@@ -20,5 +20,6 @@ for compute_mode in compute_mode_list:
 
     for e in chc.get_last_exp_stats():
         print(e)
+    print("lost_rate =", chc.get_lost_ratio(), ", threshold =", chc.get_global_lost_ratio_threshold())
 
 chc.disable_exp_stats()

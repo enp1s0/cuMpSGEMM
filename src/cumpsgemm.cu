@@ -122,6 +122,9 @@ void launch_kernel (
 			ignore_threshold, lost_threshold,
 			total_counter, lost_counter
 			);
+#ifdef CUMPSGEMM_CHECK_KERNEL_ERROR
+	CUTF_CHECK_ERROR(cudaStreamSynchronize(cuda_stream));
+#endif
 }
 
 void resize_counter(

@@ -23,6 +23,7 @@ void cuMpSGEMM_log(
 	if (env != nullptr && std::string(env) != "0") {
 		std::fprintf(stdout, "[cuMpSGEMM LOG] %s\n",
 				str.c_str());
+		std::fflush(stdout);
 	}
 }
 
@@ -34,6 +35,7 @@ void cuMpSGEMM_error(
 	if (env != nullptr && std::string(env) != "0") {
 		std::fprintf(stdout, "[cuMpSGEMM ERROR] %s\n",
 				str.c_str());
+		std::fflush(stdout);
 	}
 }
 
@@ -44,6 +46,7 @@ void cuMpSGEMM_warning(
 	if (env != nullptr && std::string(env) != "0") {
 		std::fprintf(stdout, "[cuMpSGEMM WARNING] %s\n",
 				str.c_str());
+		std::fflush(stdout);
 	}
 }
 

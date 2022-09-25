@@ -2,9 +2,13 @@
 #include <cassert>
 #include <type_traits>
 #include <cublas.h>
+#include <cutf/cuda.hpp>
 #include <cumpsgemm/cumpsgemm.hpp>
 
 #include "handle.hpp"
+
+// For debug
+//#define CUMPSGEMM_CHECK_KERNEL_ERROR
 
 namespace {
 template <class T>
@@ -71,6 +75,9 @@ void launch_kernel (
 			beta,
 			c_ptr, ldc
 			);
+#ifdef CUMPSGEMM_CHECK_KERNEL_ERROR
+	CUTF_CHECK_ERROR(cudaStreamSynchronize(cuda_stream));
+#endif
 }
 
 template <class T>
@@ -103,6 +110,9 @@ void launch_kernel (
 			c_ptr, ldc, stridec,
 			num_blocks_per_gemm
 			);
+#ifdef CUMPSGEMM_CHECK_KERNEL_ERROR
+	CUTF_CHECK_ERROR(cudaStreamSynchronize(cuda_stream));
+#endif
 }
 } // unnamed namespace
 

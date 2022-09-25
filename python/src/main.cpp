@@ -61,6 +61,10 @@ double get_lost_ratio() {
 	return 0.;
 }
 
+bool is_exp_stats_enabled() {
+	return cumpsgemm::hijack_control::is_exp_stats_enabled();
+}
+
 PYBIND11_MODULE(cumpsgemm_hijack_control, m) {
 	m.doc() = "cuMpSGEMM hijack control API";
 
@@ -73,6 +77,7 @@ PYBIND11_MODULE(cumpsgemm_hijack_control, m) {
 	m.def("set_global_lost_ratio_threshold", &set_global_lost_ratio_threshold, "set_global_lost_ratio_threshold", pybind11::arg("ratio_threshold"));
 	m.def("get_global_lost_ratio_threshold", &get_global_lost_ratio_threshold, "get_global_lost_ratio_threshold");
 	m.def("get_lost_ratio"                 , &get_lost_ratio                 , "get_lost_ratio");
+	m.def("is_exp_stats_enabled"           , &is_exp_stats_enabled           , "is_exp_stats_enabled");
 
 	pybind11::enum_<cuMpSGEMM_compute_mode_t>(m, "compute_mode")
 		.value("CUMPSGEMM_CUBLAS"       , CUMPSGEMM_CUBLAS       )

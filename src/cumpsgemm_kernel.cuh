@@ -278,7 +278,7 @@ __device__ void operator() (
 	}
 
 	unsigned local_total_counter = 0;
-	unsigned local_lost_counter = 0;
+	unsigned local_lost_counter  = 0;
 
 	c_dmem_storer(
 			c_dmem_ptr, ldc,
@@ -291,33 +291,32 @@ __device__ void operator() (
 			);
 
 	for (std::uint32_t offset = warp_size >> 1; offset >= 1; offset >>= 1) {
-		local_lost_counter += __shfl_xor_sync(~0u, local_lost_counter, offset);
-		local_total_counter  += __shfl_xor_sync(~0u, local_total_counter , offset);
+		local_lost_counter  += __shfl_xor_sync(~0u, local_lost_counter , offset);
+		local_total_counter += __shfl_xor_sync(~0u, local_total_counter, offset);
 	}
-	__syncthreads();
 
 	unsigned *smem_lost_counter_ptr = reinterpret_cast<unsigned*>(smem);
 	unsigned *smem_total_counter_ptr  = smem_lost_counter_ptr + (BLOCK_SIZE / warp_size);
 
 	if ((threadIdx.x & 0x1f) == 0) {
-		smem_lost_counter_ptr[threadIdx.x >> 5] = local_lost_counter;
-		smem_total_counter_ptr [threadIdx.x >> 5] = local_total_counter;
+		smem_lost_counter_ptr [threadIdx.x >> 5] = local_lost_counter;
+		smem_total_counter_ptr[threadIdx.x >> 5] = local_total_counter;
 	}
 	__syncthreads();
 
 	if (threadIdx.x >= BLOCK_SIZE / warp_size) return;
 
-	local_total_counter  = smem_lost_counter_ptr[threadIdx.x];
-	local_lost_counter = smem_total_counter_ptr [threadIdx.x];
+	local_total_counter = smem_lost_counter_ptr [threadIdx.x];
+	local_lost_counter  = smem_total_counter_ptr[threadIdx.x];
 
 	for (std::uint32_t offset = (BLOCK_SIZE / warp_size) >> 1; offset >= 1; offset >>= 1) {
-		local_lost_counter += __shfl_xor_sync(~0u, local_lost_counter, offset);
-		local_total_counter  += __shfl_xor_sync(~0u, local_total_counter , offset);
+		local_lost_counter  += __shfl_xor_sync(~0u, local_lost_counter , offset);
+		local_total_counter += __shfl_xor_sync(~0u, local_total_counter, offset);
 	}
 
 	if (threadIdx.x == 0) {
-		atomicAdd(lost_counter, local_lost_counter);
-		atomicAdd(total_counter , local_total_counter);
+		atomicAdd(lost_counter , local_lost_counter);
+		atomicAdd(total_counter, local_total_counter);
 	}
 }
 };

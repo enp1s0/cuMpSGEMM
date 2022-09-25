@@ -937,38 +937,50 @@ void gemm_exp_stats_test(
 	cumpsgemm::enable_exp_stats(cuMpSGEMM_handle);
 	cumpsgemm::set_exp_stats_params(cuMpSGEMM_handle, ignore_threshold, lose_threshold);
 
-	if (gemm == gemm_type::s) {
-		const float alpha = 1.0f, beta = 0.0f;
-		cumpsgemm::gemm(
-				cuMpSGEMM_handle,
-				CUBLAS_OP_N,
-				CUBLAS_OP_N,
-				N, N, N,
-				&alpha,
-				a_ptr, N,
-				b_ptr, N,
-				&beta,
-				c_ptr, N,
-				CUMPSGEMM_TF32TCEC
-				);
-	} else {
-		const cuComplex alpha = make_float2(1, 0);
-		const cuComplex beta = make_float2(1, 0);
-		cumpsgemm::gemm(
-				cuMpSGEMM_handle,
-				CUBLAS_OP_N,
-				CUBLAS_OP_N,
-				N, N, N,
-				&alpha,
-				reinterpret_cast<const cuComplex*>(a_ptr), N,
-				reinterpret_cast<const cuComplex*>(b_ptr), N,
-				&beta,
-				reinterpret_cast<cuComplex*>(c_ptr), N,
-				CUMPSGEMM_TF32TCEC
-				);
+	std::vector<cuMpSGEMM_compute_mode_t> modes;
+
+	modes.push_back(CUMPSGEMM_FP16TCEC);
+	modes.push_back(CUMPSGEMM_FP16TC);
+	modes.push_back(CUMPSGEMM_TF32TCEC);
+	modes.push_back(CUMPSGEMM_TF32TC);
+
+	for (const auto compute_mode : modes) {
+		if (gemm == gemm_type::s) {
+			const float alpha = 1.0f, beta = 0.0f;
+			cumpsgemm::gemm(
+					cuMpSGEMM_handle,
+					CUBLAS_OP_N,
+					CUBLAS_OP_N,
+					N, N, N,
+					&alpha,
+					a_ptr, N,
+					b_ptr, N,
+					&beta,
+					c_ptr, N,
+					compute_mode
+					);
+		} else {
+			const cuComplex alpha = make_float2(1, 0);
+			const cuComplex beta = make_float2(1, 0);
+			cumpsgemm::gemm(
+					cuMpSGEMM_handle,
+					CUBLAS_OP_N,
+					CUBLAS_OP_N,
+					N, N, N,
+					&alpha,
+					reinterpret_cast<const cuComplex*>(a_ptr), N,
+					reinterpret_cast<const cuComplex*>(b_ptr), N,
+					&beta,
+					reinterpret_cast<cuComplex*>(c_ptr), N,
+					compute_mode
+					);
+		}
+		const auto exp_stats = cumpsgemm::get_last_exp_stats(cuMpSGEMM_handle);
+		std::printf("[%s:%8s] R_FP16TCEC = %lu / %lu (%6.2f)\n",
+				(gemm == gemm_type::s ? "sgemm" : "cgemm"),
+				cuMpSGEMM_get_compute_mode_string(compute_mode),
+				exp_stats[0].first, exp_stats[0].second, static_cast<double>(exp_stats[0].first) / exp_stats[0].second);
 	}
-	const auto exp_stats = cumpsgemm::get_last_exp_stats(cuMpSGEMM_handle);
-	std::printf("R_FP16TCEC = %lu / %lu (%6.2f)\n", exp_stats[0].first, exp_stats[0].second, static_cast<double>(exp_stats[0].first) / exp_stats[0].second);
 }
 
 void gemm_strided_batch_exp_stats_test(
@@ -996,40 +1008,52 @@ void gemm_strided_batch_exp_stats_test(
 	cumpsgemm::enable_exp_stats(cuMpSGEMM_handle);
 	cumpsgemm::set_exp_stats_params(cuMpSGEMM_handle, ignore_threshold, lose_threshold);
 
-	if (gemm == gemm_type::s) {
-		const float alpha = 1.0f, beta = 0.0f;
-		cumpsgemm::gemm_stridedBatch(
-				cuMpSGEMM_handle,
-				CUBLAS_OP_N,
-				CUBLAS_OP_N,
-				N, N, N,
-				&alpha,
-				a_ptr, N, N * N,
-				b_ptr, N, N * N,
-				&beta,
-				c_ptr, N, N * N,
-				batch_size,
-				CUMPSGEMM_TF32TCEC
-				);
-	} else {
-		const cuComplex alpha = make_float2(1, 0);
-		const cuComplex beta = make_float2(1, 0);
-		cumpsgemm::gemm_stridedBatch(
-				cuMpSGEMM_handle,
-				CUBLAS_OP_N,
-				CUBLAS_OP_N,
-				N, N, N,
-				&alpha,
-				reinterpret_cast<const cuComplex*>(a_ptr), N, N * N,
-				reinterpret_cast<const cuComplex*>(b_ptr), N, N * N,
-				&beta,
-				reinterpret_cast<cuComplex*>(c_ptr), N, N * N,
-				batch_size,
-				CUMPSGEMM_TF32TCEC
-				);
+	std::vector<cuMpSGEMM_compute_mode_t> modes;
+
+	modes.push_back(CUMPSGEMM_FP16TCEC);
+	modes.push_back(CUMPSGEMM_FP16TC);
+	modes.push_back(CUMPSGEMM_TF32TCEC);
+	modes.push_back(CUMPSGEMM_TF32TC);
+
+	for (const auto compute_mode : modes) {
+		if (gemm == gemm_type::s) {
+			const float alpha = 1.0f, beta = 0.0f;
+			cumpsgemm::gemm_stridedBatch(
+					cuMpSGEMM_handle,
+					CUBLAS_OP_N,
+					CUBLAS_OP_N,
+					N, N, N,
+					&alpha,
+					a_ptr, N, N * N,
+					b_ptr, N, N * N,
+					&beta,
+					c_ptr, N, N * N,
+					batch_size,
+					CUMPSGEMM_TF32TCEC
+					);
+		} else {
+			const cuComplex alpha = make_float2(1, 0);
+			const cuComplex beta = make_float2(1, 0);
+			cumpsgemm::gemm_stridedBatch(
+					cuMpSGEMM_handle,
+					CUBLAS_OP_N,
+					CUBLAS_OP_N,
+					N, N, N,
+					&alpha,
+					reinterpret_cast<const cuComplex*>(a_ptr), N, N * N,
+					reinterpret_cast<const cuComplex*>(b_ptr), N, N * N,
+					&beta,
+					reinterpret_cast<cuComplex*>(c_ptr), N, N * N,
+					batch_size,
+					CUMPSGEMM_TF32TCEC
+					);
+		}
+		const auto exp_stats = cumpsgemm::get_last_exp_stats(cuMpSGEMM_handle);
+		std::printf("[%s:%8s] R_FP16TCEC = %lu / %lu (%6.2f)\n",
+				(gemm == gemm_type::s ? "sgemm" : "cgemm"),
+				cuMpSGEMM_get_compute_mode_string(compute_mode),
+				exp_stats[0].first, exp_stats[0].second, static_cast<double>(exp_stats[0].first) / exp_stats[0].second);
 	}
-	const auto exp_stats = cumpsgemm::get_last_exp_stats(cuMpSGEMM_handle);
-	std::printf("R_FP16TCEC = %lu / %lu (%6.2f)\n", exp_stats[0].first, exp_stats[0].second, static_cast<double>(exp_stats[0].first) / exp_stats[0].second);
 }
 
 void print_usage(const char* program_name) {

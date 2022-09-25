@@ -4,6 +4,7 @@
 #include <dlfcn.h>
 #include <cumpsgemm/cumpsgemm.hpp>
 #include <cumpsgemm/hijack_control.hpp>
+#include "handle.hpp"
 
 namespace {
 
@@ -511,7 +512,7 @@ cublasStatus_t cublasGemmStridedBatchedEx(cublasHandle_t handle, cublasOperation
 }
 } // extern "C"
 
-cuMpSGEMM_handle_t cumpsgemm::hijack_control::get_internal_global_handle() {
+cuMpSGEMM_handle* cumpsgemm::hijack_control::get_internal_global_handle() {
 	if (internal_global_cuMpSGEMM_handle == nullptr) {
 		cuMpSGEMM_create(&internal_global_cuMpSGEMM_handle);
 	}
@@ -544,4 +545,8 @@ void cumpsgemm::hijack_control::set_exp_stats_params(
 		const float lost_threshold
 		) {
 	cumpsgemm::set_exp_stats_params(get_internal_global_handle(), ignore_threshold, lost_threshold);
+}
+
+bool cumpsgemm::hijack_control::is_exp_stats_enabled() {
+	return get_internal_global_handle()->exp_stats_enabled;
 }

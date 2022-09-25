@@ -16,5 +16,6 @@ void set_exp_stats_params(
 		const float ignore_threshold,
 		const float lost_threshold
 		);
+bool is_exp_stats_enabled();
 } // namespace hijack_control
 } // namespace cumpsgemm

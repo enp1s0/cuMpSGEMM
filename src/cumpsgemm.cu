@@ -2,10 +2,13 @@
 #include <cassert>
 #include <type_traits>
 #include <cublas.h>
-#include <cutf/memory.hpp>
+#include <cutf/cuda.hpp>
 #include <cumpsgemm/cumpsgemm.hpp>
 
 #include "handle.hpp"
+
+// For debug
+//#define CUMPSGEMM_CHECK_KERNEL_ERROR
 
 namespace {
 template <class T>
@@ -78,6 +81,9 @@ void launch_kernel (
 			ignore_threshold, lost_threshold,
 			total_counter, lost_counter
 			);
+#ifdef CUMPSGEMM_CHECK_KERNEL_ERROR
+	CUTF_CHECK_ERROR(cudaStreamSynchronize(cuda_stream));
+#endif
 }
 
 template <class T>
@@ -160,6 +166,9 @@ void init_counter (
 			lost_counter_ptr,
 			length
 			);
+#ifdef CUMPSGEMM_CHECK_KERNEL_ERROR
+	CUTF_CHECK_ERROR(cudaStreamSynchronize(cuda_stream));
+#endif
 }
 } // unnamed namespace
 

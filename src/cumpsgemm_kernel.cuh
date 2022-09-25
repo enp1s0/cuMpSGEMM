@@ -410,6 +410,13 @@ __global__ void gemm_batchStrided_kernel(
 	const T* const b_dmem_ptr = b_ptr + gemm_id * strideb;
 	T* const c_dmem_ptr = c_ptr + gemm_id * stridec;
 
+	cumpsgemm::counter_t* local_total_dmem_counter = nullptr;
+	cumpsgemm::counter_t* local_lost_dmem_counter = nullptr;
+	if (total_counter != nullptr) {
+		local_total_dmem_counter = total_counter + gemm_id;
+		local_lost_dmem_counter = lost_counter + gemm_id;
+	}
+
 	gemm_core<T, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, NUM_UNROLLINGS, NUM_STAGES, A_DMEM_LOADER, B_DMEM_LOADER, C_DMEM_STORER, MMA_SMEM, TC_T, EC>{}(
 			m, n, k,
 			alpha,
@@ -419,7 +426,7 @@ __global__ void gemm_batchStrided_kernel(
 			c_dmem_ptr, ldc,
 			blockIdx_x, blockIdx_y,
 			ignore_threshold, lost_threshold,
-			total_counter + gemm_id, lost_counter + gemm_id
+			local_total_dmem_counter, local_lost_dmem_counter
 			);
 }
 

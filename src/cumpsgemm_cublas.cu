@@ -538,6 +538,7 @@ void cumpsgemm::hijack_control::enable_exp_stats() {
 
 void cumpsgemm::hijack_control::disable_exp_stats() {
 	cumpsgemm::disable_exp_stats(get_internal_global_handle());
+	cumpsgemm::hijack_control::unset_compute_mode();
 }
 
 void cumpsgemm::hijack_control::set_exp_stats_params(

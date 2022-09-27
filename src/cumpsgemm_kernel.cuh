@@ -6,12 +6,15 @@
 #include <cutf/cuda.hpp>
 #include <cutf/error.hpp>
 #include <cutf/cp_async.hpp>
+#include <cutf/debug/clock_breakdown.hpp>
 
 #include <cumpsgemm/cumpsgemm.h>
 #include <cumpsgemm/cumpsgemm.hpp>
 #include "device_tcec_wrapper.hpp"
 #include "handle.hpp"
 #include "dmem_accessor.hpp"
+
+//#define ENABLE_CLOCK_BREAKDOWN
 
 namespace {
 constexpr unsigned smem_A_skew = 8;
@@ -180,6 +183,10 @@ __device__ void operator() (
 		cumpsgemm::counter_t* const total_counter,
 		cumpsgemm::counter_t* const lost_counter
 		) {
+#ifdef ENABLE_CLOCK_BREAKDOWN
+	CUTF_CLOCK_BREAKDOWN_INIT(3);
+	CUTF_CLOCK_BREAKDOWN_RECORD(0);
+#endif
 	extern __shared__ uint8_t smem_base[];
 	T* smem = reinterpret_cast<T*>(smem_base);
 	T* const a_smem_ptr = smem;
@@ -274,6 +281,14 @@ __device__ void operator() (
 				0, 0,
 				nullptr, nullptr
 				);
+#ifdef ENABLE_CLOCK_BREAKDOWN
+		if (threadIdx.x == 0) {
+			CUTF_CLOCK_BREAKDOWN_RECORD(1);
+			printf("%lld\n",
+					CUTF_CLOCK_BREAKDOWN_DURATION(0, 1)
+					);
+		}
+#endif
 		return;
 	}
 
@@ -289,6 +304,9 @@ __device__ void operator() (
 			ignore_threshold, lost_threshold,
 			&local_total_counter, &local_lost_counter
 			);
+#ifdef ENABLE_CLOCK_BREAKDOWN
+	CUTF_CLOCK_BREAKDOWN_RECORD(1);
+#endif
 
 	for (std::uint32_t offset = warp_size >> 1; offset >= 1; offset >>= 1) {
 		local_lost_counter  += __shfl_xor_sync(~0u, local_lost_counter , offset);
@@ -317,6 +335,13 @@ __device__ void operator() (
 	if (threadIdx.x == 0) {
 		atomicAdd(lost_counter , local_lost_counter);
 		atomicAdd(total_counter, local_total_counter);
+#ifdef ENABLE_CLOCK_BREAKDOWN
+		CUTF_CLOCK_BREAKDOWN_RECORD(2);
+		printf("%lld,%lld\n",
+				CUTF_CLOCK_BREAKDOWN_DURATION(0, 1),
+				CUTF_CLOCK_BREAKDOWN_DURATION(1, 2)
+				);
+#endif
 	}
 }
 };

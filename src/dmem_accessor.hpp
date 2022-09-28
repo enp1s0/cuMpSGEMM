@@ -1,5 +1,6 @@
 #pragma once
 #include <cutf/cp_async.hpp>
+#include <cutf/math.hpp>
 #include "device_common.hpp"
 
 namespace cumpsgemm {
@@ -197,42 +198,31 @@ struct dmem_loader<cumpsgemm::conjugate, float, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE
 };
 
 namespace detail {
-template <class T>
 __device__ void exp_stats(
-		const T v,
-		const typename cumpsgemm::device::element_t_conv<T>::type ignore_threshold,
-		const typename cumpsgemm::device::element_t_conv<T>::type lost_threshold,
+		const float v,
+		float ignore_threshold,
+		float lost_threshold,
 		unsigned* const local_total_counter,
 		unsigned* const local_lost_counter
 		) {
-	if (v > ignore_threshold) {
+	const auto av = fabs(v);
+	if (av > ignore_threshold) {
 		(*local_total_counter)++;
-		if (v < lost_threshold) {
+		if (av < lost_threshold) {
 			(*local_lost_counter)++;
 		}
 	}
 }
 
-template <>
-__device__ void exp_stats<cuComplex>(
+__device__ void exp_stats(
 		const cuComplex v,
-		const typename cumpsgemm::device::element_t_conv<cuComplex>::type ignore_threshold,
-		const typename cumpsgemm::device::element_t_conv<cuComplex>::type lost_threshold,
+		float ignore_threshold,
+		float lost_threshold,
 		unsigned* const local_total_counter,
 		unsigned* const local_lost_counter
 		) {
-	if (v.x > ignore_threshold) {
-		(*local_total_counter)++;
-		if (v.x < lost_threshold) {
-			(*local_lost_counter)++;
-		}
-	}
-	if (v.y > ignore_threshold) {
-		(*local_total_counter)++;
-		if (v.y < lost_threshold) {
-			(*local_lost_counter)++;
-		}
-	}
+	exp_stats(v.x, ignore_threshold, lost_threshold, local_total_counter, local_lost_counter);
+	exp_stats(v.y, ignore_threshold, lost_threshold, local_total_counter, local_lost_counter);
 }
 
 template <class T, unsigned SMEM_M, unsigned SMEM_N, unsigned SKEW, unsigned BLOCK_SIZE, class VEC_T, bool BETA, bool EXP_STATS>

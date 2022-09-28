@@ -97,3 +97,35 @@ struct cuMpSGEMM_handle {
 	std::uint32_t counter_offset;
 	std::uint32_t last_stored_counter_length;
 };
+
+namespace cumpsgemm {
+namespace exp_stats {
+// exp_stats API
+void resize_counter(
+		cuMpSGEMM_handle* handle,
+		const std::size_t new_length
+		);
+void init_counter (
+		cuMpSGEMM_handle* handle,
+		const unsigned length
+		);
+void exp_stats_ext(
+		cuMpSGEMM_handle* handle,
+		const unsigned m,
+		const unsigned n,
+		const float* const ptr,
+		const unsigned ld,
+		const unsigned batch_size,
+		const unsigned stride
+		);
+void exp_stats_ext(
+		cuMpSGEMM_handle* handle,
+		const unsigned m,
+		const unsigned n,
+		const cuComplex* const ptr,
+		const unsigned ld,
+		const unsigned batch_size,
+		const unsigned stride
+		);
+} // namespace exp_stats
+} // namespace cumpsgemm

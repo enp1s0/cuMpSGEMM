@@ -3,6 +3,18 @@
 
 double global_lost_ratio_threshold = 0.1;
 
+namespace cumpsgemm {
+namespace hijack_control {
+void set_compute_mode(const cuMpSGEMM_compute_mode_t) {};
+void unset_compute_mode() {};
+std::vector<std::pair<std::size_t, std::size_t>> get_last_exp_stats() {return std::vector<std::pair<std::size_t, std::size_t>>{};};
+void enable_exp_stats() {};
+void disable_exp_stats() {};
+void set_exp_stats_params(const float, const float) {};
+bool is_exp_stats_enabled(){return false;};
+}
+}
+
 void set_compute_mode(const cuMpSGEMM_compute_mode_t compute_mode) {
 	cumpsgemm::hijack_control::set_compute_mode(compute_mode);
 }

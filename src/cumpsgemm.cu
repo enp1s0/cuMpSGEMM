@@ -153,8 +153,8 @@ __global__ void init_counter_kernel(
 	if (tid >= length) {
 		return;
 	}
-	total_counter_ptr [tid] = 0;
-	lost_counter_ptr[tid] = 0;
+	total_counter_ptr[tid] = 0;
+	lost_counter_ptr [tid] = 0;
 }
 
 void init_counter (

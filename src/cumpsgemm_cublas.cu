@@ -482,7 +482,27 @@ cublasStatus_t cublasGemmEx(cublasHandle_t handle, cublasOperation_t transa,
 			cublas_lib_name.c_str(),
 			__func__
 			);
-	return (*func_ptr)(handle, transa, transb, m, n, k, alpha, A, Atype, lda, B, Btype, ldb, beta, C, Ctype, ldc, computeType, algo);
+	const auto res = (*func_ptr)(handle, transa, transb, m, n, k, alpha, A, Atype, lda, B, Btype, ldb, beta, C, Ctype, ldc, computeType, algo);
+
+	if (Atype == CUDA_R_32F && Btype == CUDA_R_32F && Ctype == CUDA_R_32F) {
+		cumpsgemm::exp_stats::exp_stats_ext(
+				cumpsgemm::hijack_control::get_internal_global_handle(),
+				m, n,
+				reinterpret_cast<const float*>(C), ldc,
+				1,
+				0
+				);
+	} else if (Atype == CUDA_C_32F && Btype == CUDA_C_32F && Ctype == CUDA_C_32F) {
+		cumpsgemm::exp_stats::exp_stats_ext(
+				cumpsgemm::hijack_control::get_internal_global_handle(),
+				m, n,
+				reinterpret_cast<const cuComplex*>(C), ldc,
+				1,
+				0
+				);
+	}
+
+	return res;
 }
 
 cublasStatus_t cublasGemmStridedBatchedEx(cublasHandle_t handle, cublasOperation_t transa,
@@ -536,7 +556,26 @@ cublasStatus_t cublasGemmStridedBatchedEx(cublasHandle_t handle, cublasOperation
 			cublas_lib_name.c_str(),
 			__func__
 			);
-	return (*func_ptr)(handle, transa, transb, m, n, k, alpha, A, Atype, lda, strideA, B, Btype, ldb, strideB, beta, C, Ctype, ldc, strideC, batch_count, computeType, algo);
+	const auto res = (*func_ptr)(handle, transa, transb, m, n, k, alpha, A, Atype, lda, strideA, B, Btype, ldb, strideB, beta, C, Ctype, ldc, strideC, batch_count, computeType, algo);
+
+	if (Atype == CUDA_R_32F && Btype == CUDA_R_32F && Ctype == CUDA_R_32F) {
+		cumpsgemm::exp_stats::exp_stats_ext(
+				cumpsgemm::hijack_control::get_internal_global_handle(),
+				m, n,
+				reinterpret_cast<const float*>(C), ldc,
+				batch_count,
+				strideC
+				);
+	} else if (Atype == CUDA_C_32F && Btype == CUDA_C_32F && Ctype == CUDA_C_32F) {
+		cumpsgemm::exp_stats::exp_stats_ext(
+				cumpsgemm::hijack_control::get_internal_global_handle(),
+				m, n,
+				reinterpret_cast<const cuComplex*>(C), ldc,
+				batch_count,
+				strideC
+				);
+	}
+	return res;
 }
 } // extern "C"
 

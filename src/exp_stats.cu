@@ -202,7 +202,7 @@ void cumpsgemm::exp_stats::exp_stats_ext(
 
 	constexpr auto block_size = 256;
 	const dim3 grid_size(
-			std::min<std::uint64_t>(((1lu * m * n) + block_size - 1) / block_size, handle->num_sms * 8),
+			std::min<std::uint64_t>((1lu * m * n + block_size - 1) / block_size, handle->num_sms * 8),
 			batch_size
 			);
 
@@ -217,7 +217,6 @@ void cumpsgemm::exp_stats::exp_stats_ext(
 			handle->lost_threshold,
 			handle->ignore_threshold
 			);
-
 	cumpsgemm::exp_stats::download_exp_stats(handle, buffer_id);
 }
 

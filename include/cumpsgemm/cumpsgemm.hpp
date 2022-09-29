@@ -39,8 +39,12 @@ cublasStatus_t gemm_stridedBatch(
 		unsigned* const used_kernel_module_id = nullptr
 		);
 
-// get the list of [total_count, target_count]
-std::vector<std::pair<std::size_t, std::size_t>> get_last_exp_stats(
+std::pair<std::size_t, std::size_t> get_exp_stats(
+		cuMpSGEMM_handle_t handle,
+		const unsigned buffer_id
+		);
+
+unsigned get_current_buffer_id(
 		cuMpSGEMM_handle_t handle
 		);
 

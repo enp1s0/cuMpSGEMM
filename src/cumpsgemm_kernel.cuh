@@ -284,7 +284,7 @@ __device__ void operator() (
 #ifdef ENABLE_CLOCK_BREAKDOWN
 		if (threadIdx.x == 0) {
 			CUTF_CLOCK_BREAKDOWN_RECORD(1);
-			printf("%lld\n",
+			printf("clock,%lld\n",
 					CUTF_CLOCK_BREAKDOWN_DURATION(0, 1)
 					);
 		}
@@ -336,10 +336,9 @@ __device__ void operator() (
 		atomicAdd(lost_counter , local_lost_counter);
 		atomicAdd(total_counter, local_total_counter);
 #ifdef ENABLE_CLOCK_BREAKDOWN
-		CUTF_CLOCK_BREAKDOWN_RECORD(2);
-		printf("%lld,%lld\n",
-				CUTF_CLOCK_BREAKDOWN_DURATION(0, 1),
-				CUTF_CLOCK_BREAKDOWN_DURATION(1, 2)
+		CUTF_CLOCK_BREAKDOWN_RECORD(1);
+		printf("clock,%lld\n",
+				CUTF_CLOCK_BREAKDOWN_DURATION(0, 1)
 				);
 #endif
 	}

@@ -205,7 +205,7 @@ __device__ void exp_stats(
 		unsigned* const local_total_counter,
 		unsigned* const local_lost_counter
 		) {
-	const auto av = fabs(v);
+	const auto av = cutf::math::abs(v);
 	if (av > ignore_threshold) {
 		(*local_total_counter)++;
 		if (av < lost_threshold) {

@@ -6,6 +6,7 @@
 #include <cumpsgemm/cumpsgemm.hpp>
 
 #include "handle.hpp"
+#include "exp_stats.hpp"
 
 // For debug
 //#define CUMPSGEMM_CHECK_KERNEL_ERROR
@@ -162,16 +163,16 @@ cublasStatus_t cumpsgemm::gemm(
 		*used_kernel_modeule_id = module_id;
 	}
 
-	auto total_counter_ptr  = handle->dev_total_counter  + handle->counter_offset;
-	auto lost_counter_ptr = handle->dev_lost_counter + handle->counter_offset;
-	if (!handle->exp_stats_enabled) {
-		total_counter_ptr = nullptr;
-		lost_counter_ptr = nullptr;
-	} else {
+	cumpsgemm::counter_t* total_counter_ptr  = nullptr;
+	cumpsgemm::counter_t* lost_counter_ptr = nullptr;
+	if (handle->exp_stats_enabled) {
+		const auto buffer_id = cumpsgemm::exp_stats::get_current_buffer_id(handle);
 		cumpsgemm::exp_stats::init_counter(
 				handle,
-				1
+				buffer_id
 				);
+		total_counter_ptr = handle->dev_total_counter_buffer + buffer_id;
+		lost_counter_ptr  = handle->dev_lost_counter_buffer  + buffer_id;
 	}
 
 	launch_kernel<T>(
@@ -189,8 +190,11 @@ cublasStatus_t cumpsgemm::gemm(
 			handle->cuda_stream
 			);
 
-	handle->counter_offset = 0;
-	handle->last_stored_counter_length = 1;
+
+	if (handle->exp_stats_enabled) {
+		const auto buffer_id = cumpsgemm::exp_stats::get_current_buffer_id(handle);
+		cumpsgemm::exp_stats::download_exp_stats(handle, buffer_id);
+	}
 	return CUBLAS_STATUS_SUCCESS;
 }
 
@@ -214,15 +218,10 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 		) {
 	const auto code = gen_module_code<T>(op_A, op_B, compute_mode);
 
-	if ((batch_count > handle->counter_length) && handle->exp_stats_enabled) {
-		cumpsgemm::exp_stats::resize_counter(handle, batch_count);
-	}
-
 	const auto kernel_module_candidate_list = handle->gemm_stridedBatch_module[code];
 
 	if (m * n > (1lu << 24)) {
 		for (std::uint64_t i = 0; i < batch_count; i++) {
-			handle->counter_offset = i;
 			cumpsgemm::gemm(
 					handle,
 					op_A, op_B,
@@ -235,9 +234,9 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 					compute_mode,
 					used_kernel_modeule_id
 					);
+			handle->counter_init_disabled = true;
 		}
-		handle->counter_offset = 0;
-		handle->last_stored_counter_length = batch_count;
+		handle->counter_init_disabled = false;
 		return CUBLAS_STATUS_SUCCESS;
 	}
 
@@ -255,16 +254,16 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 		*used_kernel_modeule_id = module_id;
 	}
 
-	auto total_counter_ptr  = handle->dev_total_counter;
-	auto lost_counter_ptr = handle->dev_lost_counter;
-	if (!handle->exp_stats_enabled) {
-		total_counter_ptr = nullptr;
-		lost_counter_ptr = nullptr;
-	} else {
+	cumpsgemm::counter_t* total_counter_ptr  = nullptr;
+	cumpsgemm::counter_t* lost_counter_ptr = nullptr;
+	if (handle->exp_stats_enabled) {
+		const auto buffer_id = cumpsgemm::exp_stats::get_current_buffer_id(handle);
 		cumpsgemm::exp_stats::init_counter(
 				handle,
-				batch_count
+				buffer_id
 				);
+		total_counter_ptr = handle->dev_total_counter_buffer + buffer_id;
+		lost_counter_ptr  = handle->dev_lost_counter_buffer  + buffer_id;
 	}
 
 	launch_kernel<T>(
@@ -283,8 +282,11 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 			handle->cuda_stream
 			);
 
-	handle->counter_offset = 0;
-	handle->last_stored_counter_length = batch_count;
+	if (handle->exp_stats_enabled) {
+		const auto buffer_id = cumpsgemm::exp_stats::get_current_buffer_id(handle);
+		cumpsgemm::exp_stats::download_exp_stats(handle, buffer_id);
+	}
+
 	return CUBLAS_STATUS_SUCCESS;
 }
 
@@ -404,4 +406,18 @@ cublasStatus_t cuMpSGEMM_cgemm_strided_batch(
 			compute_mode
 			);
 }
+
 } // extern "C"
+
+std::pair<std::size_t, std::size_t> cumpsgemm::get_exp_stats(
+		cuMpSGEMM_handle_t handle,
+		const unsigned buffer_id
+		) {
+	return cumpsgemm::exp_stats::get_exp_stats(handle, buffer_id);
+}
+
+unsigned cumpsgemm::get_current_buffer_id(
+		cuMpSGEMM_handle_t handle
+		) {
+	return cumpsgemm::exp_stats::get_current_buffer_id(handle);
+}

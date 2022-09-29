@@ -679,23 +679,27 @@ cublasStatus_t cuMpSGEMM_create(cuMpSGEMM_handle_t* const handle) {
 #endif
 
 	(*handle)->exp_stats_enabled = false;
-	(*handle)->counter_length = 1000;
-	(*handle)->counter_offset = 0;
+	(*handle)->buffer_length = 10000;
 	(*handle)->ignore_threshold = 0;
 	(*handle)->lost_threshold = 0;
-	(*handle)->last_stored_counter_length = 0;
-	CUTF_CHECK_ERROR(cudaMalloc    (&((*handle)->dev_lost_counter ), sizeof(cumpsgemm::counter_t) * (*handle)->counter_length));
-	CUTF_CHECK_ERROR(cudaMalloc    (&((*handle)->dev_total_counter), sizeof(cumpsgemm::counter_t) * (*handle)->counter_length));
-	CUTF_CHECK_ERROR(cudaMallocHost(&((*handle)->host_lost_counter ), sizeof(cumpsgemm::counter_t) * (*handle)->counter_length));
-	CUTF_CHECK_ERROR(cudaMallocHost(&((*handle)->host_total_counter), sizeof(cumpsgemm::counter_t) * (*handle)->counter_length));
+	(*handle)->current_buffer_id = 1;
+	(*handle)->counter_init_disabled = false;
+	CUTF_CHECK_ERROR(cudaMalloc    (&((*handle)->dev_lost_counter_buffer ), sizeof(cumpsgemm::counter_t) * (*handle)->buffer_length));
+	CUTF_CHECK_ERROR(cudaMalloc    (&((*handle)->dev_total_counter_buffer), sizeof(cumpsgemm::counter_t) * (*handle)->buffer_length));
+	CUTF_CHECK_ERROR(cudaMallocHost(&((*handle)->host_lost_counter_buffer ), sizeof(cumpsgemm::counter_t) * (*handle)->buffer_length));
+	CUTF_CHECK_ERROR(cudaMallocHost(&((*handle)->host_total_counter_buffer), sizeof(cumpsgemm::counter_t) * (*handle)->buffer_length));
+
+	(*handle)->host_lost_counter_buffer [0] = 1;
+	(*handle)->host_total_counter_buffer[0] = 1;
+
 	return CUBLAS_STATUS_SUCCESS;
 }
 
 cublasStatus_t cuMpSGEMM_destroy(cuMpSGEMM_handle_t handle) {
-	CUTF_CHECK_ERROR(cudaFree    (handle->dev_lost_counter ));
-	CUTF_CHECK_ERROR(cudaFree    (handle->dev_total_counter));
-	CUTF_CHECK_ERROR(cudaFreeHost(handle->host_lost_counter ));
-	CUTF_CHECK_ERROR(cudaFreeHost(handle->host_total_counter));
+	CUTF_CHECK_ERROR(cudaFree    (handle->dev_lost_counter_buffer ));
+	CUTF_CHECK_ERROR(cudaFree    (handle->dev_total_counter_buffer));
+	CUTF_CHECK_ERROR(cudaFreeHost(handle->host_lost_counter_buffer ));
+	CUTF_CHECK_ERROR(cudaFreeHost(handle->host_total_counter_buffer));
 
 	delete handle;
 	return CUBLAS_STATUS_SUCCESS;

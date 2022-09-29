@@ -1,26 +1,43 @@
 #include <cutf/memory.hpp>
 #include <cutf/math.hpp>
 #include <cumpsgemm/cumpsgemm.hpp>
-#include "handle.hpp"
+#include "exp_stats.hpp"
 
 namespace {
 constexpr unsigned warp_size = 32;
 
-__global__ void download_exp_stats(
+__global__ void download_exp_stats_kernel(
 		cumpsgemm::counter_t* const host_total_counter_ptr,
 		cumpsgemm::counter_t* const host_lost_counter_ptr,
 		const cumpsgemm::counter_t* const dev_total_counter_ptr,
-		const cumpsgemm::counter_t* const dev_lost_counter_ptr,
-		const unsigned length
+		const cumpsgemm::counter_t* const dev_lost_counter_ptr
 		) {
-	const auto tid = blockIdx.x * blockDim.x + threadIdx.x;
-	if (tid >= length) {
-		return;
-	}
-	host_total_counter_ptr [tid] = dev_total_counter_ptr [tid];
-	host_lost_counter_ptr[tid] = dev_lost_counter_ptr[tid];
+	*host_total_counter_ptr = *dev_total_counter_ptr;
+	*host_lost_counter_ptr = *dev_lost_counter_ptr;
 }
 } // unnamed namespace
+
+void cumpsgemm::exp_stats::download_exp_stats(
+		cuMpSGEMM_handle* handle,
+		const unsigned buffer_id
+		) {
+	download_exp_stats_kernel<<<1, 1, 0, handle->cuda_stream>>>(
+			handle->host_total_counter_buffer + buffer_id,
+			handle->host_lost_counter_buffer + buffer_id,
+			handle->dev_total_counter_buffer + buffer_id,
+			handle->dev_lost_counter_buffer + buffer_id
+			);
+}
+
+std::pair<std::size_t, std::size_t> cumpsgemm::exp_stats::get_exp_stats(
+		cuMpSGEMM_handle* handle,
+		const unsigned buffer_id
+		) {
+	while(handle->host_total_counter_buffer[buffer_id] == handle->buffer_empty_value) {}
+	while(handle->host_lost_counter_buffer[buffer_id] == handle->buffer_empty_value) {}
+
+	return std::pair<std::size_t, std::size_t>{handle->host_lost_counter_buffer[buffer_id], handle->host_total_counter_buffer[buffer_id]};
+}
 
 void cumpsgemm::set_exp_stats_params(
 		cuMpSGEMM_handle_t handle,
@@ -43,72 +60,64 @@ void cumpsgemm::disable_exp_stats(
 	handle->exp_stats_enabled = false;
 }
 
-std::vector<std::pair<std::size_t, std::size_t>> cumpsgemm::get_last_exp_stats(
-		cuMpSGEMM_handle_t handle
-		) {
-	const auto block_size = 256u;
-	download_exp_stats<<<(handle->last_stored_counter_length + block_size - 1) / block_size, block_size, 0, handle->cuda_stream>>>(
-			handle->host_total_counter,
-			handle->host_lost_counter,
-			handle->dev_total_counter,
-			handle->dev_lost_counter,
-			handle->last_stored_counter_length
-			);
-	CUTF_CHECK_ERROR(cudaStreamSynchronize(handle->cuda_stream));
-	std::vector<std::pair<std::size_t, std::size_t>> result(handle->last_stored_counter_length);
-
-	for (unsigned i = 0; i < handle->last_stored_counter_length; i++) {
-		result[i] = std::make_pair<std::size_t, std::size_t>(handle->host_total_counter[i], handle->host_lost_counter[i]);
-	}
-
-	return result;
-}
-
 void cumpsgemm::exp_stats::resize_counter(
 		cuMpSGEMM_handle_t handle,
 		const std::size_t new_length
 		) {
-	CUTF_CHECK_ERROR(cudaFree    (handle->dev_lost_counter ));
-	CUTF_CHECK_ERROR(cudaFree    (handle->dev_total_counter  ));
-	CUTF_CHECK_ERROR(cudaFreeHost(handle->host_lost_counter));
-	CUTF_CHECK_ERROR(cudaFreeHost(handle->host_total_counter ));
+	CUTF_CHECK_ERROR(cudaFree    (handle->dev_lost_counter_buffer ));
+	CUTF_CHECK_ERROR(cudaFree    (handle->dev_total_counter_buffer  ));
+	CUTF_CHECK_ERROR(cudaFreeHost(handle->host_lost_counter_buffer));
+	CUTF_CHECK_ERROR(cudaFreeHost(handle->host_total_counter_buffer ));
 
-	handle->counter_length = new_length;
+	handle->buffer_length = new_length;
 
-	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->dev_lost_counter ), sizeof(cumpsgemm::counter_t) * handle->counter_length));
-	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->dev_total_counter  ), sizeof(cumpsgemm::counter_t) * handle->counter_length));
-	CUTF_CHECK_ERROR(cudaMallocHost(&(handle->host_lost_counter), sizeof(cumpsgemm::counter_t) * handle->counter_length));
-	CUTF_CHECK_ERROR(cudaMallocHost(&(handle->host_total_counter ), sizeof(cumpsgemm::counter_t) * handle->counter_length));
+	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->dev_lost_counter_buffer), sizeof(cumpsgemm::counter_t) * handle->buffer_length));
+	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->dev_total_counter_buffer), sizeof(cumpsgemm::counter_t) * handle->buffer_length));
+	CUTF_CHECK_ERROR(cudaMallocHost(&(handle->host_lost_counter_buffer), sizeof(cumpsgemm::counter_t) * handle->buffer_length));
+	CUTF_CHECK_ERROR(cudaMallocHost(&(handle->host_total_counter_buffer), sizeof(cumpsgemm::counter_t) * handle->buffer_length));
 }
 
 namespace {
 __global__ void init_counter_kernel(
 		cumpsgemm::counter_t* const total_counter_ptr,
-		cumpsgemm::counter_t* const lost_counter_ptr,
-		const unsigned length
+		cumpsgemm::counter_t* const lost_counter_ptr
 		) {
-	const auto tid = blockIdx.x * blockDim.x + threadIdx.x;
-	if (tid >= length) {
-		return;
-	}
-	total_counter_ptr[tid] = 0;
-	lost_counter_ptr [tid] = 0;
+	*total_counter_ptr = 0;
+	*lost_counter_ptr  = 0;
 }
 } // unnamed namespace
 
 void cumpsgemm::exp_stats::init_counter (
 		cuMpSGEMM_handle_t handle,
-		const unsigned length
+		const unsigned buffer_id
 		) {
-	const auto block_size = 256u;
-	init_counter_kernel<<<(length + block_size - 1) / block_size, block_size, 0, handle->cuda_stream>>>(
-			handle->dev_total_counter,
-			handle->dev_lost_counter,
-			length
+	init_counter_kernel<<<1, 1, 0, handle->cuda_stream>>>(
+			handle->dev_total_counter_buffer + buffer_id,
+			handle->dev_lost_counter_buffer + buffer_id
 			);
+	*(handle->host_total_counter_buffer + buffer_id) = handle->buffer_empty_value;
+	*(handle->host_lost_counter_buffer  + buffer_id) = handle->buffer_empty_value;
 #ifdef CUMPSGEMM_CHECK_KERNEL_ERROR
 	CUTF_CHECK_ERROR(cudaStreamSynchronize(cuda_stream));
 #endif
+}
+
+// Ring buffer id calculator.
+// It does not return 0
+std::uint32_t cumpsgemm::exp_stats::get_next_buffer_id(
+		cuMpSGEMM_handle* handle
+		) {
+	const auto next = ++(handle->current_buffer_id);
+	if (next < handle->buffer_length) {
+		return next;
+	}
+	handle->current_buffer_id = 1;
+	return 1;
+}
+std::uint32_t cumpsgemm::exp_stats::get_current_buffer_id(
+		cuMpSGEMM_handle* handle
+		) {
+	return handle->current_buffer_id;
 }
 
 namespace {
@@ -171,8 +180,8 @@ __global__ void exp_stats_ext_kernel(
 	}
 
 	if (threadIdx.x == 0) {
-		atomicAdd(lose_counter  + ib, local_lose_counter);
-		atomicAdd(total_counter + ib, local_total_counter);
+		atomicAdd(lose_counter , local_lose_counter);
+		atomicAdd(total_counter, local_total_counter);
 	}
 }
 } // unnamed namespace
@@ -197,15 +206,19 @@ void cumpsgemm::exp_stats::exp_stats_ext(
 			batch_size
 			);
 
+	const auto buffer_id = cumpsgemm::exp_stats::get_current_buffer_id(handle);
+
 	exp_stats_ext_kernel<block_size><<<grid_size, block_size, 0, handle->cuda_stream>>>(
-			handle->dev_lost_counter,
-			handle->dev_total_counter,
+			handle->dev_lost_counter_buffer + buffer_id,
+			handle->dev_total_counter_buffer + buffer_id,
 			m, n,
 			ptr, ld,
 			batch_size, stride,
 			handle->lost_threshold,
 			handle->ignore_threshold
 			);
+
+	cumpsgemm::exp_stats::download_exp_stats(handle, buffer_id);
 }
 
 void cumpsgemm::exp_stats::exp_stats_ext(

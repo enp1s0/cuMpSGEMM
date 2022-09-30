@@ -99,3 +99,10 @@ struct cuMpSGEMM_handle {
 	std::uint32_t current_buffer_id;
 	bool counter_init_disabled;
 };
+
+void init_exp_stats_counter_buffer(
+		cuMpSGEMM_handle* handle
+		);
+void destroy_exp_stats_counter_buffer(
+		cuMpSGEMM_handle* handle
+		);

@@ -103,7 +103,8 @@ void cumpsgemm::exp_stats::init_counter (
 }
 
 // Ring buffer id calculator.
-// It does not return 0
+// 0 and 1 is reserved
+// loop[2, 3, ..., buffer_length-1]
 std::uint32_t cumpsgemm::exp_stats::get_next_buffer_id(
 		cuMpSGEMM_handle* handle
 		) {
@@ -111,8 +112,8 @@ std::uint32_t cumpsgemm::exp_stats::get_next_buffer_id(
 	if (next < handle->buffer_length) {
 		return next;
 	}
-	handle->current_buffer_id = 1;
-	return 1;
+	handle->current_buffer_id = 2;
+	return 2;
 }
 std::uint32_t cumpsgemm::exp_stats::get_current_buffer_id(
 		cuMpSGEMM_handle* handle
@@ -238,4 +239,34 @@ void cumpsgemm::exp_stats::exp_stats_ext(
 			batch_size,
 			2 * stride
 			);
+}
+
+void init_exp_stats_counter_buffer(
+		cuMpSGEMM_handle* handle
+		) {
+
+	handle->exp_stats_enabled = false;
+	handle->buffer_length = 10000;
+	handle->ignore_threshold = 0;
+	handle->lost_threshold = 0;
+	handle->current_buffer_id = 1;
+	handle->counter_init_disabled = false;
+	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->dev_lost_counter_buffer ) , sizeof(cumpsgemm::counter_t) * handle->buffer_length));
+	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->dev_total_counter_buffer) , sizeof(cumpsgemm::counter_t) * handle->buffer_length));
+	CUTF_CHECK_ERROR(cudaMallocHost(&(handle->host_lost_counter_buffer ), sizeof(cumpsgemm::counter_t) * handle->buffer_length));
+	CUTF_CHECK_ERROR(cudaMallocHost(&(handle->host_total_counter_buffer), sizeof(cumpsgemm::counter_t) * handle->buffer_length));
+
+	// For not exp_stats-d matrices
+	handle->host_lost_counter_buffer [0] = 1;
+	handle->host_total_counter_buffer[0] = 1;
+	handle->host_lost_counter_buffer [0] = 0;
+	handle->host_total_counter_buffer[0] = 1;
+}
+void destroy_exp_stats_counter_buffer(
+		cuMpSGEMM_handle* handle
+		) {
+	CUTF_CHECK_ERROR(cudaFree    (handle->dev_lost_counter_buffer  ));
+	CUTF_CHECK_ERROR(cudaFree    (handle->dev_total_counter_buffer ));
+	CUTF_CHECK_ERROR(cudaFreeHost(handle->host_lost_counter_buffer ));
+	CUTF_CHECK_ERROR(cudaFreeHost(handle->host_total_counter_buffer));
 }

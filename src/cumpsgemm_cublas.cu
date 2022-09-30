@@ -163,9 +163,6 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 	if (std::is_same<T, float>::value && (op_A == CUBLAS_OP_C || op_B == CUBLAS_OP_C)) {
 		return CUBLAS_STATUS_INVALID_VALUE;
 	}
-	if (cumpsgemm::hijack_control::get_internal_global_handle()->exp_stats_enabled) {
-		cumpsgemm::exp_stats::get_next_buffer_id(cumpsgemm::hijack_control::get_internal_global_handle());
-	}
 
 	cudaStream_t cuda_stream;
 	cublasGetStream(cublas_handle, &cuda_stream);
@@ -250,9 +247,6 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 		) {
 	if (std::is_same<T, float>::value && (op_A == CUBLAS_OP_C || op_B == CUBLAS_OP_C)) {
 		return CUBLAS_STATUS_INVALID_VALUE;
-	}
-	if (cumpsgemm::hijack_control::get_internal_global_handle()->exp_stats_enabled) {
-		cumpsgemm::exp_stats::get_next_buffer_id(cumpsgemm::hijack_control::get_internal_global_handle());
 	}
 
 	cudaStream_t cuda_stream;
@@ -598,9 +592,8 @@ void cumpsgemm::hijack_control::unset_compute_mode() {
 std::pair<std::size_t, std::size_t> cumpsgemm::hijack_control::get_exp_stats(const unsigned buffer_id) {
 	return cumpsgemm::exp_stats::get_exp_stats(get_internal_global_handle(), buffer_id);
 }
-std::pair<std::size_t, std::size_t> get_exp_stats(const unsigned buffer_id);
 
-unsigned get_current_buffer_id() {
+unsigned cumpsgemm::hijack_control::get_current_buffer_id() {
 	return cumpsgemm::exp_stats::get_current_buffer_id(cuMpSGEMM_get_internal_global_handle());
 }
 

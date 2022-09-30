@@ -166,11 +166,16 @@ cublasStatus_t cumpsgemm::gemm(
 	cumpsgemm::counter_t* total_counter_ptr  = nullptr;
 	cumpsgemm::counter_t* lost_counter_ptr = nullptr;
 	if (handle->exp_stats_enabled) {
+		if (!(handle->counter_init_disabled)) {
+			cumpsgemm::exp_stats::get_next_buffer_id(handle);
+		}
 		const auto buffer_id = cumpsgemm::exp_stats::get_current_buffer_id(handle);
-		cumpsgemm::exp_stats::init_counter(
-				handle,
-				buffer_id
-				);
+		if (!(handle->counter_init_disabled)) {
+			cumpsgemm::exp_stats::init_counter(
+					handle,
+					buffer_id
+					);
+		}
 		total_counter_ptr = handle->dev_total_counter_buffer + buffer_id;
 		lost_counter_ptr  = handle->dev_lost_counter_buffer  + buffer_id;
 	}
@@ -257,6 +262,7 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 	cumpsgemm::counter_t* total_counter_ptr  = nullptr;
 	cumpsgemm::counter_t* lost_counter_ptr = nullptr;
 	if (handle->exp_stats_enabled) {
+		cumpsgemm::exp_stats::get_next_buffer_id(handle);
 		const auto buffer_id = cumpsgemm::exp_stats::get_current_buffer_id(handle);
 		cumpsgemm::exp_stats::init_counter(
 				handle,

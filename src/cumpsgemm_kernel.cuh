@@ -324,8 +324,8 @@ __device__ void operator() (
 
 	if (threadIdx.x >= BLOCK_SIZE / warp_size) return;
 
-	local_total_counter = smem_lost_counter_ptr [threadIdx.x];
-	local_lost_counter  = smem_total_counter_ptr[threadIdx.x];
+	local_total_counter = smem_total_counter_ptr[threadIdx.x];
+	local_lost_counter  = smem_lost_counter_ptr [threadIdx.x];
 
 	for (std::uint32_t offset = (BLOCK_SIZE / warp_size) >> 1; offset >= 1; offset >>= 1) {
 		local_lost_counter  += __shfl_xor_sync(~0u, local_lost_counter , offset);

@@ -64,16 +64,16 @@ void cumpsgemm::exp_stats::resize_counter(
 		cuMpSGEMM_handle_t handle,
 		const std::size_t new_length
 		) {
-	CUTF_CHECK_ERROR(cudaFree    (handle->dev_lost_counter_buffer ));
-	CUTF_CHECK_ERROR(cudaFree    (handle->dev_total_counter_buffer  ));
-	CUTF_CHECK_ERROR(cudaFreeHost(handle->host_lost_counter_buffer));
-	CUTF_CHECK_ERROR(cudaFreeHost(handle->host_total_counter_buffer ));
+	CUTF_CHECK_ERROR(cudaFree    (handle->dev_lost_counter_buffer  ));
+	CUTF_CHECK_ERROR(cudaFree    (handle->dev_total_counter_buffer ));
+	CUTF_CHECK_ERROR(cudaFreeHost(handle->host_lost_counter_buffer ));
+	CUTF_CHECK_ERROR(cudaFreeHost(handle->host_total_counter_buffer));
 
 	handle->buffer_length = new_length;
 
-	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->dev_lost_counter_buffer), sizeof(cumpsgemm::counter_t) * handle->buffer_length));
-	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->dev_total_counter_buffer), sizeof(cumpsgemm::counter_t) * handle->buffer_length));
-	CUTF_CHECK_ERROR(cudaMallocHost(&(handle->host_lost_counter_buffer), sizeof(cumpsgemm::counter_t) * handle->buffer_length));
+	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->dev_lost_counter_buffer)  , sizeof(cumpsgemm::counter_t) * handle->buffer_length));
+	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->dev_total_counter_buffer) , sizeof(cumpsgemm::counter_t) * handle->buffer_length));
+	CUTF_CHECK_ERROR(cudaMallocHost(&(handle->host_lost_counter_buffer) , sizeof(cumpsgemm::counter_t) * handle->buffer_length));
 	CUTF_CHECK_ERROR(cudaMallocHost(&(handle->host_total_counter_buffer), sizeof(cumpsgemm::counter_t) * handle->buffer_length));
 }
 
@@ -171,8 +171,8 @@ __global__ void exp_stats_ext_kernel(
 
 	if (threadIdx.x >= BLOCK_SIZE / warp_size) return;
 
-	local_total_counter = smem_lose_counter_ptr [threadIdx.x];
-	local_lose_counter  = smem_total_counter_ptr[threadIdx.x];
+	local_total_counter = smem_total_counter_ptr[threadIdx.x];
+	local_lose_counter  = smem_lose_counter_ptr [threadIdx.x];
 
 	for (std::uint32_t offset = (BLOCK_SIZE / warp_size) >> 1; offset >= 1; offset >>= 1) {
 		local_lose_counter  += __shfl_xor_sync(~0u, local_lose_counter , offset);

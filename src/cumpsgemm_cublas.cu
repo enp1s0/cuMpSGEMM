@@ -203,7 +203,7 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 		// restore math mode
 		cublasSetMathMode(cublas_handle, math_mode);
 
-		if (cumpsgemm::hijack_control::get_internal_global_handle()->exp_stats_enabled) {
+		if (cumpsgemm::hijack_control::get_internal_global_handle()->exp_stats_handle->enabled) {
 			cumpsgemm::exp_stats::exp_stats_ext(
 					cumpsgemm::hijack_control::get_internal_global_handle(),
 					m, n,
@@ -286,7 +286,7 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 		const auto res = (*func_ptr)(cublas_handle, op_A, op_B, m, n, k, alpha, a_dmem_ptr, lda, stridea, b_dmem_ptr, ldb, strideb, beta, c_dmem_ptr, ldc, stridec, batch_count);
 		cublasSetMathMode(cublas_handle, math_mode);
 
-		if (cumpsgemm::hijack_control::get_internal_global_handle()->exp_stats_enabled) {
+		if (cumpsgemm::hijack_control::get_internal_global_handle()->exp_stats_handle->enabled) {
 			cumpsgemm::exp_stats::exp_stats_ext(
 					cumpsgemm::hijack_control::get_internal_global_handle(),
 					m, n,
@@ -614,5 +614,9 @@ void cumpsgemm::hijack_control::set_exp_stats_params(
 }
 
 bool cumpsgemm::hijack_control::is_exp_stats_enabled() {
-	return get_internal_global_handle()->exp_stats_enabled;
+	return get_internal_global_handle()->exp_stats_handle->enabled;
+}
+
+void cumpsgemm::hijack_control::reset_buffer_id() {
+	cumpsgemm::exp_stats::reset_buffer_id(get_internal_global_handle());
 }

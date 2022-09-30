@@ -54,13 +54,13 @@ void cumpsgemm::set_exp_stats_params(
 void cumpsgemm::enable_exp_stats(
 		cuMpSGEMM_handle_t handle
 		) {
-	handle->exp_stats_handle->exp_stats_enabled = true;
+	handle->exp_stats_handle->enabled = true;
 }
 
 void cumpsgemm::disable_exp_stats(
 		cuMpSGEMM_handle_t handle
 		) {
-	handle->exp_stats_handle->exp_stats_enabled = false;
+	handle->exp_stats_handle->enabled = false;
 }
 
 void cumpsgemm::exp_stats::resize_counter(
@@ -255,7 +255,7 @@ void init_exp_stats_counter_buffer(
 	handle->exp_stats_handle = new cumpsgemm::exp_stats::exp_stats_handle;
 	cumpsgemm::exp_stats::reset_buffer_id(handle);
 
-	handle->exp_stats_handle->exp_stats_enabled = false;
+	handle->exp_stats_handle->enabled = false;
 	handle->exp_stats_handle->buffer_length = 10000;
 	handle->exp_stats_handle->ignore_threshold = 0;
 	handle->exp_stats_handle->lost_threshold = 0;

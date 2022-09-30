@@ -15,7 +15,6 @@ struct exp_stats_handle {
 	float ignore_threshold;
 	float lost_threshold;
 
-	bool exp_stats_enabled;
 	std::uint32_t buffer_length;
 	std::uint32_t current_buffer_id;
 	bool counter_init_disabled;

@@ -48,6 +48,10 @@ unsigned get_current_buffer_id(
 		cuMpSGEMM_handle_t handle
 		);
 
+void reset_buffer_id(
+		cuMpSGEMM_handle_t handle
+		);
+
 void set_exp_stats_params(
 		cuMpSGEMM_handle_t handle,
 		const float ignore_threshold,

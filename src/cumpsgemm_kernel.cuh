@@ -324,8 +324,8 @@ __device__ void operator() (
 
 	if (threadIdx.x >= BLOCK_SIZE / warp_size) return;
 
-	local_total_counter = smem_lost_counter_ptr [threadIdx.x];
-	local_lost_counter  = smem_total_counter_ptr[threadIdx.x];
+	local_total_counter = smem_total_counter_ptr[threadIdx.x];
+	local_lost_counter  = smem_lost_counter_ptr [threadIdx.x];
 
 	for (std::uint32_t offset = (BLOCK_SIZE / warp_size) >> 1; offset >= 1; offset >>= 1) {
 		local_lost_counter  += __shfl_xor_sync(~0u, local_lost_counter , offset);
@@ -434,13 +434,6 @@ __global__ void gemm_batchStrided_kernel(
 	const T* const b_dmem_ptr = b_ptr + gemm_id * strideb;
 	T* const c_dmem_ptr = c_ptr + gemm_id * stridec;
 
-	cumpsgemm::counter_t* local_total_dmem_counter = nullptr;
-	cumpsgemm::counter_t* local_lost_dmem_counter = nullptr;
-	if (total_counter != nullptr) {
-		local_total_dmem_counter = total_counter + gemm_id;
-		local_lost_dmem_counter = lost_counter + gemm_id;
-	}
-
 	gemm_core<T, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, NUM_UNROLLINGS, NUM_STAGES, A_DMEM_LOADER, B_DMEM_LOADER, C_DMEM_STORER, MMA_SMEM, TC_T, EC>{}(
 			m, n, k,
 			alpha,
@@ -450,7 +443,7 @@ __global__ void gemm_batchStrided_kernel(
 			c_dmem_ptr, ldc,
 			blockIdx_x, blockIdx_y,
 			ignore_threshold, lost_threshold,
-			local_total_dmem_counter, local_lost_dmem_counter
+			total_counter, lost_counter
 			);
 }
 

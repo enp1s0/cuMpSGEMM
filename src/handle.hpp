@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <utility>
 #include <cuComplex.h>
 
 namespace cumpsgemm {
@@ -70,6 +71,9 @@ constexpr code_t c                = 0b1'0'0'00'00;
 // ------- OR accumulation ------
 constexpr code_t max_code = 0b1'11'11'11 + 1;
 } // namespace kernel_module_code
+namespace exp_stats {
+struct exp_stats_handle;
+} // namespace exp_stats
 } // namespace cumpsgemm
 
 struct cuMpSGEMM_handle {
@@ -84,48 +88,12 @@ struct cuMpSGEMM_handle {
 	cudaStream_t cuda_stream = 0;
 
 	// For exp stats
-	cumpsgemm::counter_t* dev_total_counter;
-	cumpsgemm::counter_t* dev_lost_counter;
-	cumpsgemm::counter_t* host_total_counter;
-	cumpsgemm::counter_t* host_lost_counter;
-
-	float ignore_threshold;
-	float lost_threshold;
-
-	bool exp_stats_enabled;
-	std::uint32_t counter_length;
-	std::uint32_t counter_offset;
-	std::uint32_t last_stored_counter_length;
+	cumpsgemm::exp_stats::exp_stats_handle* exp_stats_handle;
 };
 
-namespace cumpsgemm {
-namespace exp_stats {
-// exp_stats API
-void resize_counter(
-		cuMpSGEMM_handle* handle,
-		const std::size_t new_length
+void init_exp_stats_counter_buffer(
+		cuMpSGEMM_handle* handle
 		);
-void init_counter (
-		cuMpSGEMM_handle* handle,
-		const unsigned length
+void destroy_exp_stats_counter_buffer(
+		cuMpSGEMM_handle* handle
 		);
-void exp_stats_ext(
-		cuMpSGEMM_handle* handle,
-		const unsigned m,
-		const unsigned n,
-		const float* const ptr,
-		const unsigned ld,
-		const unsigned batch_size,
-		const unsigned stride
-		);
-void exp_stats_ext(
-		cuMpSGEMM_handle* handle,
-		const unsigned m,
-		const unsigned n,
-		const cuComplex* const ptr,
-		const unsigned ld,
-		const unsigned batch_size,
-		const unsigned stride
-		);
-} // namespace exp_stats
-} // namespace cumpsgemm

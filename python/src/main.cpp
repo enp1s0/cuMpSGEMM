@@ -1,3 +1,4 @@
+#include <utility>
 #include <pybind11/pybind11.h>
 #include <cumpsgemm/hijack_control.hpp>
 
@@ -7,11 +8,12 @@ namespace cumpsgemm {
 namespace hijack_control {
 void set_compute_mode(const cuMpSGEMM_compute_mode_t) {};
 void unset_compute_mode() {};
-std::vector<std::pair<std::size_t, std::size_t>> get_last_exp_stats() {return std::vector<std::pair<std::size_t, std::size_t>>{};};
+std::pair<std::size_t, std::size_t> get_exp_stats(const unsigned buffer_id) {return std::pair<std::size_t, std::size_t>{1, 1};};
 void enable_exp_stats() {};
 void disable_exp_stats() {};
 void set_exp_stats_params(const float, const float) {};
 bool is_exp_stats_enabled(){return false;};
+unsigned get_current_buffer_id() {return 0;}
 }
 }
 
@@ -23,17 +25,12 @@ void unset_compute_mode() {
 	cumpsgemm::hijack_control::unset_compute_mode();
 }
 
-pybind11::list get_last_exp_stats() {
-	const auto result_list = cumpsgemm::hijack_control::get_last_exp_stats();
-	pybind11::list res;
-	for (const auto& r : result_list) {
-		pybind11::dict d;
-		d["lost"] = r.first;
-		d["total"]  = r.second;
-
-		res.append(d);
-	}
-	return res;
+pybind11::dict get_exp_stats(const unsigned buffer_id) {
+	const auto r = cumpsgemm::hijack_control::get_exp_stats(buffer_id);
+	pybind11::dict d;
+	d["lost"] = r.first;
+	d["total"]  = r.second;
+	return d;
 }
 
 void enable_exp_stats() {
@@ -59,14 +56,10 @@ float get_global_lost_ratio_threshold() {
 	return global_lost_ratio_threshold;
 }
 
-double get_lost_ratio() {
-	const auto l = cumpsgemm::hijack_control::get_last_exp_stats();
-	std::size_t lost_count = 0;
-	std::size_t total_count = 0;
-	for (const auto es : l) {
-		total_count += es.second;
-		lost_count += es.first;
-	}
+double get_lost_ratio(const unsigned buffer_id) {
+	const auto r = cumpsgemm::hijack_control::get_exp_stats(buffer_id);
+	std::size_t lost_count = r.first;
+	std::size_t total_count = r.second;
 	if (total_count > 0) {
 		return static_cast<double>(lost_count) / total_count;
 	}
@@ -77,18 +70,23 @@ bool is_exp_stats_enabled() {
 	return cumpsgemm::hijack_control::is_exp_stats_enabled();
 }
 
+unsigned get_current_buffer_id() {
+	return cumpsgemm::hijack_control::get_current_buffer_id();
+}
+
 PYBIND11_MODULE(cumpsgemm_hijack_control, m) {
 	m.doc() = "cuMpSGEMM hijack control API";
 
 	m.def("unset_compute_mode"             , &unset_compute_mode             , "unset_compute_mode");
 	m.def("set_compute_mode"               , &set_compute_mode               , "set_compute_mode"  , pybind11::arg("compute_mode"));
-	m.def("get_last_exp_stats"             , &get_last_exp_stats             , "get_last_exp_stats");
+	m.def("get_exp_stats"                  , &get_exp_stats                  , "get_exp_stats", pybind11::arg("buffer_id"));
+	m.def("get_current_buffer_id"          , &get_current_buffer_id          , "get_current_buffer_id");
 	m.def("enable_exp_stats"               , &enable_exp_stats               , "enable_exp_stats");
 	m.def("disable_exp_stats"              , &disable_exp_stats              , "disable_exp_stats");
 	m.def("set_exp_stats_params"           , &set_exp_stats_params           , "set_exp_stats_params", pybind11::arg("ignore_threshold"), pybind11::arg("lost_threshold"));
 	m.def("set_global_lost_ratio_threshold", &set_global_lost_ratio_threshold, "set_global_lost_ratio_threshold", pybind11::arg("ratio_threshold"));
 	m.def("get_global_lost_ratio_threshold", &get_global_lost_ratio_threshold, "get_global_lost_ratio_threshold");
-	m.def("get_lost_ratio"                 , &get_lost_ratio                 , "get_lost_ratio");
+	m.def("get_lost_ratio"                 , &get_lost_ratio                 , "get_lost_ratio", pybind11::arg("buffer_id"));
 	m.def("is_exp_stats_enabled"           , &is_exp_stats_enabled           , "is_exp_stats_enabled");
 
 	pybind11::enum_<cuMpSGEMM_compute_mode_t>(m, "compute_mode")

@@ -126,7 +126,7 @@ std::uint32_t cumpsgemm::exp_stats::get_current_buffer_id(
 
 namespace {
 // exp_stats for cuBLAS original functions
-template <unsigned BLOCK_SIZE>
+template <unsigned BLOCK_SIZE, unsigned VEC_LEN>
 __global__ void exp_stats_ext_kernel(
 		unsigned long long int* const lose_counter,
 		unsigned long long int* const total_counter,
@@ -142,20 +142,45 @@ __global__ void exp_stats_ext_kernel(
 	unsigned local_lose_counter = 0;
 	unsigned local_total_counter = 0;
 	const auto ib = blockIdx.y;
-	for (std::size_t gid = 0; gid <= m * n; gid += blockDim.x * gridDim.x) {
-		const auto im = gid % m;
-		const auto in = (gid / m) % n;
+	const auto local_mat_ptr = ptr + ib * stride;
+	for (std::size_t lid = (threadIdx.x + blockIdx.x * blockDim.x) * VEC_LEN; lid < m * n; lid += BLOCK_SIZE * gridDim.x * VEC_LEN) {
+		float vec[VEC_LEN];
+		if (lid + VEC_LEN < m * n) {
+			for (uint32_t i = 0; i < VEC_LEN; i++) {
+				const auto gid = lid + i;
+				const auto im = gid % m;
+				const auto in = gid / m;
 
-		const auto memory_index = im + ld * in + stride * ib;
+				const auto memory_index = im + ld * in;
+				vec[i] = local_mat_ptr[memory_index];
+			}
+		} else {
+			for (uint32_t i = 0; i < VEC_LEN; i++) {
+				const auto gid = lid + i;
+				float v;
+				if (gid < m * n) {
+					const auto im = gid % m;
+					const auto in = gid / m;
 
-		const auto v = cutf::math::abs(ptr[memory_index]);
-
-		if (v > ignore_threshold) {
-			local_total_counter++;
-			if (v < lose_threshold) {
-				local_lose_counter++;
+					const auto memory_index = im + ld * in;
+					v = local_mat_ptr[memory_index];
+				} else {
+					v = 0;
+				}
+				vec[i] = v;
 			}
 		}
+
+		for (unsigned i = 0; i < VEC_LEN; i++) {
+			const auto v = vec[i];
+			if (v > ignore_threshold) {
+				local_total_counter++;
+				if (v < lose_threshold) {
+					local_lose_counter++;
+				}
+			}
+		}
+		break;
 	}
 
 	for (std::uint32_t offset = warp_size >> 1; offset >= 1; offset >>= 1) {
@@ -205,13 +230,15 @@ void cumpsgemm::exp_stats::exp_stats_ext(
 			buffer_id
 			);
 
-	constexpr auto block_size = 256;
+	constexpr unsigned VEC_LEN = 8;
+
+	constexpr auto block_size = 1024;
 	const dim3 grid_size(
-			std::min<std::uint64_t>((1lu * m * n + block_size - 1) / block_size, handle->num_sms * 8),
+			std::min<std::uint64_t>(((1lu * m * n + block_size - 1) / block_size + VEC_LEN - 1) / VEC_LEN, handle->num_sms),
 			batch_size
 			);
 
-	exp_stats_ext_kernel<block_size><<<grid_size, block_size, 0, handle->cuda_stream>>>(
+	exp_stats_ext_kernel<block_size, VEC_LEN><<<grid_size, block_size, 0, handle->cuda_stream>>>(
 			handle->exp_stats_handle->dev_lost_counter_buffer + buffer_id,
 			handle->exp_stats_handle->dev_total_counter_buffer + buffer_id,
 			m, n,

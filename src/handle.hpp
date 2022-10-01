@@ -21,11 +21,7 @@ using gemm_kernel_func_t = void (*)(
 			const T* const, const uint32_t,
 			const T* const, const uint32_t,
 			const T,
-			T* const, const uint32_t,
-			const typename device::element_t_conv<T>::type,
-			const typename device::element_t_conv<T>::type,
-			counter_t* const,
-			counter_t* const
+			T* const, const uint32_t
 			);
 
 template <class T>
@@ -38,11 +34,7 @@ using gemm_stridedBatch_kernel_func_t = void (*)(
 			const T* const, const uint32_t, const uint64_t,
 			const T,
 			T* const, const uint32_t, const uint64_t,
-			const uint32_t,
-			const typename device::element_t_conv<T>::type,
-			const typename device::element_t_conv<T>::type,
-			counter_t* const,
-			counter_t* const
+			const uint32_t
 			);
 
 struct gemm_module {

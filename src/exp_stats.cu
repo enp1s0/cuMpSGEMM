@@ -142,16 +142,17 @@ __global__ void exp_stats_ext_kernel(
 	unsigned local_lose_counter = 0;
 	unsigned local_total_counter = 0;
 	const auto ib = blockIdx.y;
-	for (std::size_t lid = (threadIdx.x + blockIdx.x * blockDim.x) * VEC_LEN; lid < m * n; lid += BLOCK_SIZE * VEC_LEN) {
+	const auto local_mat_ptr = ptr + ib * stride;
+	for (std::size_t lid = (threadIdx.x + blockIdx.x * blockDim.x) * VEC_LEN; lid < m * n; lid += BLOCK_SIZE * gridDim.x * VEC_LEN) {
 		float vec[VEC_LEN];
 		if (lid + VEC_LEN < m * n) {
 			for (uint32_t i = 0; i < VEC_LEN; i++) {
 				const auto gid = lid + i;
 				const auto im = gid % m;
-				const auto in = (gid / m) % n;
+				const auto in = gid / m;
 
-				const auto memory_index = im + ld * in + stride * ib;
-				vec[i] = ptr[memory_index];
+				const auto memory_index = im + ld * in;
+				vec[i] = local_mat_ptr[memory_index];
 			}
 		} else {
 			for (uint32_t i = 0; i < VEC_LEN; i++) {
@@ -159,26 +160,27 @@ __global__ void exp_stats_ext_kernel(
 				float v;
 				if (gid < m * n) {
 					const auto im = gid % m;
-					const auto in = (gid / m) % n;
+					const auto in = gid / m;
 
-					const auto memory_index = im + ld * in + stride * ib;
-					v = ptr[memory_index];
+					const auto memory_index = im + ld * in;
+					v = local_mat_ptr[memory_index];
 				} else {
 					v = 0;
 				}
 				vec[i] = v;
 			}
+		}
 
-			for (unsigned i = 0; i < VEC_LEN; i++) {
-				const auto v = vec[i];
-				if (v > ignore_threshold) {
-					local_total_counter++;
-					if (v < lose_threshold) {
-						local_lose_counter++;
-					}
+		for (unsigned i = 0; i < VEC_LEN; i++) {
+			const auto v = vec[i];
+			if (v > ignore_threshold) {
+				local_total_counter++;
+				if (v < lose_threshold) {
+					local_lose_counter++;
 				}
 			}
 		}
+		break;
 	}
 
 	for (std::uint32_t offset = warp_size >> 1; offset >= 1; offset >>= 1) {
@@ -228,11 +230,11 @@ void cumpsgemm::exp_stats::exp_stats_ext(
 			buffer_id
 			);
 
-	constexpr unsigned VEC_LEN = 4;
+	constexpr unsigned VEC_LEN = 8;
 
-	constexpr auto block_size = 256;
+	constexpr auto block_size = 1024;
 	const dim3 grid_size(
-			std::min<std::uint64_t>(((1lu * m * n + block_size - 1) / block_size + VEC_LEN - 1) / VEC_LEN, handle->num_sms * 8),
+			std::min<std::uint64_t>(((1lu * m * n + block_size - 1) / block_size + VEC_LEN - 1) / VEC_LEN, handle->num_sms),
 			batch_size
 			);
 

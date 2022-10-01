@@ -180,6 +180,7 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 			"), shape=(" + std::to_string(m) + ", " + std::to_string(n) + ", " + std::to_string(k) + "), mode=" + cuMpSGEMM_get_compute_mode_string(compute_mode) +
 			"[" + (hijack_mode == dynamic_mode ? "dynamic" : "static") + "][exp_stats:" + (cumpsgemm::hijack_control::get_internal_global_handle()->exp_stats_handle->enabled ? "1" : "0") + "]");
 
+	cublasStatus_t res;
 	if (compute_mode == CUMPSGEMM_CUBLAS || compute_mode == CUMPSGEMM_CUBLAS_FP16TC || compute_mode == CUMPSGEMM_CUBLAS_TF32TC || compute_mode == CUMPSGEMM_CUBLAS_SIMT) {
 		cublasMath_t math_mode;
 		cublasGetMathMode(cublas_handle, &math_mode);
@@ -199,35 +200,37 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 		if (func_ptr == nullptr) {
 			cuMpSGEMM_error(std::string("Could not load cuBLAS function \"") + func_name + "\"");
 		}
-		const auto res = (*func_ptr)(cublas_handle, op_A, op_B, m, n, k, alpha, a_dmem_ptr, lda, b_dmem_ptr, ldb, beta, c_dmem_ptr, ldc);
+		res = (*func_ptr)(cublas_handle, op_A, op_B, m, n, k, alpha, a_dmem_ptr, lda, b_dmem_ptr, ldb, beta, c_dmem_ptr, ldc);
 
 		// restore math mode
 		cublasSetMathMode(cublas_handle, math_mode);
 
-		if (cumpsgemm::hijack_control::get_internal_global_handle()->exp_stats_handle->enabled) {
-			cumpsgemm::exp_stats::exp_stats_ext(
-					cumpsgemm::hijack_control::get_internal_global_handle(),
-					m, n,
-					c_dmem_ptr, ldc,
-					1,
-					0
-					);
-		}
-
-		return res;
+	} else {
+		res = cumpsgemm::gemm<T>(
+				cuMpSGEMM_get_internal_global_handle(),
+				op_A, op_B,
+				m, n, k,
+				alpha,
+				a_dmem_ptr, lda,
+				b_dmem_ptr, ldb,
+				beta,
+				c_dmem_ptr, ldc,
+				compute_mode
+				);
 	}
 
-	return cumpsgemm::gemm<T>(
-			cuMpSGEMM_get_internal_global_handle(),
-			op_A, op_B,
-			m, n, k,
-			alpha,
-			a_dmem_ptr, lda,
-			b_dmem_ptr, ldb,
-			beta,
-			c_dmem_ptr, ldc,
-			compute_mode
-			);
+
+	if (cumpsgemm::hijack_control::get_internal_global_handle()->exp_stats_handle->enabled) {
+		cumpsgemm::exp_stats::exp_stats_ext(
+				cumpsgemm::hijack_control::get_internal_global_handle(),
+				m, n,
+				c_dmem_ptr, ldc,
+				1,
+				0
+				);
+	}
+
+	return res;
 }
 
 template <class T>
@@ -266,6 +269,7 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 			"), shape=(" + std::to_string(m) + ", " + std::to_string(n) + ", " + std::to_string(k) + "), batch=" + std::to_string(batch_count) + ", mode=" + cuMpSGEMM_get_compute_mode_string(compute_mode) +
 			"[" + (hijack_mode == dynamic_mode ? "dynamic" : "static") + "][exp_stats:" + (cumpsgemm::hijack_control::get_internal_global_handle()->exp_stats_handle->enabled ? "1" : "0") + "]");
 
+	cublasStatus_t res;
 	if (compute_mode == CUMPSGEMM_CUBLAS || compute_mode == CUMPSGEMM_CUBLAS_FP16TC || compute_mode == CUMPSGEMM_CUBLAS_TF32TC || compute_mode == CUMPSGEMM_CUBLAS_SIMT) {
 		cublasMath_t math_mode;
 		cublasGetMathMode(cublas_handle, &math_mode);
@@ -285,33 +289,34 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 		if (func_ptr == nullptr) {
 			cuMpSGEMM_error(std::string("Could not load cuBLAS function \"") + func_name + "\"");
 		}
-		const auto res = (*func_ptr)(cublas_handle, op_A, op_B, m, n, k, alpha, a_dmem_ptr, lda, stridea, b_dmem_ptr, ldb, strideb, beta, c_dmem_ptr, ldc, stridec, batch_count);
+		res = (*func_ptr)(cublas_handle, op_A, op_B, m, n, k, alpha, a_dmem_ptr, lda, stridea, b_dmem_ptr, ldb, strideb, beta, c_dmem_ptr, ldc, stridec, batch_count);
 		cublasSetMathMode(cublas_handle, math_mode);
+	} else {
 
-		if (cumpsgemm::hijack_control::get_internal_global_handle()->exp_stats_handle->enabled) {
-			cumpsgemm::exp_stats::exp_stats_ext(
-					cumpsgemm::hijack_control::get_internal_global_handle(),
-					m, n,
-					c_dmem_ptr, ldc,
-					batch_count,
-					stridec
-					);
-		}
-		return res;
+		res = cumpsgemm::gemm_stridedBatch<T>(
+				cuMpSGEMM_get_internal_global_handle(),
+				op_A, op_B,
+				m, n, k,
+				alpha,
+				a_dmem_ptr, lda, stridea,
+				b_dmem_ptr, ldb, strideb,
+				beta,
+				c_dmem_ptr, ldc, stridec,
+				batch_count,
+				compute_mode
+				);
 	}
 
-	return cumpsgemm::gemm_stridedBatch<T>(
-			cuMpSGEMM_get_internal_global_handle(),
-			op_A, op_B,
-			m, n, k,
-			alpha,
-			a_dmem_ptr, lda, stridea,
-			b_dmem_ptr, ldb, strideb,
-			beta,
-			c_dmem_ptr, ldc, stridec,
-			batch_count,
-			compute_mode
-			);
+	if (cumpsgemm::hijack_control::get_internal_global_handle()->exp_stats_handle->enabled) {
+		cumpsgemm::exp_stats::exp_stats_ext(
+				cumpsgemm::hijack_control::get_internal_global_handle(),
+				m, n,
+				c_dmem_ptr, ldc,
+				batch_count,
+				stridec
+				);
+	}
+	return res;
 }
 
 // cuBLAS functions

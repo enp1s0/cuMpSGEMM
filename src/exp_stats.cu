@@ -46,16 +46,13 @@ std::pair<std::size_t, std::size_t> cumpsgemm::exp_stats::get_exp_stats(
 		//}
 	}
 	const auto end_clock = std::chrono::system_clock::now();
-	std::printf("[%s] nanosec to get exp_stats result = %lu\n", __func__, std::chrono::duration_cast<std::chrono::nanoseconds>(end_clock - start_clock).count());
 
 	if (timeout) {
-		std::printf("[%s] time out\n", __func__);
 		return std::pair<std::size_t, std::size_t>{
 			1, 1
 		};
 	}
 
-	std::printf("[%s] : %e\n", __func__, p1[buffer_id].y / static_cast<float>(p1[buffer_id].x));
 	return std::pair<std::size_t, std::size_t>{
 		p1[buffer_id].y,
 		p1[buffer_id].x

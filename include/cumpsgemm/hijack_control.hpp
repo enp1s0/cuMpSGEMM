@@ -18,6 +18,14 @@ void set_exp_stats_params(
 		const float ignore_threshold,
 		const float lost_threshold
 		);
+void exp_stats(
+		const unsigned m,
+		const unsigned n,
+		const float* const ptr,
+		const unsigned ld,
+		const unsigned batch_size = 1,
+		const unsigned stride = 0
+		);
 bool is_exp_stats_enabled();
 } // namespace hijack_control
 } // namespace cumpsgemm

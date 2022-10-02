@@ -111,7 +111,8 @@ void cumpsgemm::exp_stats::init_counter (
 std::uint32_t cumpsgemm::exp_stats::get_next_buffer_id(
 		cuMpSGEMM_handle* handle
 		) {
-	const auto next = ++(handle->exp_stats_handle->current_buffer_id);
+	handle->exp_stats_handle->current_buffer_id++;
+	const auto next = handle->exp_stats_handle->current_buffer_id;
 	if (next < handle->exp_stats_handle->buffer_length) {
 		return next;
 	}

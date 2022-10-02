@@ -252,6 +252,16 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 			handle->cuda_stream
 			);
 
+	if (handle->exp_stats_handle->enabled) {
+		cumpsgemm::exp_stats::exp_stats_ext(
+				handle,
+				m, n,
+				c_dmem_ptr, ldc,
+				batch_count,
+				stridec
+				);
+	}
+
 	return CUBLAS_STATUS_SUCCESS;
 }
 

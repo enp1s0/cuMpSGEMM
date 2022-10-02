@@ -442,40 +442,29 @@ cublasStatus_t cublasGemmEx(cublasHandle_t handle, cublasOperation_t transa,
 														void *C, cudaDataType_t Ctype, int ldc,
 														cublasComputeType_t computeType,
 														cublasGemmAlgo_t algo) {
-	cuMpSGEMM_compute_mode_t compute_mode =
-		cuMpSGEMM_get_compute_mode_internal(
-				__func__,
+	if (Atype == CUDA_R_32F && Btype == CUDA_R_32F && Ctype == CUDA_R_32F) {
+		return cublasSgemm(
 				handle,
-				transa,
-				transb,
-				m, n, k
+				transa, transb,
+				m, n, k,
+				reinterpret_cast<const float*>(alpha),
+				reinterpret_cast<const float*>(A), lda,
+				reinterpret_cast<const float*>(B), ldb,
+				reinterpret_cast<const float*>(beta),
+				reinterpret_cast<float*>(C), ldc
 				);
-
-	if (compute_mode != CUMPSGEMM_CUBLAS) {
-		if (Atype == CUDA_R_32F && Btype == CUDA_R_32F && Ctype == CUDA_R_32F) {
-			return cublasSgemm(
-					handle,
-					transa, transb,
-					m, n, k,
-					reinterpret_cast<const float*>(alpha),
-					reinterpret_cast<const float*>(A), lda,
-					reinterpret_cast<const float*>(B), ldb,
-					reinterpret_cast<const float*>(beta),
-					reinterpret_cast<float*>(C), ldc
-					);
-		}
-		if (Atype == CUDA_C_32F && Btype == CUDA_C_32F && Ctype == CUDA_C_32F) {
-			return cublasCgemm(
-					handle,
-					transa, transb,
-					m, n, k,
-					reinterpret_cast<const cuComplex*>(alpha),
-					reinterpret_cast<const cuComplex*>(A), lda,
-					reinterpret_cast<const cuComplex*>(B), ldb,
-					reinterpret_cast<const cuComplex*>(beta),
-					reinterpret_cast<cuComplex*>(C), ldc
-					);
-		}
+	}
+	if (Atype == CUDA_C_32F && Btype == CUDA_C_32F && Ctype == CUDA_C_32F) {
+		return cublasCgemm(
+				handle,
+				transa, transb,
+				m, n, k,
+				reinterpret_cast<const cuComplex*>(alpha),
+				reinterpret_cast<const cuComplex*>(A), lda,
+				reinterpret_cast<const cuComplex*>(B), ldb,
+				reinterpret_cast<const cuComplex*>(beta),
+				reinterpret_cast<cuComplex*>(C), ldc
+				);
 	}
 	cublasStatus_t (*func_ptr)(cublasHandle_t, cublasOperation_t, cublasOperation_t, int, int, int, const void*, const void*, cudaDataType_t, int, const void*, cudaDataType_t, int, const void*, void*, cudaDataType_t, int, cublasComputeType_t, cublasGemmAlgo_t);
 	*(void**)(&func_ptr) = cuMpSGEMM_get_function_pointer(
@@ -483,25 +472,6 @@ cublasStatus_t cublasGemmEx(cublasHandle_t handle, cublasOperation_t transa,
 			__func__
 			);
 	const auto res = (*func_ptr)(handle, transa, transb, m, n, k, alpha, A, Atype, lda, B, Btype, ldb, beta, C, Ctype, ldc, computeType, algo);
-
-	if (Atype == CUDA_R_32F && Btype == CUDA_R_32F && Ctype == CUDA_R_32F) {
-		cumpsgemm::exp_stats::exp_stats_ext(
-				cumpsgemm::hijack_control::get_internal_global_handle(),
-				m, n,
-				reinterpret_cast<const float*>(C), ldc,
-				1,
-				0
-				);
-	} else if (Atype == CUDA_C_32F && Btype == CUDA_C_32F && Ctype == CUDA_C_32F) {
-		cumpsgemm::exp_stats::exp_stats_ext(
-				cumpsgemm::hijack_control::get_internal_global_handle(),
-				m, n,
-				reinterpret_cast<const cuComplex*>(C), ldc,
-				1,
-				0
-				);
-	}
-
 	return res;
 }
 
@@ -514,42 +484,31 @@ cublasStatus_t cublasGemmStridedBatchedEx(cublasHandle_t handle, cublasOperation
 														int batch_count,
 														cublasComputeType_t computeType,
 														cublasGemmAlgo_t algo) {
-	cuMpSGEMM_compute_mode_t compute_mode =
-		cuMpSGEMM_get_compute_mode_internal(
-				__func__,
+	if (Atype == CUDA_R_32F && Btype == CUDA_R_32F && Ctype == CUDA_R_32F) {
+		return cublasSgemmStridedBatched(
 				handle,
-				transa,
-				transb,
-				m, n, k
+				transa, transb,
+				m, n, k,
+				reinterpret_cast<const float*>(alpha),
+				reinterpret_cast<const float*>(A), lda, strideA,
+				reinterpret_cast<const float*>(B), ldb, strideB,
+				reinterpret_cast<const float*>(beta),
+				reinterpret_cast<float*>(C), ldc, strideC,
+				batch_count
 				);
-
-	if (compute_mode != CUMPSGEMM_CUBLAS) {
-		if (Atype == CUDA_R_32F && Btype == CUDA_R_32F && Ctype == CUDA_R_32F) {
-			return cublasSgemmStridedBatched(
-					handle,
-					transa, transb,
-					m, n, k,
-					reinterpret_cast<const float*>(alpha),
-					reinterpret_cast<const float*>(A), lda, strideA,
-					reinterpret_cast<const float*>(B), ldb, strideB,
-					reinterpret_cast<const float*>(beta),
-					reinterpret_cast<float*>(C), ldc, strideC,
-					batch_count
-					);
-		}
-		if (Atype == CUDA_C_32F && Btype == CUDA_C_32F && Ctype == CUDA_C_32F) {
-			return cublasCgemmStridedBatched(
-					handle,
-					transa, transb,
-					m, n, k,
-					reinterpret_cast<const cuComplex*>(alpha),
-					reinterpret_cast<const cuComplex*>(A), lda, strideA,
-					reinterpret_cast<const cuComplex*>(B), ldb, strideB,
-					reinterpret_cast<const cuComplex*>(beta),
-					reinterpret_cast<cuComplex*>(C), ldc, strideC,
-					batch_count
-					);
-		}
+	}
+	if (Atype == CUDA_C_32F && Btype == CUDA_C_32F && Ctype == CUDA_C_32F) {
+		return cublasCgemmStridedBatched(
+				handle,
+				transa, transb,
+				m, n, k,
+				reinterpret_cast<const cuComplex*>(alpha),
+				reinterpret_cast<const cuComplex*>(A), lda, strideA,
+				reinterpret_cast<const cuComplex*>(B), ldb, strideB,
+				reinterpret_cast<const cuComplex*>(beta),
+				reinterpret_cast<cuComplex*>(C), ldc, strideC,
+				batch_count
+				);
 	}
 	cublasStatus_t (*func_ptr)(cublasHandle_t, cublasOperation_t, cublasOperation_t, int, int, int, const void*, const void*, cudaDataType_t, int, long long int, const void*, cudaDataType_t, int, long long int, const void*, void*, cudaDataType_t, int, long long int, int, cublasComputeType_t, cublasGemmAlgo_t);
 	*(void**)(&func_ptr) = cuMpSGEMM_get_function_pointer(
@@ -557,24 +516,6 @@ cublasStatus_t cublasGemmStridedBatchedEx(cublasHandle_t handle, cublasOperation
 			__func__
 			);
 	const auto res = (*func_ptr)(handle, transa, transb, m, n, k, alpha, A, Atype, lda, strideA, B, Btype, ldb, strideB, beta, C, Ctype, ldc, strideC, batch_count, computeType, algo);
-
-	if (Atype == CUDA_R_32F && Btype == CUDA_R_32F && Ctype == CUDA_R_32F) {
-		cumpsgemm::exp_stats::exp_stats_ext(
-				cumpsgemm::hijack_control::get_internal_global_handle(),
-				m, n,
-				reinterpret_cast<const float*>(C), ldc,
-				batch_count,
-				strideC
-				);
-	} else if (Atype == CUDA_C_32F && Btype == CUDA_C_32F && Ctype == CUDA_C_32F) {
-		cumpsgemm::exp_stats::exp_stats_ext(
-				cumpsgemm::hijack_control::get_internal_global_handle(),
-				m, n,
-				reinterpret_cast<const cuComplex*>(C), ldc,
-				batch_count,
-				strideC
-				);
-	}
 	return res;
 }
 } // extern "C"

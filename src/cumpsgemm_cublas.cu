@@ -567,3 +567,19 @@ bool cumpsgemm::hijack_control::is_exp_stats_enabled() {
 void cumpsgemm::hijack_control::reset_buffer_id() {
 	cumpsgemm::exp_stats::reset_buffer_id(get_internal_global_handle());
 }
+
+void cumpsgemm::hijack_control::exp_stats(
+		const unsigned m,
+		const unsigned n,
+		const float* const ptr,
+		const unsigned ld,
+		const unsigned batch_size,
+		const unsigned stride
+		) {
+	cumpsgemm::exp_stats::exp_stats_ext(
+			get_internal_global_handle(),
+			m, n,
+			ptr, ld,
+			batch_size, stride
+			);
+}

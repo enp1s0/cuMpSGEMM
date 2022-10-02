@@ -8,8 +8,7 @@ struct exp_stats_handle {
 
 	cumpsgemm::counter_t* dev_total_counter_buffer;
 	cumpsgemm::counter_t* dev_lost_counter_buffer;
-	cumpsgemm::counter_t* host_total_counter_buffer;
-	cumpsgemm::counter_t* host_lost_counter_buffer;
+	ulong2* host_counter_buffer;
 	static constexpr cumpsgemm::counter_t buffer_empty_value = ~0llu;
 
 	float ignore_threshold;

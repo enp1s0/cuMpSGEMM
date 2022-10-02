@@ -115,6 +115,8 @@ extern "C" const char* cuMpSGEMM_get_compute_mode_string (
 		return "CUBLAS_FP16TC";
 	case CUMPSGEMM_CUBLAS_TF32TC:
 		return "CUBLAS_TF32TC";
+	case CUMPSGEMM_DRY_RUN:
+		return "DRY_RUN";
 	}
 	return "Unknown";
 }
@@ -180,7 +182,12 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 			"), shape=(" + std::to_string(m) + ", " + std::to_string(n) + ", " + std::to_string(k) + "), mode=" + cuMpSGEMM_get_compute_mode_string(compute_mode) +
 			"[" + (hijack_mode == dynamic_mode ? "dynamic" : "static") + "][exp_stats:" + (cumpsgemm::hijack_control::get_internal_global_handle()->exp_stats_handle->enabled ? "1" : "0") + "]");
 
+	if (compute_mode == CUMPSGEMM_DRY_RUN) {
+		return CUBLAS_STATUS_SUCCESS;
+	}
+
 	cublasStatus_t res;
+
 	if (compute_mode == CUMPSGEMM_CUBLAS || compute_mode == CUMPSGEMM_CUBLAS_FP16TC || compute_mode == CUMPSGEMM_CUBLAS_TF32TC || compute_mode == CUMPSGEMM_CUBLAS_SIMT) {
 		cublasMath_t math_mode;
 		cublasGetMathMode(cublas_handle, &math_mode);
@@ -268,7 +275,12 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 			"), shape=(" + std::to_string(m) + ", " + std::to_string(n) + ", " + std::to_string(k) + "), batch=" + std::to_string(batch_count) + ", mode=" + cuMpSGEMM_get_compute_mode_string(compute_mode) +
 			"[" + (hijack_mode == dynamic_mode ? "dynamic" : "static") + "][exp_stats:" + (cumpsgemm::hijack_control::get_internal_global_handle()->exp_stats_handle->enabled ? "1" : "0") + "]");
 
+	if (compute_mode == CUMPSGEMM_DRY_RUN) {
+		return CUBLAS_STATUS_SUCCESS;
+	}
+
 	cublasStatus_t res;
+
 	if (compute_mode == CUMPSGEMM_CUBLAS || compute_mode == CUMPSGEMM_CUBLAS_FP16TC || compute_mode == CUMPSGEMM_CUBLAS_TF32TC || compute_mode == CUMPSGEMM_CUBLAS_SIMT) {
 		cublasMath_t math_mode;
 		cublasGetMathMode(cublas_handle, &math_mode);

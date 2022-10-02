@@ -28,6 +28,8 @@ extern "C" cuMpSGEMM_compute_mode_t cuMpSGEMM_get_compute_mode (
 			return CUMPSGEMM_CUBLAS_FP16TC;
 		if (env_val_str == "CUBLAS_SIMT")
 			return CUMPSGEMM_CUBLAS_SIMT;
+		if (env_val_str == "DRY_RUN")
+			return CUMPSGEMM_DRY_RUN;
 	}
 
 	return CUMPSGEMM_CUBLAS;

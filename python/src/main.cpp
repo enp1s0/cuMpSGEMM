@@ -4,6 +4,7 @@
 
 double global_lost_ratio_threshold = 0.1;
 int global_auto_kernel_selection_enabled = 0;
+unsigned global_cublas_dim_threshold = 128;
 
 namespace cumpsgemm {
 namespace hijack_control {
@@ -87,6 +88,14 @@ unsigned get_current_buffer_id() {
 	return cumpsgemm::hijack_control::get_current_buffer_id();
 }
 
+unsigned get_global_cublas_dim_threshold() {
+	return global_cublas_dim_threshold;
+}
+
+void set_global_cublas_dim_threshold(const unsigned dim) {
+	global_cublas_dim_threshold = dim;
+}
+
 PYBIND11_MODULE(cumpsgemm_hijack_control, m) {
 	m.doc() = "cuMpSGEMM hijack control API";
 
@@ -104,6 +113,10 @@ PYBIND11_MODULE(cumpsgemm_hijack_control, m) {
 	m.def("enable_auto_kernel_selection"    , &enable_auto_kernel_selection    , "enable_auto_kernel_selection");
 	m.def("disable_auto_kernel_selection"   , &disable_auto_kernel_selection   , "disable_auto_kernel_selection");
 	m.def("is_auto_kernel_selection_enabled", &is_auto_kernel_selection_enabled, "is_auto_kernel_selection_enabled");
+	m.def("set_global_cublas_dim_threshold" , &set_global_cublas_dim_threshold , "set_global_cublas_dim_threshold", pybind11::arg("dim"));
+	m.def("get_global_cublas_dim_threshold" , &get_global_cublas_dim_threshold , "get_global_cublas_dim_threshold");
+
+
 
 	pybind11::enum_<cuMpSGEMM_compute_mode_t>(m, "compute_mode")
 		.value("CUMPSGEMM_CUBLAS"       , CUMPSGEMM_CUBLAS       )

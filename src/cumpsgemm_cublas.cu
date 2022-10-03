@@ -6,6 +6,7 @@
 #include <cumpsgemm/hijack_control.hpp>
 #include "handle.hpp"
 #include "exp_stats.hpp"
+#include "dynamic_launch.hpp"
 
 namespace {
 
@@ -630,4 +631,65 @@ void cumpsgemm::hijack_control::set_last_called_function_str(
 
 void cumpsgemm::hijack_control::clear_last_called_function_str() {
 	cumpsgemm::hijack_control::set_last_called_function_str("");
+}
+
+unsigned cumpsgemm::hijack_control::get_next_dynamic_launch_flag_buffer_id() {
+	return cumpsgemm::dynamic_launch::get_next_dynamic_launch_flag_buffer_id(get_internal_global_handle());
+}
+
+void cumpsgemm::hijack_control::set_dynamic_launch_flag_buffer_id(unsigned id) {
+	cumpsgemm::dynamic_launch::set_dynamic_launch_flag_buffer_id(get_internal_global_handle(), id);
+}
+
+void cumpsgemm::hijack_control::unset_dynamic_launch_flag_buffer_id() {
+	cumpsgemm::dynamic_launch::unset_dynamic_launch_flag_buffer_id(get_internal_global_handle());
+}
+
+namespace {
+__global__ void dynamic_launch_flag_buffer_id_by_exp_stats_kernel(
+		int* const flag_buffer_ptr,
+		const cumpsgemm::counter_t* const total_counter_A_ptr,
+		const cumpsgemm::counter_t* const lost_counter_A_ptr,
+		const cumpsgemm::counter_t* const total_counter_B_ptr,
+		const cumpsgemm::counter_t* const lost_counter_B_ptr,
+		const float rate_threshold
+		) {
+	const auto pA = (static_cast<float>(*lost_counter_A_ptr) / *total_counter_A_ptr) < rate_threshold;
+	const auto pB = (static_cast<float>(*lost_counter_B_ptr) / *total_counter_B_ptr) < rate_threshold;
+	if (pA && pB) {
+		*flag_buffer_ptr = 0;
+	} else {
+		*flag_buffer_ptr = 1;
+	}
+}
+} // unnamed namespace
+
+void cumpsgemm::hijack_control::dynamic_launch_flag_buffer_id_by_exp_stats(
+		const unsigned exp_stats_buffer_id_A,
+		const unsigned exp_stats_buffer_id_B,
+		const unsigned dynamic_launch_flag_buffer_id,
+		const float ratio_threshold
+		) {
+	const auto handle = get_internal_global_handle();
+	const auto cuda_stream = handle->cuda_stream;
+
+	dynamic_launch_flag_buffer_id_by_exp_stats_kernel<<<1, 1, 0, cuda_stream>>>(
+			handle->dynamic_launch_handle->frag_buffer + dynamic_launch_flag_buffer_id,
+			handle->exp_stats_handle->dev_total_counter_buffer + exp_stats_buffer_id_A,
+			handle->exp_stats_handle->dev_lost_counter_buffer  + exp_stats_buffer_id_A,
+			handle->exp_stats_handle->dev_total_counter_buffer + exp_stats_buffer_id_B,
+			handle->exp_stats_handle->dev_lost_counter_buffer  + exp_stats_buffer_id_B,
+			ratio_threshold
+			);
+}
+
+void cumpsgemm::hijack_control::set_dynamic_compute_mode_AB(
+		const cuMpSGEMM_compute_mode_t mode_A,
+		const cuMpSGEMM_compute_mode_t mode_B
+		) {
+	cumpsgemm::dynamic_launch::set_compute_mode_AB(
+			get_internal_global_handle(),
+			mode_A,
+			mode_B
+			);
 }

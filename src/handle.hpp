@@ -66,6 +66,9 @@ constexpr code_t max_code = 0b1'11'11'11 + 1;
 namespace exp_stats {
 struct exp_stats_handle;
 } // namespace exp_stats
+namespace dynamic_launch {
+struct dynamic_launch_handle;
+} // namespace dynamic_launch
 } // namespace cumpsgemm
 
 struct cuMpSGEMM_handle {
@@ -81,11 +84,21 @@ struct cuMpSGEMM_handle {
 
 	// For exp stats
 	cumpsgemm::exp_stats::exp_stats_handle* exp_stats_handle;
+
+	// For dynamic launch
+	cumpsgemm::dynamic_launch::dynamic_launch_handle* dynamic_launch_handle;
 };
 
 void init_exp_stats_counter_buffer(
 		cuMpSGEMM_handle* handle
 		);
 void destroy_exp_stats_counter_buffer(
+		cuMpSGEMM_handle* handle
+		);
+
+void init_dynamic_launch_flag_buffer(
+		cuMpSGEMM_handle* handle
+		);
+void destroy_launch_flag_buffer(
 		cuMpSGEMM_handle* handle
 		);

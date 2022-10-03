@@ -7,6 +7,7 @@
 
 #include "handle.hpp"
 #include "exp_stats.hpp"
+#include "dynamic_launch.hpp"
 
 // For debug
 //#define CUMPSGEMM_CHECK_KERNEL_ERROR
@@ -129,10 +130,10 @@ __global__ void launch_kernel_kernel (
 			const T* const b_ptr, const std::size_t ldb,
 			const T beta,
 			T* const c_ptr, const std::size_t ldc,
-			const int* const launch_kernel_A
+			const int* const launch_kernel_A_flag
 		) {
 	cumpsgemm::gemm_module gemm_module;
-	if (*launch_kernel_A) {
+	if (*launch_kernel_A_flag) {
 		gemm_module = gemm_module_A;
 	} else {
 		gemm_module = gemm_module_B;
@@ -282,34 +283,80 @@ cublasStatus_t cumpsgemm::gemm(
 		const cuMpSGEMM_compute_mode_t compute_mode,
 		unsigned* const used_kernel_modeule_id
 		) {
-	const auto code = gen_module_code<T>(op_A, op_B, compute_mode);
 
-	const auto kernel_module_candidate_list = handle->gemm_module[code];
+	if (!handle->dynamic_launch_handle->enabled) {
+		const auto code = gen_module_code<T>(op_A, op_B, compute_mode);
 
-	unsigned module_id;
-	auto gemm_module = kernel_module_candidate_list[handle->num_kernel_candidates - 1];
-	for (module_id = 0; module_id < handle->num_kernel_candidates - 1; module_id++) {
-		const auto module = kernel_module_candidate_list[module_id];
-		if (m * n / (module.smem_m * module.smem_n) > handle->num_sms * 2 /*A magic number :) */) {
-			gemm_module = module;
-			break;
+		const auto kernel_module_candidate_list = handle->gemm_module[code];
+
+		unsigned module_id;
+		auto gemm_module = kernel_module_candidate_list[handle->num_kernel_candidates - 1];
+		for (module_id = 0; module_id < handle->num_kernel_candidates - 1; module_id++) {
+			const auto module = kernel_module_candidate_list[module_id];
+			if (m * n / (module.smem_m * module.smem_n) > handle->num_sms * 2 /*A magic number :) */) {
+				gemm_module = module;
+				break;
+			}
 		}
-	}
 
-	if (used_kernel_modeule_id != nullptr) {
-		*used_kernel_modeule_id = module_id;
-	}
+		if (used_kernel_modeule_id != nullptr) {
+			*used_kernel_modeule_id = module_id;
+		}
 
-	launch_kernel<T>(
-			gemm_module,
-			m, n, k,
-			*alpha,
-			a_dmem_ptr, lda,
-			b_dmem_ptr, ldb,
-			*beta,
-			c_dmem_ptr, ldc,
-			handle->cuda_stream
-			);
+		launch_kernel<T>(
+				gemm_module,
+				m, n, k,
+				*alpha,
+				a_dmem_ptr, lda,
+				b_dmem_ptr, ldb,
+				*beta,
+				c_dmem_ptr, ldc,
+				handle->cuda_stream
+				);
+	} else {
+		const auto code_A = gen_module_code<T>(op_A, op_B, handle->dynamic_launch_handle->mode_A);
+		const auto code_B = gen_module_code<T>(op_A, op_B, handle->dynamic_launch_handle->mode_B);
+
+		const auto kernel_module_candidate_list_A = handle->gemm_module[code_A];
+		const auto kernel_module_candidate_list_B = handle->gemm_module[code_B];
+
+		unsigned module_id;
+		auto gemm_module_A = kernel_module_candidate_list_A[handle->num_kernel_candidates - 1];
+		auto gemm_module_B = kernel_module_candidate_list_B[handle->num_kernel_candidates - 1];
+
+		for (module_id = 0; module_id < handle->num_kernel_candidates - 1; module_id++) {
+			const auto module = kernel_module_candidate_list_A[module_id];
+			if (m * n / (module.smem_m * module.smem_n) > handle->num_sms * 2 /*A magic number :) */) {
+				gemm_module_A = module;
+				break;
+			}
+		}
+
+		for (module_id = 0; module_id < handle->num_kernel_candidates - 1; module_id++) {
+			const auto module = kernel_module_candidate_list_B[module_id];
+			if (m * n / (module.smem_m * module.smem_n) > handle->num_sms * 2 /*A magic number :) */) {
+				gemm_module_B = module;
+				break;
+			}
+		}
+
+		if (used_kernel_modeule_id != nullptr) {
+			*used_kernel_modeule_id = ~0u;
+		}
+
+		launch_launch_kernel_kernel<T>(
+				gemm_module_A,
+				gemm_module_B,
+				m, n, k,
+				*alpha,
+				a_dmem_ptr, lda,
+				b_dmem_ptr, ldb,
+				*beta,
+				c_dmem_ptr, ldc,
+				handle->dynamic_launch_handle->frag_buffer + handle->dynamic_launch_handle->enabled_id,
+				handle->cuda_stream
+				);
+	}
 	if (handle->exp_stats_handle->enabled) {
 		cumpsgemm::exp_stats::exp_stats_ext(
 				handle,
@@ -341,10 +388,6 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 		const cuMpSGEMM_compute_mode_t compute_mode,
 		unsigned* const used_kernel_modeule_id
 		) {
-	const auto code = gen_module_code<T>(op_A, op_B, compute_mode);
-
-	const auto kernel_module_candidate_list = handle->gemm_stridedBatch_module[code];
-
 	if (m * n > (1lu << 24)) {
 		const auto orig_exp_stats_enabled = handle->exp_stats_handle->enabled;
 		handle->exp_stats_handle->enabled = 0;
@@ -375,31 +418,81 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 		return CUBLAS_STATUS_SUCCESS;
 	}
 
-	unsigned module_id;
-	auto gemm_module = kernel_module_candidate_list[handle->num_kernel_candidates - 1];
-	for (module_id = 0; module_id < handle->num_kernel_candidates - 1; module_id++) {
-		const auto module = kernel_module_candidate_list[module_id];
-		if (m * n / (module.smem_m * module.smem_n) * batch_count > handle->num_sms * 2 /*A magic number :) */) {
-			gemm_module = module;
-			break;
+	if (!handle->dynamic_launch_handle->enabled) {
+		const auto code = gen_module_code<T>(op_A, op_B, compute_mode);
+
+		const auto kernel_module_candidate_list = handle->gemm_stridedBatch_module[code];
+
+		unsigned module_id;
+		auto gemm_module = kernel_module_candidate_list[handle->num_kernel_candidates - 1];
+		for (module_id = 0; module_id < handle->num_kernel_candidates - 1; module_id++) {
+			const auto module = kernel_module_candidate_list[module_id];
+			if (m * n / (module.smem_m * module.smem_n) * batch_count > handle->num_sms * 2 /*A magic number :) */) {
+				gemm_module = module;
+				break;
+			}
 		}
-	}
 
-	if (used_kernel_modeule_id != nullptr) {
-		*used_kernel_modeule_id = module_id;
-	}
+		if (used_kernel_modeule_id != nullptr) {
+			*used_kernel_modeule_id = module_id;
+		}
 
-	launch_kernel<T>(
-			gemm_module,
-			m, n, k,
-			*alpha,
-			a_dmem_ptr, lda, stridea,
-			b_dmem_ptr, ldb, strideb,
-			*beta,
-			c_dmem_ptr, ldc, stridec,
-			batch_count,
-			handle->cuda_stream
-			);
+		launch_kernel<T>(
+				gemm_module,
+				m, n, k,
+				*alpha,
+				a_dmem_ptr, lda, stridea,
+				b_dmem_ptr, ldb, strideb,
+				*beta,
+				c_dmem_ptr, ldc, stridec,
+				batch_count,
+				handle->cuda_stream
+				);
+	} else {
+		const auto code_A = gen_module_code<T>(op_A, op_B, handle->dynamic_launch_handle->mode_A);
+		const auto code_B = gen_module_code<T>(op_A, op_B, handle->dynamic_launch_handle->mode_B);
+
+		const auto kernel_module_candidate_list_A = handle->gemm_stridedBatch_module[code_A];
+		const auto kernel_module_candidate_list_B = handle->gemm_stridedBatch_module[code_B];
+
+		unsigned module_id;
+		auto gemm_module_A = kernel_module_candidate_list_A[handle->num_kernel_candidates - 1];
+		auto gemm_module_B = kernel_module_candidate_list_B[handle->num_kernel_candidates - 1];
+
+		for (module_id = 0; module_id < handle->num_kernel_candidates - 1; module_id++) {
+			const auto module = kernel_module_candidate_list_A[module_id];
+			if (m * n / (module.smem_m * module.smem_n) * batch_count > handle->num_sms * 2 /*A magic number :) */) {
+				gemm_module_A = module;
+				break;
+			}
+		}
+
+		for (module_id = 0; module_id < handle->num_kernel_candidates - 1; module_id++) {
+			const auto module = kernel_module_candidate_list_B[module_id];
+			if (m * n / (module.smem_m * module.smem_n) * batch_count > handle->num_sms * 2 /*A magic number :) */) {
+				gemm_module_B = module;
+				break;
+			}
+		}
+
+		if (used_kernel_modeule_id != nullptr) {
+			*used_kernel_modeule_id = ~0u;
+		}
+
+		launch_launch_kernel_kernel<T>(
+				gemm_module_A,
+				gemm_module_B,
+				m, n, k,
+				*alpha,
+				a_dmem_ptr, lda, stridea,
+				b_dmem_ptr, ldb, strideb,
+				*beta,
+				c_dmem_ptr, ldc, stridec,
+				batch_count,
+				handle->dynamic_launch_handle->frag_buffer + handle->dynamic_launch_handle->enabled_id,
+				handle->cuda_stream
+				);
+	}
 
 	if (handle->exp_stats_handle->enabled) {
 		cumpsgemm::exp_stats::exp_stats_ext(

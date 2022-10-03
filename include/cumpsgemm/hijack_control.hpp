@@ -1,4 +1,5 @@
 #pragma once
+#include <string>
 #include <vector>
 #include "detail/common.h"
 
@@ -27,5 +28,8 @@ void exp_stats(
 		const unsigned stride = 0
 		);
 bool is_exp_stats_enabled();
+std::string get_last_called_function_str();
+void set_last_called_function_str(const std::string func_str);
+void clear_last_called_function_str();
 } // namespace hijack_control
 } // namespace cumpsgemm

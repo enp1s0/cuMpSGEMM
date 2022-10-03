@@ -114,6 +114,155 @@ void launch_kernel (
 	CUTF_CHECK_ERROR(cudaStreamSynchronize(cuda_stream));
 #endif
 }
+
+// Dynamic launch
+template <class T>
+__global__ void launch_kernel_kernel (
+			const cumpsgemm::gemm_module gemm_module_A,
+			const cumpsgemm::gemm_module gemm_module_B,
+			const std::size_t m,
+			const std::size_t n,
+			const std::size_t k,
+			const T alpha,
+			const T* const a_ptr, const std::size_t lda,
+			const T* const b_ptr, const std::size_t ldb,
+			const T beta,
+			T* const c_ptr, const std::size_t ldc,
+			const int* const launch_kernel_A
+		) {
+	cumpsgemm::gemm_module gemm_module;
+	if (*launch_kernel_A) {
+		gemm_module = gemm_module_A;
+	} else {
+		gemm_module = gemm_module_B;
+	}
+
+	const auto kernel_ptr = reinterpret_cast<cumpsgemm::gemm_kernel_func_t<T>>(gemm_module.kernel_func);
+	const dim3 block_size(gemm_module.block_size);
+	const dim3 grid_size(
+			((m + gemm_module.smem_m - 1) / gemm_module.smem_m) * ((n + gemm_module.smem_n - 1) / gemm_module.smem_n)
+			);
+
+	kernel_ptr<<<grid_size, block_size, gemm_module.smem_size>>>(
+			m, n, k,
+			alpha,
+			a_ptr, lda,
+			b_ptr, ldb,
+			beta,
+			c_ptr, ldc
+			);
+#ifdef CUMPSGEMM_CHECK_KERNEL_ERROR
+	CUTF_CHECK_ERROR(cudaStreamSynchronize(cuda_stream));
+#endif
+}
+
+template <class T>
+__global__ void launch_kernel_kernel (
+			const cumpsgemm::gemm_module gemm_module_A,
+			const cumpsgemm::gemm_module gemm_module_B,
+			const std::size_t m,
+			const std::size_t n,
+			const std::size_t k,
+			const T alpha,
+			const T* const a_ptr, const std::size_t lda, const uint64_t stridea,
+			const T* const b_ptr, const std::size_t ldb, const uint64_t strideb,
+			const T beta,
+			T* const c_ptr, const std::size_t ldc, const uint64_t stridec,
+			const uint64_t batch_count,
+			const int* const launch_kernel_A
+		) {
+	cumpsgemm::gemm_module gemm_module;
+	if (*launch_kernel_A) {
+		gemm_module = gemm_module_A;
+	} else {
+		gemm_module = gemm_module_B;
+	}
+
+	const auto kernel_ptr = reinterpret_cast<cumpsgemm::gemm_stridedBatch_kernel_func_t<T>>(gemm_module.kernel_func);
+	const dim3 block_size(gemm_module.block_size);
+	const auto num_blocks_per_gemm = (m + gemm_module.smem_m - 1) / gemm_module.smem_m * (n + gemm_module.smem_n - 1) / gemm_module.smem_n;
+	const dim3 grid_size(
+			num_blocks_per_gemm * batch_count
+			);
+
+	kernel_ptr<<<grid_size, block_size, gemm_module.smem_size>>>(
+			m, n, k,
+			alpha,
+			a_ptr, lda, stridea,
+			b_ptr, ldb, strideb,
+			beta,
+			c_ptr, ldc, stridec,
+			num_blocks_per_gemm
+			);
+#ifdef CUMPSGEMM_CHECK_KERNEL_ERROR
+	CUTF_CHECK_ERROR(cudaStreamSynchronize(cuda_stream));
+#endif
+}
+
+template <class T>
+void launch_launch_kernel_kernel (
+			const cumpsgemm::gemm_module gemm_module_A,
+			const cumpsgemm::gemm_module gemm_module_B,
+			const std::size_t m,
+			const std::size_t n,
+			const std::size_t k,
+			const T alpha,
+			const T* const a_ptr, const std::size_t lda,
+			const T* const b_ptr, const std::size_t ldb,
+			const T beta,
+			T* const c_ptr, const std::size_t ldc,
+			const int* const launch_kernel_A,
+			cudaStream_t cuda_stream
+		) {
+
+	launch_kernel_kernel<<<1, 1, 0, cuda_stream>>>(
+			gemm_module_A,
+			gemm_module_B,
+			m, n, k,
+			alpha,
+			a_ptr, lda,
+			b_ptr, ldb,
+			beta,
+			c_ptr, ldc,
+			launch_kernel_A
+			);
+#ifdef CUMPSGEMM_CHECK_KERNEL_ERROR
+	CUTF_CHECK_ERROR(cudaStreamSynchronize(cuda_stream));
+#endif
+}
+
+template <class T>
+void launch_launch_kernel_kernel (
+			const cumpsgemm::gemm_module gemm_module_A,
+			const cumpsgemm::gemm_module gemm_module_B,
+			const std::size_t m,
+			const std::size_t n,
+			const std::size_t k,
+			const T alpha,
+			const T* const a_ptr, const std::size_t lda, const uint64_t stridea,
+			const T* const b_ptr, const std::size_t ldb, const uint64_t strideb,
+			const T beta,
+			T* const c_ptr, const std::size_t ldc, const uint64_t stridec,
+			const uint64_t batch_count,
+			const int* const launch_kernel_A,
+			cudaStream_t cuda_stream
+		) {
+	launch_kernel_kernel<<<1, 1, 0, cuda_stream>>>(
+			gemm_module_A,
+			gemm_module_B,
+			m, n, k,
+			alpha,
+			a_ptr, lda, stridea,
+			b_ptr, ldb, strideb,
+			beta,
+			c_ptr, ldc, stridec,
+			batch_count,
+			launch_kernel_A
+			);
+#ifdef CUMPSGEMM_CHECK_KERNEL_ERROR
+	CUTF_CHECK_ERROR(cudaStreamSynchronize(cuda_stream));
+#endif
+}
 } // unnamed namespace
 
 template <class T>

@@ -10,6 +10,7 @@
 namespace {
 
 cuMpSGEMM_handle_t internal_global_cuMpSGEMM_handle = nullptr;
+std::string internal_global_last_called_function_str = "";
 
 enum hijack_control_t {
 	static_mode,
@@ -181,6 +182,16 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 	cuMpSGEMM_log(std::string(func_name) + " op=(" + get_cublas_op_str(op_A) + ", " + get_cublas_op_str(op_B) +
 			"), shape=(" + std::to_string(m) + ", " + std::to_string(n) + ", " + std::to_string(k) + "), mode=" + cuMpSGEMM_get_compute_mode_string(compute_mode) +
 			"[" + (hijack_mode == dynamic_mode ? "dynamic" : "static") + "][exp_stats:" + (cumpsgemm::hijack_control::get_internal_global_handle()->exp_stats_handle->enabled ? "1" : "0") + "]");
+	cumpsgemm::hijack_control::set_last_called_function_str(
+			std::string(func_name) + "," +
+			get_cublas_op_str(op_A) + "," +
+			get_cublas_op_str(op_B) + "," +
+			std::to_string(m) + "," +
+			std::to_string(n) + "," +
+			std::to_string(k) + "," +
+			"1," + // batch_size
+			cuMpSGEMM_get_compute_mode_string(compute_mode)
+			);
 
 	if (compute_mode == CUMPSGEMM_DRY_RUN) {
 		return CUBLAS_STATUS_SUCCESS;
@@ -274,6 +285,17 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 	cuMpSGEMM_log(std::string(func_name) + " op=(" + get_cublas_op_str(op_A) + ", " + get_cublas_op_str(op_B) +
 			"), shape=(" + std::to_string(m) + ", " + std::to_string(n) + ", " + std::to_string(k) + "), batch=" + std::to_string(batch_count) + ", mode=" + cuMpSGEMM_get_compute_mode_string(compute_mode) +
 			"[" + (hijack_mode == dynamic_mode ? "dynamic" : "static") + "][exp_stats:" + (cumpsgemm::hijack_control::get_internal_global_handle()->exp_stats_handle->enabled ? "1" : "0") + "]");
+
+	cumpsgemm::hijack_control::set_last_called_function_str(
+			std::string(func_name) + "," +
+			get_cublas_op_str(op_A) + "," +
+			get_cublas_op_str(op_B) + "," +
+			std::to_string(m) + "," +
+			std::to_string(n) + "," +
+			std::to_string(k) + "," +
+			std::to_string(batch_count) + "," +
+			cuMpSGEMM_get_compute_mode_string(compute_mode)
+			);
 
 	if (compute_mode == CUMPSGEMM_DRY_RUN) {
 		return CUBLAS_STATUS_SUCCESS;
@@ -594,4 +616,18 @@ void cumpsgemm::hijack_control::exp_stats(
 			ptr, ld,
 			batch_size, stride
 			);
+}
+
+std::string cumpsgemm::hijack_control::get_last_called_function_str() {
+	return internal_global_last_called_function_str;
+}
+
+void cumpsgemm::hijack_control::set_last_called_function_str(
+		const std::string func_str
+		) {
+	internal_global_last_called_function_str = func_str;
+}
+
+void cumpsgemm::hijack_control::clear_last_called_function_str() {
+	cumpsgemm::hijack_control::set_last_called_function_str("");
 }

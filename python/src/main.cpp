@@ -1,3 +1,4 @@
+#include <string>
 #include <utility>
 #include <pybind11/pybind11.h>
 #include <cumpsgemm/hijack_control.hpp>
@@ -18,6 +19,9 @@ void set_exp_stats_params(const float, const float) {};
 bool is_exp_stats_enabled(){return false;};
 unsigned get_current_buffer_id() {return 0;}
 void exp_stats(const unsigned m, const unsigned n, const float* const ptr, const unsigned ld, const unsigned batch_size, const unsigned stride){};
+std::string get_last_called_function_str() {return "";};
+void set_last_called_function_str(const std::string) {}
+void clear_last_called_function_str() {};
 }
 }
 
@@ -122,6 +126,18 @@ void exp_stats(
 		);
 }
 
+std::string get_last_called_function_str() {
+	return cumpsgemm::hijack_control::get_last_called_function_str();
+}
+
+void set_last_called_function_str(const std::string func_str) {
+	cumpsgemm::hijack_control::set_last_called_function_str(func_str);
+}
+
+void clear_last_called_function_str() {
+	cumpsgemm::hijack_control::clear_last_called_function_str();
+}
+
 PYBIND11_MODULE(cumpsgemm_hijack_control, m) {
 	m.doc() = "cuMpSGEMM hijack control API";
 
@@ -144,6 +160,9 @@ PYBIND11_MODULE(cumpsgemm_hijack_control, m) {
 	m.def("set_global_cublas_dim_k_threshold"  , &set_global_cublas_dim_k_threshold  , "set_global_cublas_dim_k_threshold", pybind11::arg("dim"));
 	m.def("get_global_cublas_dim_k_threshold"  , &get_global_cublas_dim_k_threshold  , "get_global_cublas_dim_k_threshold");
 	m.def("exp_stats"                          , &exp_stats                          , "exp_stats", pybind11::arg("m"), pybind11::arg("n"), pybind11::arg("ptr"), pybind11::arg("ld"), pybind11::arg("batch_size") = 1, pybind11::arg("stride") = 0);
+	m.def("get_last_called_function_str"       , &get_last_called_function_str       , "get_last_called_function_str");
+	m.def("set_last_called_function_str"       , &set_last_called_function_str       , "set_last_called_function_str");
+	m.def("clear_last_called_function_str"     , &clear_last_called_function_str     , "clear_last_called_function_str");
 
 
 

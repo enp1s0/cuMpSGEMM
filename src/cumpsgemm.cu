@@ -6,6 +6,7 @@
 #include <cumpsgemm/cumpsgemm.hpp>
 
 #include "handle.hpp"
+#include "exp_stats.hpp"
 
 // For debug
 //#define CUMPSGEMM_CHECK_KERNEL_ERROR
@@ -140,7 +141,7 @@ cublasStatus_t cumpsgemm::gemm(
 	auto gemm_module = kernel_module_candidate_list[handle->num_kernel_candidates - 1];
 	for (module_id = 0; module_id < handle->num_kernel_candidates - 1; module_id++) {
 		const auto module = kernel_module_candidate_list[module_id];
-		if (m * n / (module.smem_m * module.smem_n) > handle->num_sms * 32 /*A magic number :) */) {
+		if (m * n / (module.smem_m * module.smem_n) > handle->num_sms * 2 /*A magic number :) */) {
 			gemm_module = module;
 			break;
 		}
@@ -160,6 +161,15 @@ cublasStatus_t cumpsgemm::gemm(
 			c_dmem_ptr, ldc,
 			handle->cuda_stream
 			);
+	if (handle->exp_stats_handle->enabled) {
+		cumpsgemm::exp_stats::exp_stats_ext(
+				handle,
+				m, n,
+				c_dmem_ptr, ldc,
+				1,
+				0	
+				);
+		}
 
 	return CUBLAS_STATUS_SUCCESS;
 }
@@ -187,6 +197,8 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 	const auto kernel_module_candidate_list = handle->gemm_stridedBatch_module[code];
 
 	if (m * n > (1lu << 24)) {
+		const auto orig_exp_stats_enabled = handle->exp_stats_handle->enabled;
+		handle->exp_stats_handle->enabled = 0;
 		for (std::uint64_t i = 0; i < batch_count; i++) {
 			cumpsgemm::gemm(
 					handle,
@@ -201,6 +213,16 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 					used_kernel_modeule_id
 					);
 		}
+		handle->exp_stats_handle->enabled = orig_exp_stats_enabled;
+		if (handle->exp_stats_handle->enabled) {
+			cumpsgemm::exp_stats::exp_stats_ext(
+					handle,
+					m, n,
+					c_dmem_ptr, ldc,
+					batch_count,
+					stridec
+					);
+		}
 		return CUBLAS_STATUS_SUCCESS;
 	}
 
@@ -208,7 +230,7 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 	auto gemm_module = kernel_module_candidate_list[handle->num_kernel_candidates - 1];
 	for (module_id = 0; module_id < handle->num_kernel_candidates - 1; module_id++) {
 		const auto module = kernel_module_candidate_list[module_id];
-		if (m * n / (module.smem_m * module.smem_n) * batch_count > handle->num_sms * 32 /*A magic number :) */) {
+		if (m * n / (module.smem_m * module.smem_n) * batch_count > handle->num_sms * 2 /*A magic number :) */) {
 			gemm_module = module;
 			break;
 		}
@@ -229,6 +251,16 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 			batch_count,
 			handle->cuda_stream
 			);
+
+	if (handle->exp_stats_handle->enabled) {
+		cumpsgemm::exp_stats::exp_stats_ext(
+				handle,
+				m, n,
+				c_dmem_ptr, ldc,
+				batch_count,
+				stridec
+				);
+	}
 
 	return CUBLAS_STATUS_SUCCESS;
 }
@@ -350,3 +382,23 @@ cublasStatus_t cuMpSGEMM_cgemm_strided_batch(
 			);
 }
 } // extern "C"
+
+
+std::pair<std::size_t, std::size_t> cumpsgemm::get_exp_stats(
+		cuMpSGEMM_handle_t handle,
+		const unsigned buffer_id
+		) {
+	return cumpsgemm::exp_stats::get_exp_stats(handle, buffer_id);
+}
+
+unsigned cumpsgemm::get_current_buffer_id(
+		cuMpSGEMM_handle_t handle
+		) {
+	return cumpsgemm::exp_stats::get_current_buffer_id(handle);
+}
+
+void cumpsgemm::reset_buffer_id(
+		cuMpSGEMM_handle_t handle
+		) {
+	cumpsgemm::exp_stats::reset_buffer_id(handle);
+}

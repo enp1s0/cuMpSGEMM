@@ -677,10 +677,15 @@ cublasStatus_t cuMpSGEMM_create(cuMpSGEMM_handle_t* const handle) {
 	SET_GEMM_STRIDEDBATCH_KERNEL_MODULE((*handle)->gemm_stridedBatch_module, cuComplex, tf32, without_ec, conjugate, conjugate, 64, 64, 32, 32, 32, 16, 128, 2, 2, false, c, 2); // Not optimized but works on any Ampere GPUs
 #endif
 #endif
+
+	init_exp_stats_counter_buffer((*handle));
+
 	return CUBLAS_STATUS_SUCCESS;
 }
 
 cublasStatus_t cuMpSGEMM_destroy(cuMpSGEMM_handle_t handle) {
+	destroy_exp_stats_counter_buffer(handle);
+
 	delete handle;
 	return CUBLAS_STATUS_SUCCESS;
 }

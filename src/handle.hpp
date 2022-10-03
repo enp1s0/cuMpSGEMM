@@ -1,8 +1,17 @@
 #pragma once
 #include <cstdint>
+#include <utility>
 #include <cuComplex.h>
 
 namespace cumpsgemm {
+namespace device {
+template <class T>
+struct element_t_conv {using type = T;};
+template <> struct element_t_conv<float2 > {using type = float;};
+} // namespace device
+// for exp stats
+using counter_t = unsigned long long int;
+
 template <class T>
 using gemm_kernel_func_t = void (*)(
 			const uint32_t,
@@ -54,6 +63,9 @@ constexpr code_t c                = 0b1'0'0'00'00;
 // ------- OR accumulation ------
 constexpr code_t max_code = 0b1'11'11'11 + 1;
 } // namespace kernel_module_code
+namespace exp_stats {
+struct exp_stats_handle;
+} // namespace exp_stats
 } // namespace cumpsgemm
 
 struct cuMpSGEMM_handle {
@@ -66,4 +78,14 @@ struct cuMpSGEMM_handle {
 
 	// cuda stream
 	cudaStream_t cuda_stream = 0;
+
+	// For exp stats
+	cumpsgemm::exp_stats::exp_stats_handle* exp_stats_handle;
 };
+
+void init_exp_stats_counter_buffer(
+		cuMpSGEMM_handle* handle
+		);
+void destroy_exp_stats_counter_buffer(
+		cuMpSGEMM_handle* handle
+		);

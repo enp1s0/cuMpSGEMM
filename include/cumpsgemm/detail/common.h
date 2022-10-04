@@ -13,5 +13,6 @@ enum cuMpSGEMM_compute_mode_t {
 	CUMPSGEMM_CUBLAS_FP16TC   = 6,
 	CUMPSGEMM_CUBLAS_TF32TC   = 7,
 	CUMPSGEMM_DRY_RUN         = 8,
+	CUMPSGEMM_AUTO            = 9,
 };
 #endif

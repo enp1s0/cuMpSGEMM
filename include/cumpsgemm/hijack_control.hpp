@@ -31,5 +31,19 @@ bool is_exp_stats_enabled();
 std::string get_last_called_function_str();
 void set_last_called_function_str(const std::string func_str);
 void clear_last_called_function_str();
+
+unsigned get_next_dynamic_launch_flag_buffer_id();
+void set_dynamic_launch_flag_buffer_id(unsigned id);
+void unset_dynamic_launch_flag_buffer_id();
+void dynamic_launch_flag_buffer_id_by_exp_stats(
+		const unsigned exp_stats_buffer_A,
+		const unsigned exp_stats_buffer_B,
+		const unsigned dynamic_launch_flag_buffer_id,
+		const float ratio_threshold
+		);
+void set_dynamic_compute_mode_AB(
+		const cuMpSGEMM_compute_mode_t mode_A,
+		const cuMpSGEMM_compute_mode_t mode_B
+		);
 } // namespace hijack_control
 } // namespace cumpsgemm

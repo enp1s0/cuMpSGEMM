@@ -621,6 +621,10 @@ void cumpsgemm::hijack_control::exp_stats(
 			);
 }
 
+void cumpsgemm::hijack_control::download_exp_stats_result(const unsigned id) {
+	cumpsgemm::exp_stats::download_exp_stats(get_internal_global_handle(), id);
+}
+
 std::string cumpsgemm::hijack_control::get_last_called_function_str() {
 	return internal_global_last_called_function_str;
 }
@@ -639,12 +643,8 @@ unsigned cumpsgemm::hijack_control::get_next_dynamic_launch_flag_buffer_id() {
 	return cumpsgemm::dynamic_launch::get_next_dynamic_launch_flag_buffer_id(get_internal_global_handle());
 }
 
-void cumpsgemm::hijack_control::set_dynamic_launch_flag_buffer_id(unsigned id) {
+void cumpsgemm::hijack_control::set_dynamic_launch_flag_buffer_id_use(unsigned id) {
 	cumpsgemm::dynamic_launch::set_dynamic_launch_flag_buffer_id(get_internal_global_handle(), id);
-}
-
-void cumpsgemm::hijack_control::unset_dynamic_launch_flag_buffer_id() {
-	cumpsgemm::dynamic_launch::unset_dynamic_launch_flag_buffer_id(get_internal_global_handle());
 }
 
 namespace {
@@ -666,7 +666,7 @@ __global__ void dynamic_launch_flag_buffer_id_by_exp_stats_kernel(
 }
 } // unnamed namespace
 
-void cumpsgemm::hijack_control::dynamic_launch_flag_buffer_id_by_exp_stats(
+void cumpsgemm::hijack_control::set_dynamic_launch_flag_buffer_by_exp_stats(
 		const unsigned exp_stats_buffer_id_A,
 		const unsigned exp_stats_buffer_id_B,
 		const unsigned dynamic_launch_flag_buffer_id,
@@ -682,16 +682,5 @@ void cumpsgemm::hijack_control::dynamic_launch_flag_buffer_id_by_exp_stats(
 			handle->exp_stats_handle->dev_total_counter_buffer + exp_stats_buffer_id_B,
 			handle->exp_stats_handle->dev_lost_counter_buffer  + exp_stats_buffer_id_B,
 			ratio_threshold
-			);
-}
-
-void cumpsgemm::hijack_control::set_dynamic_compute_mode_AB(
-		const cuMpSGEMM_compute_mode_t mode_A,
-		const cuMpSGEMM_compute_mode_t mode_B
-		) {
-	cumpsgemm::dynamic_launch::set_compute_mode_AB(
-			get_internal_global_handle(),
-			mode_A,
-			mode_B
 			);
 }

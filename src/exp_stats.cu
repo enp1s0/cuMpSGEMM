@@ -33,25 +33,11 @@ std::pair<std::size_t, std::size_t> cumpsgemm::exp_stats::get_exp_stats(
 		cuMpSGEMM_handle* handle,
 		const unsigned buffer_id
 		) {
-	const unsigned long timeout_ns = 1000000;
-	bool timeout = false;
 	const auto start_clock = std::chrono::system_clock::now();
 	volatile ulong2* p1 = handle->exp_stats_handle->host_counter_buffer;
 	while (p1[buffer_id].x == handle->exp_stats_handle->buffer_empty_value) {
-		//std::this_thread::sleep_for(std::chrono::nanoseconds(100));
-		//const auto mid_clock = std::chrono::system_clock::now();
-		//if (std::chrono::duration_cast<std::chrono::nanoseconds>(mid_clock - start_clock).count() > timeout_ns) {
-		//	timeout = true;
-		//	break;
-		//}
 	}
 	const auto end_clock = std::chrono::system_clock::now();
-
-	if (timeout) {
-		return std::pair<std::size_t, std::size_t>{
-			1, 1
-		};
-	}
 
 	return std::pair<std::size_t, std::size_t>{
 		p1[buffer_id].y,
@@ -262,7 +248,6 @@ void cumpsgemm::exp_stats::exp_stats_ext(
 			handle->exp_stats_handle->lost_threshold,
 			handle->exp_stats_handle->ignore_threshold
 			);
-	cumpsgemm::exp_stats::download_exp_stats(handle, buffer_id);
 }
 
 void cumpsgemm::exp_stats::exp_stats_ext(

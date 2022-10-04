@@ -20,6 +20,7 @@ void init_dynamic_launch_flag_buffer(
 	handle->dynamic_launch_handle->current_buffer_id = 1;
 	handle->dynamic_launch_handle->enabled = false;
 	handle->dynamic_launch_handle->enabled_id = 0;
+
 	handle->dynamic_launch_handle->mode_A = CUMPSGEMM_TF32TCEC;
 	handle->dynamic_launch_handle->mode_B = CUMPSGEMM_FP16TCEC;
 
@@ -58,32 +59,4 @@ void cumpsgemm::dynamic_launch::unset_dynamic_launch_flag_buffer_id(
 		) {
 	handle->dynamic_launch_handle->enabled_id = 0;
 	handle->dynamic_launch_handle->enabled = 0;
-}
-
-void cumpsgemm::dynamic_launch::set_compute_mode_AB(
-		cuMpSGEMM_handle* handle,
-		const cuMpSGEMM_compute_mode_t mode_A,
-		const cuMpSGEMM_compute_mode_t mode_B) {
-	switch (mode_A) {
-	case CUMPSGEMM_TF32TCEC:
-	case CUMPSGEMM_FP16TCEC:
-	case CUMPSGEMM_FP16TC:
-	case CUMPSGEMM_TF32TC:
-		break;
-	default:
-		throw std::runtime_error(std::string("mode A must be an SGEMM emulation method. @") + __func__);
-		break;
-	}
-	switch (mode_B) {
-	case CUMPSGEMM_TF32TCEC:
-	case CUMPSGEMM_FP16TCEC:
-	case CUMPSGEMM_FP16TC:
-	case CUMPSGEMM_TF32TC:
-		break;
-	default:
-		throw std::runtime_error(std::string("mode B must be an SGEMM emulation method. @") + __func__);
-		break;
-	}
-	handle->dynamic_launch_handle->mode_A = mode_A;
-	handle->dynamic_launch_handle->mode_B = mode_B;
 }

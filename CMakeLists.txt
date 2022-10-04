@@ -103,3 +103,18 @@ target_link_libraries(cumpsgemm_test PRIVATE
 	cudadevrt
 	cudart
 	)
+
+add_executable(cumpsgemm_hijack_test ${TESTSRCDIR}/hijack.cu ${HEADERS})
+target_include_directories(cumpsgemm_hijack_test PRIVATE ${INCDIR} ${SUBMODULEDIR}/cutf/include)
+set_target_properties(cumpsgemm_hijack_test PROPERTIES
+	CUDA_RESOLVE_DEVICE_SYMBOLS ON
+	CUDA_SEPARABLE_COMPILATION ON
+	)
+target_link_libraries(cumpsgemm_hijack_test PRIVATE
+	CUDA::cublas
+	cumpsgemm_static
+	cuda
+	curand
+	cudadevrt
+	cudart
+	)

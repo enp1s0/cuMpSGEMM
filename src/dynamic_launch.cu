@@ -6,8 +6,8 @@ namespace {
 __global__ void init_flag_buffer(
 		int* const ptr
 		) {
-	ptr[0] = 1;
-	ptr[1] = 0;
+	ptr[0] = CUMPSGEMM_TF32TCEC;
+	ptr[1] = CUMPSGEMM_FP16TCEC;
 }
 } // unnamed namespace
 

@@ -119,6 +119,8 @@ extern "C" const char* cuMpSGEMM_get_compute_mode_string (
 		return "CUBLAS_TF32TC";
 	case CUMPSGEMM_DRY_RUN:
 		return "DRY_RUN";
+	case CUMPSGEMM_AUTO:
+		return "AUTO";
 	}
 	return "Unknown";
 }
@@ -657,9 +659,9 @@ __global__ void dynamic_launch_flag_buffer_id_by_exp_stats_kernel(
 	const auto pA = (static_cast<float>(*lost_counter_A_ptr) / *total_counter_A_ptr) < rate_threshold;
 	const auto pB = (static_cast<float>(*lost_counter_B_ptr) / *total_counter_B_ptr) < rate_threshold;
 	if (pA && pB) {
-		*flag_buffer_ptr = 0;
+		*flag_buffer_ptr = CUMPSGEMM_FP16TCEC;
 	} else {
-		*flag_buffer_ptr = 1;
+		*flag_buffer_ptr = CUMPSGEMM_TF32TCEC;
 	}
 }
 } // unnamed namespace

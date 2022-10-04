@@ -488,8 +488,9 @@ __global__ void gemm_kernel(
 		T* const c_dmem_ptr, const unsigned ldc
 		) {
 	if (dynamic_mode != nullptr) {
-		if ((std::is_same<TC_T, nvcuda::wmma::precision::tf32>::value && std::is_same<EC, mtk::wmma::tcec::with_ec>::value) && (*dynamic_mode != CUMPSGEMM_TF32TCEC)) return;
-		if ((std::is_same<TC_T, half                         >::value && std::is_same<EC, mtk::wmma::tcec::with_ec>::value) && (*dynamic_mode != CUMPSGEMM_FP16TCEC)) return;
+		const auto mode = *dynamic_mode;
+		if ((std::is_same<TC_T, nvcuda::wmma::precision::tf32>::value && std::is_same<EC, mtk::wmma::tcec::with_ec>::value) && (mode != CUMPSGEMM_TF32TCEC)) return;
+		if ((std::is_same<TC_T, half                         >::value && std::is_same<EC, mtk::wmma::tcec::with_ec>::value) && (mode != CUMPSGEMM_FP16TCEC)) return;
 	}
 	const auto blockIdx_x = (blockIdx.x) % ((m + SMEM_M - 1) / SMEM_M);
 	const auto blockIdx_y = (blockIdx.x) / ((m + SMEM_M - 1) / SMEM_M);
@@ -536,8 +537,9 @@ __global__ void gemm_batchStrided_kernel(
 		const unsigned num_blocks_per_gemm
 		) {
 	if (dynamic_mode != nullptr) {
-		if ((std::is_same<TC_T, nvcuda::wmma::precision::tf32>::value && std::is_same<EC, mtk::wmma::tcec::with_ec>::value) && (*dynamic_mode != CUMPSGEMM_TF32TCEC)) return;
-		if ((std::is_same<TC_T, half                         >::value && std::is_same<EC, mtk::wmma::tcec::with_ec>::value) && (*dynamic_mode != CUMPSGEMM_FP16TCEC)) return;
+		const auto mode = *dynamic_mode;
+		if ((std::is_same<TC_T, nvcuda::wmma::precision::tf32>::value && std::is_same<EC, mtk::wmma::tcec::with_ec>::value) && (mode != CUMPSGEMM_TF32TCEC)) return;
+		if ((std::is_same<TC_T, half                         >::value && std::is_same<EC, mtk::wmma::tcec::with_ec>::value) && (mode != CUMPSGEMM_FP16TCEC)) return;
 	}
 	const auto gemm_id = blockIdx.x / num_blocks_per_gemm;
 	const auto blockIdx_x = (blockIdx.x % num_blocks_per_gemm) % ((m + SMEM_M - 1) / SMEM_M);

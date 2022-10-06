@@ -975,7 +975,7 @@ void gemm_exp_stats_test(
 					compute_mode
 					);
 		}
-		const auto buffer_id = cumpsgemm::get_current_buffer_id(cuMpSGEMM_handle);
+		const auto buffer_id = cumpsgemm::get_current_exp_stats_buffer_id(cuMpSGEMM_handle);
 		const auto exp_stats = cumpsgemm::get_exp_stats(cuMpSGEMM_handle, buffer_id);
 		std::printf("[%s:%8s] R_FP16TCEC = %lu / %lu (%6.2f), buffer_id = %u\n",
 				(gemm == gemm_type::s ? "sgemm" : "cgemm"),
@@ -1050,7 +1050,7 @@ void gemm_strided_batch_exp_stats_test(
 					CUMPSGEMM_TF32TCEC
 					);
 		}
-		const auto buffer_id = cumpsgemm::get_current_buffer_id(cuMpSGEMM_handle);
+		const auto buffer_id = cumpsgemm::get_current_exp_stats_buffer_id(cuMpSGEMM_handle);
 		const auto exp_stats = cumpsgemm::get_exp_stats(cuMpSGEMM_handle, buffer_id);
 		std::printf("[%s:%8s] R_FP16TCEC = %lu / %lu (%6.2f), buffer_id = %u\n",
 				(gemm == gemm_type::s ? "sgemm" : "cgemm"),

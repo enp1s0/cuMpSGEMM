@@ -512,14 +512,14 @@ std::pair<std::size_t, std::size_t> cumpsgemm::get_exp_stats(
 	return cumpsgemm::exp_stats::get_exp_stats(handle, buffer_id);
 }
 
-unsigned cumpsgemm::get_current_buffer_id(
+unsigned cumpsgemm::get_current_exp_stats_buffer_id(
 		cuMpSGEMM_handle_t handle
 		) {
-	return cumpsgemm::exp_stats::get_current_buffer_id(handle);
+	return cumpsgemm::exp_stats::get_current_exp_stats_buffer_id(handle);
 }
 
-void cumpsgemm::reset_buffer_id(
+void cumpsgemm::reset_exp_stats_buffer_id(
 		cuMpSGEMM_handle_t handle
 		) {
-	cumpsgemm::exp_stats::reset_buffer_id(handle);
+	cumpsgemm::exp_stats::reset_exp_stats_buffer_id(handle);
 }

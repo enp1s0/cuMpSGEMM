@@ -108,7 +108,7 @@ void cumpsgemm::exp_stats::init_counter (
 // Ring buffer id calculator.
 // 0 and 1 is reserved
 // loop[2, 3, ..., buffer_length-1]
-std::uint32_t cumpsgemm::exp_stats::get_next_buffer_id(
+std::uint32_t cumpsgemm::exp_stats::get_next_exp_stats_buffer_id(
 		cuMpSGEMM_handle* handle
 		) {
 	handle->exp_stats_handle->current_buffer_id++;
@@ -119,7 +119,7 @@ std::uint32_t cumpsgemm::exp_stats::get_next_buffer_id(
 	handle->exp_stats_handle->current_buffer_id = 2;
 	return 2;
 }
-std::uint32_t cumpsgemm::exp_stats::get_current_buffer_id(
+std::uint32_t cumpsgemm::exp_stats::get_current_exp_stats_buffer_id(
 		cuMpSGEMM_handle* handle
 		) {
 	return handle->exp_stats_handle->current_buffer_id;
@@ -225,7 +225,7 @@ void cumpsgemm::exp_stats::exp_stats_ext(
 		const unsigned batch_size,
 		const unsigned stride
 		) {
-	const auto buffer_id = cumpsgemm::exp_stats::get_next_buffer_id(handle);
+	const auto buffer_id = cumpsgemm::exp_stats::get_next_exp_stats_buffer_id(handle);
 	cumpsgemm::exp_stats::init_counter(
 			handle,
 			buffer_id
@@ -270,7 +270,7 @@ void cumpsgemm::exp_stats::exp_stats_ext(
 			);
 }
 
-void cumpsgemm::exp_stats::reset_buffer_id(
+void cumpsgemm::exp_stats::reset_exp_stats_buffer_id(
 		cuMpSGEMM_handle* handle
 		) {
 	handle->exp_stats_handle->current_buffer_id = 1;
@@ -280,7 +280,7 @@ void init_exp_stats_counter_buffer(
 		cuMpSGEMM_handle* handle
 		) {
 	handle->exp_stats_handle = new cumpsgemm::exp_stats::exp_stats_handle;
-	cumpsgemm::exp_stats::reset_buffer_id(handle);
+	cumpsgemm::exp_stats::reset_exp_stats_buffer_id(handle);
 
 	handle->exp_stats_handle->enabled = false;
 	handle->exp_stats_handle->buffer_length = 10000;

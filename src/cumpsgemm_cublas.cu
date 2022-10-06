@@ -577,8 +577,8 @@ std::pair<std::size_t, std::size_t> cumpsgemm::hijack_control::get_exp_stats(con
 	return cumpsgemm::exp_stats::get_exp_stats(get_internal_global_handle(), buffer_id);
 }
 
-unsigned cumpsgemm::hijack_control::get_current_buffer_id() {
-	return cumpsgemm::exp_stats::get_current_buffer_id(cuMpSGEMM_get_internal_global_handle());
+unsigned cumpsgemm::hijack_control::get_current_exp_stats_buffer_id() {
+	return cumpsgemm::exp_stats::get_current_exp_stats_buffer_id(cuMpSGEMM_get_internal_global_handle());
 }
 
 void cumpsgemm::hijack_control::enable_exp_stats() {
@@ -601,8 +601,8 @@ bool cumpsgemm::hijack_control::is_exp_stats_enabled() {
 	return get_internal_global_handle()->exp_stats_handle->enabled;
 }
 
-void cumpsgemm::hijack_control::reset_buffer_id() {
-	cumpsgemm::exp_stats::reset_buffer_id(get_internal_global_handle());
+void cumpsgemm::hijack_control::reset_exp_stats_buffer_id() {
+	cumpsgemm::exp_stats::reset_exp_stats_buffer_id(get_internal_global_handle());
 }
 
 void cumpsgemm::hijack_control::exp_stats(

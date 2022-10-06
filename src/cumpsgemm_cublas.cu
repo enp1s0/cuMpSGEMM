@@ -592,9 +592,9 @@ void cumpsgemm::hijack_control::disable_exp_stats() {
 
 void cumpsgemm::hijack_control::set_exp_stats_params(
 		const float ignore_threshold,
-		const float lost_threshold
+		const float lose_threshold
 		) {
-	cumpsgemm::set_exp_stats_params(get_internal_global_handle(), ignore_threshold, lost_threshold);
+	cumpsgemm::set_exp_stats_params(get_internal_global_handle(), ignore_threshold, lose_threshold);
 }
 
 bool cumpsgemm::hijack_control::is_exp_stats_enabled() {
@@ -651,13 +651,13 @@ namespace {
 __global__ void dynamic_launch_flag_buffer_id_by_exp_stats_kernel(
 		int* const flag_buffer_ptr,
 		const cumpsgemm::counter_t* const total_counter_A_ptr,
-		const cumpsgemm::counter_t* const lost_counter_A_ptr,
+		const cumpsgemm::counter_t* const lose_counter_A_ptr,
 		const cumpsgemm::counter_t* const total_counter_B_ptr,
-		const cumpsgemm::counter_t* const lost_counter_B_ptr,
+		const cumpsgemm::counter_t* const lose_counter_B_ptr,
 		const float rate_threshold
 		) {
-	const auto pA = (static_cast<float>(*lost_counter_A_ptr) / *total_counter_A_ptr) < rate_threshold;
-	const auto pB = (static_cast<float>(*lost_counter_B_ptr) / *total_counter_B_ptr) < rate_threshold;
+	const auto pA = (static_cast<float>(*lose_counter_A_ptr) / *total_counter_A_ptr) < rate_threshold;
+	const auto pB = (static_cast<float>(*lose_counter_B_ptr) / *total_counter_B_ptr) < rate_threshold;
 	if (pA && pB) {
 		*flag_buffer_ptr = CUMPSGEMM_FP16TCEC;
 	} else {
@@ -678,9 +678,9 @@ void cumpsgemm::hijack_control::set_dynamic_launch_flag_buffer_by_exp_stats(
 	dynamic_launch_flag_buffer_id_by_exp_stats_kernel<<<1, 1, 0, cuda_stream>>>(
 			handle->dynamic_launch_handle->frag_buffer + dynamic_launch_flag_buffer_id,
 			handle->exp_stats_handle->dev_total_counter_buffer + exp_stats_buffer_id_A,
-			handle->exp_stats_handle->dev_lost_counter_buffer  + exp_stats_buffer_id_A,
+			handle->exp_stats_handle->dev_lose_counter_buffer  + exp_stats_buffer_id_A,
 			handle->exp_stats_handle->dev_total_counter_buffer + exp_stats_buffer_id_B,
-			handle->exp_stats_handle->dev_lost_counter_buffer  + exp_stats_buffer_id_B,
+			handle->exp_stats_handle->dev_lose_counter_buffer  + exp_stats_buffer_id_B,
 			ratio_threshold
 			);
 }

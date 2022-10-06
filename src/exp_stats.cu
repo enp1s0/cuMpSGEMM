@@ -11,9 +11,9 @@ constexpr unsigned warp_size = 32;
 __global__ void download_exp_stats_kernel(
 		ulong2* const host_result_counter_ptr,
 		const cumpsgemm::counter_t* const dev_total_counter_ptr,
-		const cumpsgemm::counter_t* const dev_lost_counter_ptr
+		const cumpsgemm::counter_t* const dev_lose_counter_ptr
 		) {
-	const auto v = make_ulong2(*dev_total_counter_ptr, *dev_lost_counter_ptr);
+	const auto v = make_ulong2(*dev_total_counter_ptr, *dev_lose_counter_ptr);
 	*host_result_counter_ptr = v;
 }
 } // unnamed namespace
@@ -25,7 +25,7 @@ void cumpsgemm::exp_stats::download_exp_stats(
 	download_exp_stats_kernel<<<1, 1, 0, handle->cuda_stream>>>(
 			handle->exp_stats_handle->host_counter_buffer + buffer_id,
 			handle->exp_stats_handle->dev_total_counter_buffer + buffer_id,
-			handle->exp_stats_handle->dev_lost_counter_buffer + buffer_id
+			handle->exp_stats_handle->dev_lose_counter_buffer + buffer_id
 			);
 }
 
@@ -48,10 +48,10 @@ std::pair<std::size_t, std::size_t> cumpsgemm::exp_stats::get_exp_stats(
 void cumpsgemm::set_exp_stats_params(
 		cuMpSGEMM_handle_t handle,
 		const float ignore_threshold,
-		const float lost_threshold
+		const float lose_threshold
 		) {
 	handle->exp_stats_handle->ignore_threshold = ignore_threshold;
-	handle->exp_stats_handle->lost_threshold = lost_threshold;
+	handle->exp_stats_handle->lose_threshold = lose_threshold;
 }
 
 void cumpsgemm::enable_exp_stats(
@@ -70,13 +70,13 @@ void cumpsgemm::exp_stats::resize_counter(
 		cuMpSGEMM_handle_t handle,
 		const std::size_t new_length
 		) {
-	CUTF_CHECK_ERROR(cudaFree    (handle->exp_stats_handle->dev_lost_counter_buffer ));
+	CUTF_CHECK_ERROR(cudaFree    (handle->exp_stats_handle->dev_lose_counter_buffer ));
 	CUTF_CHECK_ERROR(cudaFree    (handle->exp_stats_handle->dev_total_counter_buffer));
 	CUTF_CHECK_ERROR(cudaFreeHost(handle->exp_stats_handle->host_counter_buffer     ));
 
 	handle->exp_stats_handle->buffer_length = new_length;
 
-	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->exp_stats_handle->dev_lost_counter_buffer) , sizeof(cumpsgemm::counter_t) * handle->exp_stats_handle->buffer_length));
+	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->exp_stats_handle->dev_lose_counter_buffer) , sizeof(cumpsgemm::counter_t) * handle->exp_stats_handle->buffer_length));
 	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->exp_stats_handle->dev_total_counter_buffer), sizeof(cumpsgemm::counter_t) * handle->exp_stats_handle->buffer_length));
 	CUTF_CHECK_ERROR(cudaMallocHost(&(handle->exp_stats_handle->host_counter_buffer     ), sizeof(ulong2)               * handle->exp_stats_handle->buffer_length));
 }
@@ -84,10 +84,10 @@ void cumpsgemm::exp_stats::resize_counter(
 namespace {
 __global__ void init_counter_kernel(
 		cumpsgemm::counter_t* const total_counter_ptr,
-		cumpsgemm::counter_t* const lost_counter_ptr
+		cumpsgemm::counter_t* const lose_counter_ptr
 		) {
 	*total_counter_ptr = 0;
-	*lost_counter_ptr  = 0;
+	*lose_counter_ptr  = 0;
 }
 } // unnamed namespace
 
@@ -97,7 +97,7 @@ void cumpsgemm::exp_stats::init_counter (
 		) {
 	init_counter_kernel<<<1, 1, 0, handle->cuda_stream>>>(
 			handle->exp_stats_handle->dev_total_counter_buffer + buffer_id,
-			handle->exp_stats_handle->dev_lost_counter_buffer + buffer_id
+			handle->exp_stats_handle->dev_lose_counter_buffer + buffer_id
 			);
 	(*(handle->exp_stats_handle->host_counter_buffer + buffer_id)).x = handle->exp_stats_handle->buffer_empty_value;
 #ifdef CUMPSGEMM_CHECK_KERNEL_ERROR
@@ -240,12 +240,12 @@ void cumpsgemm::exp_stats::exp_stats_ext(
 			);
 
 	exp_stats_ext_kernel<block_size, VEC_LEN><<<grid_size, block_size, 0, handle->cuda_stream>>>(
-			handle->exp_stats_handle->dev_lost_counter_buffer + buffer_id,
+			handle->exp_stats_handle->dev_lose_counter_buffer + buffer_id,
 			handle->exp_stats_handle->dev_total_counter_buffer + buffer_id,
 			m, n,
 			ptr, ld,
 			batch_size, stride,
-			handle->exp_stats_handle->lost_threshold,
+			handle->exp_stats_handle->lose_threshold,
 			handle->exp_stats_handle->ignore_threshold
 			);
 }
@@ -285,9 +285,9 @@ void init_exp_stats_counter_buffer(
 	handle->exp_stats_handle->enabled = false;
 	handle->exp_stats_handle->buffer_length = 10000;
 	handle->exp_stats_handle->ignore_threshold = 0;
-	handle->exp_stats_handle->lost_threshold = 0;
+	handle->exp_stats_handle->lose_threshold = 0;
 	handle->exp_stats_handle->counter_init_disabled = false;
-	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->exp_stats_handle->dev_lost_counter_buffer ), sizeof(cumpsgemm::counter_t) * handle->exp_stats_handle->buffer_length));
+	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->exp_stats_handle->dev_lose_counter_buffer ), sizeof(cumpsgemm::counter_t) * handle->exp_stats_handle->buffer_length));
 	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->exp_stats_handle->dev_total_counter_buffer), sizeof(cumpsgemm::counter_t) * handle->exp_stats_handle->buffer_length));
 	CUTF_CHECK_ERROR(cudaMallocHost(&(handle->exp_stats_handle->host_counter_buffer     ), sizeof(ulong2              ) * handle->exp_stats_handle->buffer_length));
 
@@ -301,7 +301,7 @@ void init_exp_stats_counter_buffer(
 void destroy_exp_stats_counter_buffer(
 		cuMpSGEMM_handle* handle
 		) {
-	CUTF_CHECK_ERROR(cudaFree    (handle->exp_stats_handle->dev_lost_counter_buffer ));
+	CUTF_CHECK_ERROR(cudaFree    (handle->exp_stats_handle->dev_lose_counter_buffer ));
 	CUTF_CHECK_ERROR(cudaFree    (handle->exp_stats_handle->dev_total_counter_buffer));
 	CUTF_CHECK_ERROR(cudaFreeHost(handle->exp_stats_handle->host_counter_buffer     ));
 

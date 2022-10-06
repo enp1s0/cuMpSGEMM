@@ -3,7 +3,7 @@
 #include <pybind11/pybind11.h>
 #include <cumpsgemm/hijack_control.hpp>
 
-double global_lost_ratio_threshold = 0.1;
+double global_lose_ratio_threshold = 0.1;
 int global_auto_kernel_selection_enabled = 0;
 unsigned global_cublas_dim_mn_threshold = 128;
 unsigned global_cublas_dim_k_threshold = 64;
@@ -45,7 +45,7 @@ void unset_compute_mode() {
 pybind11::dict get_exp_stats(const unsigned buffer_id) {
 	const auto r = cumpsgemm::hijack_control::get_exp_stats(buffer_id);
 	pybind11::dict d;
-	d["lost"] = r.first;
+	d["lose"] = r.first;
 	d["total"]  = r.second;
 	return d;
 }
@@ -72,25 +72,25 @@ bool is_auto_kernel_selection_enabled() {
 
 void set_exp_stats_params(
 		const float ignore_threshold,
-		const float lost_threshold
+		const float lose_threshold
 		) {
-	cumpsgemm::hijack_control::set_exp_stats_params(ignore_threshold, lost_threshold);
+	cumpsgemm::hijack_control::set_exp_stats_params(ignore_threshold, lose_threshold);
 }
 
-void set_global_lost_ratio_threshold(const double a) {
-	global_lost_ratio_threshold = a;
+void set_global_lose_ratio_threshold(const double a) {
+	global_lose_ratio_threshold = a;
 }
 
-float get_global_lost_ratio_threshold() {
-	return global_lost_ratio_threshold;
+float get_global_lose_ratio_threshold() {
+	return global_lose_ratio_threshold;
 }
 
-double get_lost_ratio(const unsigned buffer_id) {
+double get_lose_ratio(const unsigned buffer_id) {
 	const auto r = cumpsgemm::hijack_control::get_exp_stats(buffer_id);
-	std::size_t lost_count = r.first;
+	std::size_t lose_count = r.first;
 	std::size_t total_count = r.second;
 	if (total_count > 0) {
-		return static_cast<double>(lost_count) / total_count;
+		return static_cast<double>(lose_count) / total_count;
 	}
 	return 0.;
 }
@@ -176,10 +176,10 @@ PYBIND11_MODULE(cumpsgemm_hijack_control, m) {
 	m.def("get_current_exp_stats_buffer_id"    , &get_current_exp_stats_buffer_id   , "get_current_exp_stats_buffer_id");
 	m.def("enable_exp_stats"                   , &enable_exp_stats                  , "enable_exp_stats");
 	m.def("disable_exp_stats"                  , &disable_exp_stats                 , "disable_exp_stats");
-	m.def("set_exp_stats_params"               , &set_exp_stats_params              , "set_exp_stats_params", pybind11::arg("ignore_threshold"), pybind11::arg("lost_threshold"));
-	m.def("set_global_lost_ratio_threshold"    , &set_global_lost_ratio_threshold   , "set_global_lost_ratio_threshold", pybind11::arg("ratio_threshold"));
-	m.def("get_global_lost_ratio_threshold"    , &get_global_lost_ratio_threshold   , "get_global_lost_ratio_threshold");
-	m.def("get_lost_ratio"                     , &get_lost_ratio                    , "get_lost_ratio", pybind11::arg("buffer_id"));
+	m.def("set_exp_stats_params"               , &set_exp_stats_params              , "set_exp_stats_params", pybind11::arg("ignore_threshold"), pybind11::arg("lose_threshold"));
+	m.def("set_global_lose_ratio_threshold"    , &set_global_lose_ratio_threshold   , "set_global_lose_ratio_threshold", pybind11::arg("ratio_threshold"));
+	m.def("get_global_lose_ratio_threshold"    , &get_global_lose_ratio_threshold   , "get_global_lose_ratio_threshold");
+	m.def("get_lose_ratio"                     , &get_lose_ratio                    , "get_lose_ratio", pybind11::arg("buffer_id"));
 	m.def("is_exp_stats_enabled"               , &is_exp_stats_enabled              , "is_exp_stats_enabled");
 	m.def("enable_auto_kernel_selection"       , &enable_auto_kernel_selection      , "enable_auto_kernel_selection");
 	m.def("disable_auto_kernel_selection"      , &disable_auto_kernel_selection     , "disable_auto_kernel_selection");

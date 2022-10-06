@@ -33,25 +33,11 @@ std::pair<std::size_t, std::size_t> cumpsgemm::exp_stats::get_exp_stats(
 		cuMpSGEMM_handle* handle,
 		const unsigned buffer_id
 		) {
-	const unsigned long timeout_ns = 1000000;
-	bool timeout = false;
 	const auto start_clock = std::chrono::system_clock::now();
 	volatile ulong2* p1 = handle->exp_stats_handle->host_counter_buffer;
 	while (p1[buffer_id].x == handle->exp_stats_handle->buffer_empty_value) {
-		//std::this_thread::sleep_for(std::chrono::nanoseconds(100));
-		//const auto mid_clock = std::chrono::system_clock::now();
-		//if (std::chrono::duration_cast<std::chrono::nanoseconds>(mid_clock - start_clock).count() > timeout_ns) {
-		//	timeout = true;
-		//	break;
-		//}
 	}
 	const auto end_clock = std::chrono::system_clock::now();
-
-	if (timeout) {
-		return std::pair<std::size_t, std::size_t>{
-			1, 1
-		};
-	}
 
 	return std::pair<std::size_t, std::size_t>{
 		p1[buffer_id].y,
@@ -122,7 +108,7 @@ void cumpsgemm::exp_stats::init_counter (
 // Ring buffer id calculator.
 // 0 and 1 is reserved
 // loop[2, 3, ..., buffer_length-1]
-std::uint32_t cumpsgemm::exp_stats::get_next_buffer_id(
+std::uint32_t cumpsgemm::exp_stats::get_next_exp_stats_buffer_id(
 		cuMpSGEMM_handle* handle
 		) {
 	handle->exp_stats_handle->current_buffer_id++;
@@ -133,7 +119,7 @@ std::uint32_t cumpsgemm::exp_stats::get_next_buffer_id(
 	handle->exp_stats_handle->current_buffer_id = 2;
 	return 2;
 }
-std::uint32_t cumpsgemm::exp_stats::get_current_buffer_id(
+std::uint32_t cumpsgemm::exp_stats::get_current_exp_stats_buffer_id(
 		cuMpSGEMM_handle* handle
 		) {
 	return handle->exp_stats_handle->current_buffer_id;
@@ -239,7 +225,7 @@ void cumpsgemm::exp_stats::exp_stats_ext(
 		const unsigned batch_size,
 		const unsigned stride
 		) {
-	const auto buffer_id = cumpsgemm::exp_stats::get_next_buffer_id(handle);
+	const auto buffer_id = cumpsgemm::exp_stats::get_next_exp_stats_buffer_id(handle);
 	cumpsgemm::exp_stats::init_counter(
 			handle,
 			buffer_id
@@ -262,7 +248,6 @@ void cumpsgemm::exp_stats::exp_stats_ext(
 			handle->exp_stats_handle->lost_threshold,
 			handle->exp_stats_handle->ignore_threshold
 			);
-	cumpsgemm::exp_stats::download_exp_stats(handle, buffer_id);
 }
 
 void cumpsgemm::exp_stats::exp_stats_ext(
@@ -285,7 +270,7 @@ void cumpsgemm::exp_stats::exp_stats_ext(
 			);
 }
 
-void cumpsgemm::exp_stats::reset_buffer_id(
+void cumpsgemm::exp_stats::reset_exp_stats_buffer_id(
 		cuMpSGEMM_handle* handle
 		) {
 	handle->exp_stats_handle->current_buffer_id = 1;
@@ -295,7 +280,7 @@ void init_exp_stats_counter_buffer(
 		cuMpSGEMM_handle* handle
 		) {
 	handle->exp_stats_handle = new cumpsgemm::exp_stats::exp_stats_handle;
-	cumpsgemm::exp_stats::reset_buffer_id(handle);
+	cumpsgemm::exp_stats::reset_exp_stats_buffer_id(handle);
 
 	handle->exp_stats_handle->enabled = false;
 	handle->exp_stats_handle->buffer_length = 10000;

@@ -12,6 +12,8 @@ namespace cumpsgemm {
 namespace hijack_control {
 void set_compute_mode(const cuMpSGEMM_compute_mode_t) {};
 void unset_compute_mode() {};
+
+// exp stats
 std::pair<std::size_t, std::size_t> get_exp_stats(const unsigned buffer_id) {return std::pair<std::size_t, std::size_t>{1, 1};};
 void enable_exp_stats() {};
 void disable_exp_stats() {};
@@ -19,6 +21,13 @@ void set_exp_stats_params(const float, const float) {};
 bool is_exp_stats_enabled(){return false;};
 unsigned get_current_buffer_id() {return 0;}
 void exp_stats(const unsigned m, const unsigned n, const float* const ptr, const unsigned ld, const unsigned batch_size, const unsigned stride){};
+
+// dynamic launch
+unsigned get_next_dynamic_launch_flag_buffer_id() {return 0;}
+void set_dynamic_launch_flag_buffer_id_use(const unsigned) {};
+void set_dynamic_launch_flag_buffer_by_exp_stats(const unsigned, const unsigned, const unsigned, const float) {};
+
+// function log
 std::string get_last_called_function_str() {return "";};
 void set_last_called_function_str(const std::string) {}
 void clear_last_called_function_str() {};
@@ -138,33 +147,56 @@ void clear_last_called_function_str() {
 	cumpsgemm::hijack_control::clear_last_called_function_str();
 }
 
+// Dynamic launch (try-and-exit)
+
+unsigned get_next_dynamic_launch_flag_buffer_id() {
+	return cumpsgemm::hijack_control::get_next_dynamic_launch_flag_buffer_id();
+}
+
+void set_dynamic_launch_flag_buffer_id(unsigned id) {
+	cumpsgemm::hijack_control::set_dynamic_launch_flag_buffer_id_use(id);
+}
+
+void set_dynamic_launch_flag_buffer_by_exp_stats(const unsigned exp_stats_id_A, const unsigned exp_stats_id_B, const unsigned dynamic_launch_buffer_id, const float threshold_rate) {
+	cumpsgemm::hijack_control::set_dynamic_launch_flag_buffer_by_exp_stats(
+		exp_stats_id_A,
+		exp_stats_id_B,
+		dynamic_launch_buffer_id,
+		threshold_rate
+		);
+}
+
 PYBIND11_MODULE(cumpsgemm_hijack_control, m) {
 	m.doc() = "cuMpSGEMM hijack control API";
 
-	m.def("unset_compute_mode"                 , &unset_compute_mode                 , "unset_compute_mode");
-	m.def("set_compute_mode"                   , &set_compute_mode                   , "set_compute_mode"  , pybind11::arg("compute_mode"));
-	m.def("get_exp_stats"                      , &get_exp_stats                      , "get_exp_stats", pybind11::arg("buffer_id"));
-	m.def("get_current_buffer_id"              , &get_current_buffer_id              , "get_current_buffer_id");
-	m.def("enable_exp_stats"                   , &enable_exp_stats                   , "enable_exp_stats");
-	m.def("disable_exp_stats"                  , &disable_exp_stats                  , "disable_exp_stats");
-	m.def("set_exp_stats_params"               , &set_exp_stats_params               , "set_exp_stats_params", pybind11::arg("ignore_threshold"), pybind11::arg("lost_threshold"));
-	m.def("set_global_lost_ratio_threshold"    , &set_global_lost_ratio_threshold    , "set_global_lost_ratio_threshold", pybind11::arg("ratio_threshold"));
-	m.def("get_global_lost_ratio_threshold"    , &get_global_lost_ratio_threshold    , "get_global_lost_ratio_threshold");
-	m.def("get_lost_ratio"                     , &get_lost_ratio                     , "get_lost_ratio", pybind11::arg("buffer_id"));
-	m.def("is_exp_stats_enabled"               , &is_exp_stats_enabled               , "is_exp_stats_enabled");
-	m.def("enable_auto_kernel_selection"       , &enable_auto_kernel_selection       , "enable_auto_kernel_selection");
-	m.def("disable_auto_kernel_selection"      , &disable_auto_kernel_selection      , "disable_auto_kernel_selection");
-	m.def("is_auto_kernel_selection_enabled"   , &is_auto_kernel_selection_enabled   , "is_auto_kernel_selection_enabled");
-	m.def("set_global_cublas_dim_mn_threshold" , &set_global_cublas_dim_mn_threshold , "set_global_cublas_dim_mn_threshold", pybind11::arg("dim"));
-	m.def("get_global_cublas_dim_mn_threshold" , &get_global_cublas_dim_mn_threshold , "get_global_cublas_dim_mn_threshold");
-	m.def("set_global_cublas_dim_k_threshold"  , &set_global_cublas_dim_k_threshold  , "set_global_cublas_dim_k_threshold", pybind11::arg("dim"));
-	m.def("get_global_cublas_dim_k_threshold"  , &get_global_cublas_dim_k_threshold  , "get_global_cublas_dim_k_threshold");
-	m.def("exp_stats"                          , &exp_stats                          , "exp_stats", pybind11::arg("m"), pybind11::arg("n"), pybind11::arg("ptr"), pybind11::arg("ld"), pybind11::arg("batch_size") = 1, pybind11::arg("stride") = 0);
-	m.def("get_last_called_function_str"       , &get_last_called_function_str       , "get_last_called_function_str");
-	m.def("set_last_called_function_str"       , &set_last_called_function_str       , "set_last_called_function_str");
-	m.def("clear_last_called_function_str"     , &clear_last_called_function_str     , "clear_last_called_function_str");
+	m.def("unset_compute_mode"                 , &unset_compute_mode, "unset_compute_mode");
+	m.def("set_compute_mode"                   , &set_compute_mode  , "set_compute_mode"  , pybind11::arg("compute_mode"));
 
+	m.def("get_exp_stats"                      , &get_exp_stats                     , "get_exp_stats", pybind11::arg("buffer_id"));
+	m.def("get_current_buffer_id"              , &get_current_buffer_id             , "get_current_buffer_id");
+	m.def("enable_exp_stats"                   , &enable_exp_stats                  , "enable_exp_stats");
+	m.def("disable_exp_stats"                  , &disable_exp_stats                 , "disable_exp_stats");
+	m.def("set_exp_stats_params"               , &set_exp_stats_params              , "set_exp_stats_params", pybind11::arg("ignore_threshold"), pybind11::arg("lost_threshold"));
+	m.def("set_global_lost_ratio_threshold"    , &set_global_lost_ratio_threshold   , "set_global_lost_ratio_threshold", pybind11::arg("ratio_threshold"));
+	m.def("get_global_lost_ratio_threshold"    , &get_global_lost_ratio_threshold   , "get_global_lost_ratio_threshold");
+	m.def("get_lost_ratio"                     , &get_lost_ratio                    , "get_lost_ratio", pybind11::arg("buffer_id"));
+	m.def("is_exp_stats_enabled"               , &is_exp_stats_enabled              , "is_exp_stats_enabled");
+	m.def("enable_auto_kernel_selection"       , &enable_auto_kernel_selection      , "enable_auto_kernel_selection");
+	m.def("disable_auto_kernel_selection"      , &disable_auto_kernel_selection     , "disable_auto_kernel_selection");
+	m.def("is_auto_kernel_selection_enabled"   , &is_auto_kernel_selection_enabled  , "is_auto_kernel_selection_enabled");
+	m.def("set_global_cublas_dim_mn_threshold" , &set_global_cublas_dim_mn_threshold, "set_global_cublas_dim_mn_threshold", pybind11::arg("dim"));
+	m.def("get_global_cublas_dim_mn_threshold" , &get_global_cublas_dim_mn_threshold, "get_global_cublas_dim_mn_threshold");
+	m.def("set_global_cublas_dim_k_threshold"  , &set_global_cublas_dim_k_threshold , "set_global_cublas_dim_k_threshold", pybind11::arg("dim"));
+	m.def("get_global_cublas_dim_k_threshold"  , &get_global_cublas_dim_k_threshold , "get_global_cublas_dim_k_threshold");
+	m.def("exp_stats"                          , &exp_stats                         , "exp_stats", pybind11::arg("m"), pybind11::arg("n"), pybind11::arg("ptr"), pybind11::arg("ld"), pybind11::arg("batch_size") = 1, pybind11::arg("stride") = 0);
 
+	m.def("get_last_called_function_str"       , &get_last_called_function_str  , "get_last_called_function_str");
+	m.def("set_last_called_function_str"       , &set_last_called_function_str  , "set_last_called_function_str");
+	m.def("clear_last_called_function_str"     , &clear_last_called_function_str, "clear_last_called_function_str");
+
+	m.def("get_next_dynamic_launch_flag_buffer_id"     , &get_next_dynamic_launch_flag_buffer_id     , "get_next_dynamic_launch_flag_buffer_id");
+	m.def("set_dynamic_launch_flag_buffer_id"          , &set_dynamic_launch_flag_buffer_id          , "set_dynamic_launch_flag_buffer_id", pybind11::arg("id"));
+	m.def("set_dynamic_launch_flag_buffer_by_exp_stats", &set_dynamic_launch_flag_buffer_by_exp_stats, "set_dynamic_launch_flag_buffer_by_exp_stats", pybind11::arg("exp_stats_id_A"), pybind11::arg("exp_stats_id_B"), pybind11::arg("dynamic_launch_flag_buffer_id"), pybind11::arg("ratio_threshold"));
 
 	pybind11::enum_<cuMpSGEMM_compute_mode_t>(m, "compute_mode")
 		.value("CUMPSGEMM_CUBLAS"       , CUMPSGEMM_CUBLAS       )
@@ -176,6 +208,7 @@ PYBIND11_MODULE(cumpsgemm_hijack_control, m) {
 		.value("CUMPSGEMM_CUBLAS_FP16TC", CUMPSGEMM_CUBLAS_FP16TC)
 		.value("CUMPSGEMM_CUBLAS_TF32TC", CUMPSGEMM_CUBLAS_TF32TC)
 		.value("CUMPSGEMM_DRY_RUN"      , CUMPSGEMM_DRY_RUN      )
+		.value("CUMPSGEMM_AUTO"         , CUMPSGEMM_AUTO         )
 		.export_values();
 }
 

@@ -6,6 +6,7 @@
 #include <cumpsgemm/hijack_control.hpp>
 #include "handle.hpp"
 #include "exp_stats.hpp"
+#include "dynamic_launch.hpp"
 
 namespace {
 
@@ -118,6 +119,8 @@ extern "C" const char* cuMpSGEMM_get_compute_mode_string (
 		return "CUBLAS_TF32TC";
 	case CUMPSGEMM_DRY_RUN:
 		return "DRY_RUN";
+	case CUMPSGEMM_AUTO:
+		return "AUTO";
 	}
 	return "Unknown";
 }
@@ -574,8 +577,8 @@ std::pair<std::size_t, std::size_t> cumpsgemm::hijack_control::get_exp_stats(con
 	return cumpsgemm::exp_stats::get_exp_stats(get_internal_global_handle(), buffer_id);
 }
 
-unsigned cumpsgemm::hijack_control::get_current_buffer_id() {
-	return cumpsgemm::exp_stats::get_current_buffer_id(cuMpSGEMM_get_internal_global_handle());
+unsigned cumpsgemm::hijack_control::get_current_exp_stats_buffer_id() {
+	return cumpsgemm::exp_stats::get_current_exp_stats_buffer_id(cuMpSGEMM_get_internal_global_handle());
 }
 
 void cumpsgemm::hijack_control::enable_exp_stats() {
@@ -598,8 +601,8 @@ bool cumpsgemm::hijack_control::is_exp_stats_enabled() {
 	return get_internal_global_handle()->exp_stats_handle->enabled;
 }
 
-void cumpsgemm::hijack_control::reset_buffer_id() {
-	cumpsgemm::exp_stats::reset_buffer_id(get_internal_global_handle());
+void cumpsgemm::hijack_control::reset_exp_stats_buffer_id() {
+	cumpsgemm::exp_stats::reset_exp_stats_buffer_id(get_internal_global_handle());
 }
 
 void cumpsgemm::hijack_control::exp_stats(
@@ -618,6 +621,10 @@ void cumpsgemm::hijack_control::exp_stats(
 			);
 }
 
+void cumpsgemm::hijack_control::download_exp_stats_result(const unsigned id) {
+	cumpsgemm::exp_stats::download_exp_stats(get_internal_global_handle(), id);
+}
+
 std::string cumpsgemm::hijack_control::get_last_called_function_str() {
 	return internal_global_last_called_function_str;
 }
@@ -630,4 +637,50 @@ void cumpsgemm::hijack_control::set_last_called_function_str(
 
 void cumpsgemm::hijack_control::clear_last_called_function_str() {
 	cumpsgemm::hijack_control::set_last_called_function_str("");
+}
+
+unsigned cumpsgemm::hijack_control::get_next_dynamic_launch_flag_buffer_id() {
+	return cumpsgemm::dynamic_launch::get_next_dynamic_launch_flag_buffer_id(get_internal_global_handle());
+}
+
+void cumpsgemm::hijack_control::set_dynamic_launch_flag_buffer_id_use(unsigned id) {
+	cumpsgemm::dynamic_launch::set_dynamic_launch_flag_buffer_id(get_internal_global_handle(), id);
+}
+
+namespace {
+__global__ void dynamic_launch_flag_buffer_id_by_exp_stats_kernel(
+		int* const flag_buffer_ptr,
+		const cumpsgemm::counter_t* const total_counter_A_ptr,
+		const cumpsgemm::counter_t* const lost_counter_A_ptr,
+		const cumpsgemm::counter_t* const total_counter_B_ptr,
+		const cumpsgemm::counter_t* const lost_counter_B_ptr,
+		const float rate_threshold
+		) {
+	const auto pA = (static_cast<float>(*lost_counter_A_ptr) / *total_counter_A_ptr) < rate_threshold;
+	const auto pB = (static_cast<float>(*lost_counter_B_ptr) / *total_counter_B_ptr) < rate_threshold;
+	if (pA && pB) {
+		*flag_buffer_ptr = CUMPSGEMM_FP16TCEC;
+	} else {
+		*flag_buffer_ptr = CUMPSGEMM_TF32TCEC;
+	}
+}
+} // unnamed namespace
+
+void cumpsgemm::hijack_control::set_dynamic_launch_flag_buffer_by_exp_stats(
+		const unsigned exp_stats_buffer_id_A,
+		const unsigned exp_stats_buffer_id_B,
+		const unsigned dynamic_launch_flag_buffer_id,
+		const float ratio_threshold
+		) {
+	const auto handle = get_internal_global_handle();
+	const auto cuda_stream = handle->cuda_stream;
+
+	dynamic_launch_flag_buffer_id_by_exp_stats_kernel<<<1, 1, 0, cuda_stream>>>(
+			handle->dynamic_launch_handle->frag_buffer + dynamic_launch_flag_buffer_id,
+			handle->exp_stats_handle->dev_total_counter_buffer + exp_stats_buffer_id_A,
+			handle->exp_stats_handle->dev_lost_counter_buffer  + exp_stats_buffer_id_A,
+			handle->exp_stats_handle->dev_total_counter_buffer + exp_stats_buffer_id_B,
+			handle->exp_stats_handle->dev_lost_counter_buffer  + exp_stats_buffer_id_B,
+			ratio_threshold
+			);
 }

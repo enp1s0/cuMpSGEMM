@@ -679,12 +679,14 @@ cublasStatus_t cuMpSGEMM_create(cuMpSGEMM_handle_t* const handle) {
 #endif
 
 	init_exp_stats_counter_buffer((*handle));
+	init_dynamic_launch_flag_buffer((*handle));
 
 	return CUBLAS_STATUS_SUCCESS;
 }
 
 cublasStatus_t cuMpSGEMM_destroy(cuMpSGEMM_handle_t handle) {
 	destroy_exp_stats_counter_buffer(handle);
+	destroy_launch_flag_buffer(handle);
 
 	delete handle;
 	return CUBLAS_STATUS_SUCCESS;

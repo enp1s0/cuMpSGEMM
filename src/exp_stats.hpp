@@ -27,13 +27,13 @@ void init_counter (
 		cuMpSGEMM_handle* handle,
 		const unsigned buffer_id
 		);
-std::uint32_t get_next_buffer_id(
+std::uint32_t get_next_exp_stats_buffer_id(
 		cuMpSGEMM_handle* handle
 		);
-std::uint32_t get_current_buffer_id(
+std::uint32_t get_current_exp_stats_buffer_id(
 		cuMpSGEMM_handle* handle
 		);
-void reset_buffer_id(
+void reset_exp_stats_buffer_id(
 		cuMpSGEMM_handle* handle
 		);
 void download_exp_stats(

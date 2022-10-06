@@ -19,7 +19,7 @@ void enable_exp_stats() {};
 void disable_exp_stats() {};
 void set_exp_stats_params(const float, const float) {};
 bool is_exp_stats_enabled(){return false;};
-unsigned get_current_buffer_id() {return 0;}
+unsigned get_current_exp_stats_buffer_id() {return 0;}
 void exp_stats(const unsigned m, const unsigned n, const float* const ptr, const unsigned ld, const unsigned batch_size, const unsigned stride){};
 
 // dynamic launch
@@ -99,8 +99,8 @@ bool is_exp_stats_enabled() {
 	return cumpsgemm::hijack_control::is_exp_stats_enabled();
 }
 
-unsigned get_current_buffer_id() {
-	return cumpsgemm::hijack_control::get_current_buffer_id();
+unsigned get_current_exp_stats_buffer_id() {
+	return cumpsgemm::hijack_control::get_current_exp_stats_buffer_id();
 }
 
 unsigned get_global_cublas_dim_mn_threshold() {
@@ -173,7 +173,7 @@ PYBIND11_MODULE(cumpsgemm_hijack_control, m) {
 	m.def("set_compute_mode"                   , &set_compute_mode  , "set_compute_mode"  , pybind11::arg("compute_mode"));
 
 	m.def("get_exp_stats"                      , &get_exp_stats                     , "get_exp_stats", pybind11::arg("buffer_id"));
-	m.def("get_current_buffer_id"              , &get_current_buffer_id             , "get_current_buffer_id");
+	m.def("get_current_exp_stats_buffer_id"    , &get_current_exp_stats_buffer_id   , "get_current_exp_stats_buffer_id");
 	m.def("enable_exp_stats"                   , &enable_exp_stats                  , "enable_exp_stats");
 	m.def("disable_exp_stats"                  , &disable_exp_stats                 , "disable_exp_stats");
 	m.def("set_exp_stats_params"               , &set_exp_stats_params              , "set_exp_stats_params", pybind11::arg("ignore_threshold"), pybind11::arg("lost_threshold"));

@@ -1,5 +1,6 @@
 #include <cutf/memory.hpp>
 #include <cutf/math.hpp>
+#include <cutf/experimental/fp.hpp>
 #include <cumpsgemm/cumpsgemm.hpp>
 #include <chrono>
 #include <thread>
@@ -72,22 +73,26 @@ void cumpsgemm::exp_stats::resize_counter(
 		) {
 	CUTF_CHECK_ERROR(cudaFree    (handle->exp_stats_handle->dev_lose_counter_buffer ));
 	CUTF_CHECK_ERROR(cudaFree    (handle->exp_stats_handle->dev_total_counter_buffer));
+	CUTF_CHECK_ERROR(cudaFree    (handle->exp_stats_handle->dev_max_abs_buffer      ));
 	CUTF_CHECK_ERROR(cudaFreeHost(handle->exp_stats_handle->host_counter_buffer     ));
 
 	handle->exp_stats_handle->buffer_length = new_length;
 
-	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->exp_stats_handle->dev_lose_counter_buffer) , sizeof(cumpsgemm::counter_t) * handle->exp_stats_handle->buffer_length));
+	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->exp_stats_handle->dev_lose_counter_buffer ), sizeof(cumpsgemm::counter_t) * handle->exp_stats_handle->buffer_length));
 	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->exp_stats_handle->dev_total_counter_buffer), sizeof(cumpsgemm::counter_t) * handle->exp_stats_handle->buffer_length));
+	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->exp_stats_handle->dev_max_abs_buffer      ), sizeof(float               ) * handle->exp_stats_handle->buffer_length));
 	CUTF_CHECK_ERROR(cudaMallocHost(&(handle->exp_stats_handle->host_counter_buffer     ), sizeof(ulong2)               * handle->exp_stats_handle->buffer_length));
 }
 
 namespace {
 __global__ void init_counter_kernel(
 		cumpsgemm::counter_t* const total_counter_ptr,
-		cumpsgemm::counter_t* const lose_counter_ptr
+		cumpsgemm::counter_t* const lose_counter_ptr,
+		float* const max_abs_value_ptr
 		) {
 	*total_counter_ptr = 0;
 	*lose_counter_ptr  = 0;
+	*max_abs_value_ptr = 0;
 }
 } // unnamed namespace
 
@@ -97,7 +102,8 @@ void cumpsgemm::exp_stats::init_counter (
 		) {
 	init_counter_kernel<<<1, 1, 0, handle->cuda_stream>>>(
 			handle->exp_stats_handle->dev_total_counter_buffer + buffer_id,
-			handle->exp_stats_handle->dev_lose_counter_buffer + buffer_id
+			handle->exp_stats_handle->dev_lose_counter_buffer + buffer_id,
+			handle->exp_stats_handle->dev_max_abs_buffer + buffer_id
 			);
 	(*(handle->exp_stats_handle->host_counter_buffer + buffer_id)).x = handle->exp_stats_handle->buffer_empty_value;
 #ifdef CUMPSGEMM_CHECK_KERNEL_ERROR
@@ -126,22 +132,18 @@ std::uint32_t cumpsgemm::exp_stats::get_current_exp_stats_buffer_id(
 }
 
 namespace {
-// exp_stats for cuBLAS original functions
+// Get the largest abs value
 template <unsigned BLOCK_SIZE, unsigned VEC_LEN>
-__global__ void exp_stats_ext_kernel(
-		unsigned long long int* const lose_counter,
-		unsigned long long int* const total_counter,
+__global__ void exp_stats_ext_stage_1_kernel(
+		float * const result_ptr,
 		const unsigned m,
 		const unsigned n,
 		const float* const ptr,
 		const unsigned ld,
 		const unsigned batch_size,
-		const unsigned stride,
-		const float lose_threshold,
-		const float ignore_threshold
+		const unsigned stride
 		) {
-	unsigned local_lose_counter = 0;
-	unsigned local_total_counter = 0;
+	float local_max_abs_value = 0;
 	const auto ib = blockIdx.y;
 	const auto local_mat_ptr = ptr + ib * stride;
 	for (std::size_t lid = (threadIdx.x + blockIdx.x * blockDim.x) * VEC_LEN; lid < m * n; lid += BLOCK_SIZE * gridDim.x * VEC_LEN) {
@@ -171,17 +173,101 @@ __global__ void exp_stats_ext_kernel(
 				vec[i] = v;
 			}
 		}
+		for (uint32_t i = 0; i < VEC_LEN; i++) {
+			local_max_abs_value = cutf::math::max(local_max_abs_value, cutf::math::abs(vec[i]));
+		}
+	}
+
+	for (std::uint32_t offset = warp_size >> 1; offset >= 1; offset >>= 1) {
+		local_max_abs_value = cutf::math::max(
+				__shfl_xor_sync(~0u, local_max_abs_value, offset),
+				local_max_abs_value
+				);
+	}
+
+	__shared__ float smem[BLOCK_SIZE];
+
+	if ((threadIdx.x & 0x1f) == 0) {
+		smem[threadIdx.x >> 5] = local_max_abs_value;
+	}
+	__syncthreads();
+
+	if (threadIdx.x >= BLOCK_SIZE / warp_size) return;
+
+	local_max_abs_value = smem[threadIdx.x];
+
+	for (std::uint32_t offset = (BLOCK_SIZE / warp_size) >> 1; offset >= 1; offset >>= 1) {
+		local_max_abs_value = cutf::math::max(
+				__shfl_xor_sync(~0u, local_max_abs_value, offset),
+				local_max_abs_value
+				);
+	}
+
+	if (threadIdx.x == 0) {
+		const auto max_abs = cutf::experimental::fp::reinterpret_as_fp(
+			cutf::experimental::fp::reinterpret_as_uint(local_max_abs_value) & 0x7fa00000u);
+		atomicAdd(result_ptr, max_abs);
+	}
+}
+// exp_stats for cuBLAS original functions
+template <unsigned BLOCK_SIZE, unsigned VEC_LEN>
+__global__ void exp_stats_ext_stage_2_kernel(
+		unsigned long long int* const lose_counter,
+		unsigned long long int* const total_counter,
+		const unsigned m,
+		const unsigned n,
+		const float* const ptr,
+		const unsigned ld,
+		const unsigned batch_size,
+		const unsigned stride,
+		const float* const max_abs_ptr,
+		const float lose_threshold,
+		const float ignore_threshold
+		) {
+	unsigned local_lose_counter = 0;
+	unsigned local_total_counter = 0;
+	const auto ib = blockIdx.y;
+	const auto local_mat_ptr = ptr + ib * stride;
+	const auto max_abs_value = *max_abs_ptr;
+	const auto abs_ignore_threshold = ignore_threshold * max_abs_value;
+	const auto abs_lose_threshold = ignore_threshold * max_abs_value;
+	for (std::size_t lid = (threadIdx.x + blockIdx.x * blockDim.x) * VEC_LEN; lid < m * n; lid += BLOCK_SIZE * gridDim.x * VEC_LEN) {
+		float vec[VEC_LEN];
+		if (lid + VEC_LEN < m * n) {
+			for (uint32_t i = 0; i < VEC_LEN; i++) {
+				const auto gid = lid + i;
+				const auto im = gid % m;
+				const auto in = gid / m;
+
+				const auto memory_index = im + ld * in;
+				vec[i] = local_mat_ptr[memory_index];
+			}
+		} else {
+			for (uint32_t i = 0; i < VEC_LEN; i++) {
+				const auto gid = lid + i;
+				float v;
+				if (gid < m * n) {
+					const auto im = gid % m;
+					const auto in = gid / m;
+
+					const auto memory_index = im + ld * in;
+					v = local_mat_ptr[memory_index];
+				} else {
+					v = 0;
+				}
+				vec[i] = v;
+			}
+		}
 
 		for (unsigned i = 0; i < VEC_LEN; i++) {
-			const auto v = vec[i];
-			if (v > ignore_threshold) {
+			const auto v = cutf::math::abs(vec[i]);
+			if (v > abs_ignore_threshold) {
 				local_total_counter++;
-				if (v < lose_threshold) {
+				if (v < abs_lose_threshold) {
 					local_lose_counter++;
 				}
 			}
 		}
-		break;
 	}
 
 	for (std::uint32_t offset = warp_size >> 1; offset >= 1; offset >>= 1) {
@@ -238,13 +324,20 @@ void cumpsgemm::exp_stats::exp_stats_ext(
 			std::min<std::uint64_t>(((1lu * m * n + block_size - 1) / block_size + VEC_LEN - 1) / VEC_LEN, handle->num_sms),
 			batch_size
 			);
+	exp_stats_ext_stage_1_kernel<block_size, VEC_LEN><<<grid_size, block_size, 0, handle->cuda_stream>>>(
+			handle->exp_stats_handle->dev_max_abs_buffer + buffer_id,
+			m, n,
+			ptr, ld,
+			batch_size, stride
+			);
 
-	exp_stats_ext_kernel<block_size, VEC_LEN><<<grid_size, block_size, 0, handle->cuda_stream>>>(
+	exp_stats_ext_stage_2_kernel<block_size, VEC_LEN><<<grid_size, block_size, 0, handle->cuda_stream>>>(
 			handle->exp_stats_handle->dev_lose_counter_buffer + buffer_id,
 			handle->exp_stats_handle->dev_total_counter_buffer + buffer_id,
 			m, n,
 			ptr, ld,
 			batch_size, stride,
+			handle->exp_stats_handle->dev_max_abs_buffer + buffer_id,
 			handle->exp_stats_handle->lose_threshold,
 			handle->exp_stats_handle->ignore_threshold
 			);
@@ -289,6 +382,7 @@ void init_exp_stats_counter_buffer(
 	handle->exp_stats_handle->counter_init_disabled = false;
 	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->exp_stats_handle->dev_lose_counter_buffer ), sizeof(cumpsgemm::counter_t) * handle->exp_stats_handle->buffer_length));
 	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->exp_stats_handle->dev_total_counter_buffer), sizeof(cumpsgemm::counter_t) * handle->exp_stats_handle->buffer_length));
+	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->exp_stats_handle->dev_max_abs_buffer      ), sizeof(float               ) * handle->exp_stats_handle->buffer_length));
 	CUTF_CHECK_ERROR(cudaMallocHost(&(handle->exp_stats_handle->host_counter_buffer     ), sizeof(ulong2              ) * handle->exp_stats_handle->buffer_length));
 
 	// For not exp_stats-d matrices

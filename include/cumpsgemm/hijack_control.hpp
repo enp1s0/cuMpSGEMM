@@ -17,7 +17,7 @@ unsigned get_current_exp_stats_buffer_id();
 void reset_exp_stats_buffer_id();
 void set_exp_stats_params(
 		const float ignore_threshold,
-		const float lost_threshold
+		const float lose_threshold
 		);
 void exp_stats(
 		const unsigned m,

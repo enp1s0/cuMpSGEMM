@@ -9,7 +9,7 @@ struct dynamic_launch_handle {
 	unsigned flag_buffer_length;
 	unsigned current_buffer_id;
 
-	int *frag_buffer;
+	int *flag_buffer;
 
 	bool enabled;
 	unsigned enabled_id;

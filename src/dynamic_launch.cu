@@ -24,14 +24,14 @@ void init_dynamic_launch_flag_buffer(
 	handle->dynamic_launch_handle->mode_A = CUMPSGEMM_TF32TCEC;
 	handle->dynamic_launch_handle->mode_B = CUMPSGEMM_FP16TCEC;
 
-	CUTF_CHECK_ERROR(cudaMalloc(&handle->dynamic_launch_handle->frag_buffer, sizeof(int) * handle->dynamic_launch_handle->flag_buffer_length));
-	init_flag_buffer<<<1, 1, 0, handle->cuda_stream>>>(handle->dynamic_launch_handle->frag_buffer);
+	CUTF_CHECK_ERROR(cudaMalloc(&handle->dynamic_launch_handle->flag_buffer, sizeof(int) * handle->dynamic_launch_handle->flag_buffer_length));
+	init_flag_buffer<<<1, 1, 0, handle->cuda_stream>>>(handle->dynamic_launch_handle->flag_buffer);
 }
 
 void destroy_launch_flag_buffer(
 		cuMpSGEMM_handle* handle
 		) {
-	CUTF_CHECK_ERROR(cudaFree(handle->dynamic_launch_handle->frag_buffer));
+	CUTF_CHECK_ERROR(cudaFree(handle->dynamic_launch_handle->flag_buffer));
 	delete handle->dynamic_launch_handle;
 }
 

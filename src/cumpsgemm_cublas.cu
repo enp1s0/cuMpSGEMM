@@ -676,7 +676,7 @@ void cumpsgemm::hijack_control::set_dynamic_launch_flag_buffer_by_exp_stats(
 	const auto cuda_stream = handle->cuda_stream;
 
 	dynamic_launch_flag_buffer_id_by_exp_stats_kernel<<<1, 1, 0, cuda_stream>>>(
-			handle->dynamic_launch_handle->frag_buffer + dynamic_launch_flag_buffer_id,
+			handle->dynamic_launch_handle->flag_buffer + dynamic_launch_flag_buffer_id,
 			handle->exp_stats_handle->dev_total_counter_buffer + exp_stats_buffer_id_A,
 			handle->exp_stats_handle->dev_lose_counter_buffer  + exp_stats_buffer_id_A,
 			handle->exp_stats_handle->dev_total_counter_buffer + exp_stats_buffer_id_B,

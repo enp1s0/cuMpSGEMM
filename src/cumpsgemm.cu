@@ -202,7 +202,7 @@ cublasStatus_t cumpsgemm::gemm(
 
 		launch_kernel<T>(
 				gemm_module_A,
-				handle->dynamic_launch_handle->frag_buffer + handle->dynamic_launch_handle->enabled_id,
+				handle->dynamic_launch_handle->flag_buffer + handle->dynamic_launch_handle->enabled_id,
 				m, n, k,
 				*alpha,
 				a_dmem_ptr, lda,
@@ -213,7 +213,7 @@ cublasStatus_t cumpsgemm::gemm(
 				);
 		launch_kernel<T>(
 				gemm_module_B,
-				handle->dynamic_launch_handle->frag_buffer + handle->dynamic_launch_handle->enabled_id,
+				handle->dynamic_launch_handle->flag_buffer + handle->dynamic_launch_handle->enabled_id,
 				m, n, k,
 				*alpha,
 				a_dmem_ptr, lda,
@@ -349,7 +349,7 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 
 		launch_kernel<T>(
 				gemm_module_A,
-				handle->dynamic_launch_handle->frag_buffer + handle->dynamic_launch_handle->enabled_id,
+				handle->dynamic_launch_handle->flag_buffer + handle->dynamic_launch_handle->enabled_id,
 				m, n, k,
 				*alpha,
 				a_dmem_ptr, lda, stridea,
@@ -361,7 +361,7 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 				);
 		launch_kernel<T>(
 				gemm_module_B,
-				handle->dynamic_launch_handle->frag_buffer + handle->dynamic_launch_handle->enabled_id,
+				handle->dynamic_launch_handle->flag_buffer + handle->dynamic_launch_handle->enabled_id,
 				m, n, k,
 				*alpha,
 				a_dmem_ptr, lda, stridea,

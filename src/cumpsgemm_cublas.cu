@@ -7,6 +7,7 @@
 #include "handle.hpp"
 #include "exp_stats.hpp"
 #include "dynamic_launch.hpp"
+#include "dynamic_scaling.hpp"
 
 namespace {
 
@@ -682,5 +683,58 @@ void cumpsgemm::hijack_control::set_dynamic_launch_flag_buffer_by_exp_stats(
 			handle->exp_stats_handle->dev_total_counter_buffer + exp_stats_buffer_id_B,
 			handle->exp_stats_handle->dev_lose_counter_buffer  + exp_stats_buffer_id_B,
 			ratio_threshold
+			);
+}
+
+void cumpsgemm::hijack_control::scale_AB(
+		const unsigned exp_stats_buffer_id,
+		const unsigned dynamic_launch_flag_buffer_id,
+		const unsigned m,
+		const unsigned n,
+		float* const ptr,
+		const unsigned ld,
+		const unsigned batch_size,
+		const unsigned stride
+		) {
+	cumpsgemm::dynamic_scaling::scale_AB(
+			cumpsgemm::hijack_control::get_internal_global_handle(),
+			m, n,
+			ptr, ld,
+			batch_size,
+			stride,
+			exp_stats_buffer_id,
+			dynamic_launch_flag_buffer_id
+			);
+}
+
+void cumpsgemm::hijack_control::scale_C(
+		const unsigned exp_stats_buffer_A_id,
+		const unsigned exp_stats_buffer_B_id,
+		const unsigned dynamic_launch_flag_buffer_id,
+		const unsigned m,
+		const unsigned n,
+		float* const ptr,
+		const unsigned ld,
+		const unsigned batch_size,
+		const unsigned stride
+		) {
+	cumpsgemm::dynamic_scaling::scale_C(
+			cumpsgemm::hijack_control::get_internal_global_handle(),
+			m, n,
+			ptr, ld,
+			batch_size,
+			stride,
+			exp_stats_buffer_A_id,
+			exp_stats_buffer_B_id,
+			dynamic_launch_flag_buffer_id
+			);
+}
+
+float cumpsgemm::hijack_control::get_max_exp(
+		const unsigned dynamic_launch_flag_buffer_id
+		) {
+	return cumpsgemm::dynamic_scaling::get_max_exp(
+			cumpsgemm::hijack_control::get_internal_global_handle(),
+			dynamic_launch_flag_buffer_id
 			);
 }

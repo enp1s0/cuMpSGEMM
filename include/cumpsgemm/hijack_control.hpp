@@ -36,10 +36,35 @@ void download_exp_stats_result(const unsigned id);
 unsigned get_next_dynamic_launch_flag_buffer_id();
 void set_dynamic_launch_flag_buffer_id_use(unsigned id);
 void set_dynamic_launch_flag_buffer_by_exp_stats(
-		const unsigned exp_stats_buffer_A,
-		const unsigned exp_stats_buffer_B,
+		const unsigned exp_stats_buffer_A_id,
+		const unsigned exp_stats_buffer_B_id,
 		const unsigned dynamic_launch_flag_buffer_id,
 		const float ratio_threshold
+		);
+
+void scale_AB(
+		const unsigned exp_stats_buffer_id,
+		const unsigned dynamic_launch_flag_buffer_id,
+		const unsigned m,
+		const unsigned n,
+		float* const ptr,
+		const unsigned ld,
+		const unsigned batch_size = 1,
+		const unsigned stride = 0
+		);
+void scale_C(
+		const unsigned exp_stats_buffer_A_id,
+		const unsigned exp_stats_buffer_B_id,
+		const unsigned dynamic_launch_flag_buffer_id,
+		const unsigned m,
+		const unsigned n,
+		float* const ptr,
+		const unsigned ld,
+		const unsigned batch_size = 1,
+		const unsigned stride = 0
+		);
+float get_max_exp_abs(
+		const unsigned dynamic_launch_flag_buffer_id
 		);
 } // namespace hijack_control
 } // namespace cumpsgemm

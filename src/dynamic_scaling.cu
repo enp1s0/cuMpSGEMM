@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cumpsgemm/detail/common.h>
+#include <cutf/memory.hpp>
 #include "dynamic_scaling.hpp"
 #include "exp_stats.hpp"
 #include "dynamic_launch.hpp"
@@ -172,4 +173,14 @@ void cumpsgemm::dynamic_scaling::scale_C(
 			handle->exp_stats_handle->dev_max_abs_buffer + exp_stats_buffer_A_id,
 			handle->exp_stats_handle->dev_max_abs_buffer + exp_stats_buffer_B_id
 			);
+}
+
+float cumpsgemm::dynamic_scaling::get_max_exp(
+		cuMpSGEMM_handle* handle,
+		const unsigned exp_stats_buffer_id
+		) {
+	float max_exp;
+	CUTF_CHECK_ERROR(cutf::memory::copy_async(&max_exp, handle->exp_stats_handle->dev_max_abs_buffer, sizeof(float), handle->cuda_stream));
+	CUTF_CHECK_ERROR(cudaStreamSynchronize(handle->cuda_stream));
+	return max_exp;
 }

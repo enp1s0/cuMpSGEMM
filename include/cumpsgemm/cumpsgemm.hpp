@@ -65,5 +65,10 @@ void enable_exp_stats(
 void disable_exp_stats(
 		cuMpSGEMM_handle_t handle
 		);
+
+float get_max_abs_exp(
+		cuMpSGEMM_handle_t handle,
+		const unsigned buffer_id
+		);
 } // namespace cumpsgemm
 #endif

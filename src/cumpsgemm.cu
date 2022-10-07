@@ -8,6 +8,7 @@
 #include "handle.hpp"
 #include "exp_stats.hpp"
 #include "dynamic_launch.hpp"
+#include "dynamic_scaling.hpp"
 
 // For debug
 //#define CUMPSGEMM_CHECK_KERNEL_ERROR
@@ -522,4 +523,11 @@ void cumpsgemm::reset_exp_stats_buffer_id(
 		cuMpSGEMM_handle_t handle
 		) {
 	cumpsgemm::exp_stats::reset_exp_stats_buffer_id(handle);
+}
+
+float cumpsgemm::get_max_exp(
+		cuMpSGEMM_handle_t handle,
+		const unsigned buffer_id
+		) {
+	return cumpsgemm::dynamic_scaling::get_max_exp(handle, buffer_id);
 }

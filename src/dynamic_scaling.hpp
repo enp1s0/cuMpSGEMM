@@ -24,5 +24,9 @@ void scale_C(
 		const unsigned exp_stats_buffer_B_id,
 		const unsigned dynamic_launch_buffer_id
 		);
+float get_max_exp(
+		cuMpSGEMM_handle* handle,
+		const unsigned exp_stats_buffer_id
+		);
 } // dynamic_scaling
 } // cumpsgemm

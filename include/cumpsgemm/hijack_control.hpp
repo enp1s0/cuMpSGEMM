@@ -63,7 +63,7 @@ void scale_C(
 		const unsigned batch_size = 1,
 		const unsigned stride = 0
 		);
-float get_max_exp_abs(
+float get_max_exp(
 		const unsigned dynamic_launch_flag_buffer_id
 		);
 } // namespace hijack_control

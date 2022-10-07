@@ -66,7 +66,7 @@ void disable_exp_stats(
 		cuMpSGEMM_handle_t handle
 		);
 
-float get_max_abs_exp(
+float get_max_exp(
 		cuMpSGEMM_handle_t handle,
 		const unsigned buffer_id
 		);

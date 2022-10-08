@@ -314,30 +314,41 @@ void cumpsgemm::exp_stats::exp_stats_ext(
 			buffer_id
 			);
 
-	constexpr unsigned VEC_LEN = 8;
+	{
+		constexpr unsigned VEC_LEN = 4;
 
-	constexpr auto block_size = 1024;
-	const dim3 grid_size(
-			std::min<std::uint64_t>(((1lu * m * n + block_size - 1) / block_size + VEC_LEN - 1) / VEC_LEN, handle->num_sms),
-			batch_size
-			);
-	exp_stats_ext_stage_1_kernel<block_size, VEC_LEN><<<grid_size, block_size, 0, handle->cuda_stream>>>(
-			handle->exp_stats_handle->dev_max_abs_buffer + buffer_id,
-			m, n,
-			ptr, ld,
-			batch_size, stride
-			);
+		constexpr auto block_size = 1024;
+		const dim3 grid_size(
+				std::min<std::uint64_t>(((1lu * m * n + block_size - 1) / block_size + VEC_LEN - 1) / VEC_LEN, handle->num_sms * 4),
+				batch_size
+				);
+		exp_stats_ext_stage_1_kernel<block_size, VEC_LEN><<<grid_size, block_size, 0, handle->cuda_stream>>>(
+				handle->exp_stats_handle->dev_max_abs_buffer + buffer_id,
+				m, n,
+				ptr, ld,
+				batch_size, stride
+				);
+	}
 
-	exp_stats_ext_stage_2_kernel<block_size, VEC_LEN><<<grid_size, block_size, 0, handle->cuda_stream>>>(
-			handle->exp_stats_handle->dev_lose_counter_buffer + buffer_id,
-			handle->exp_stats_handle->dev_total_counter_buffer + buffer_id,
-			m, n,
-			ptr, ld,
-			batch_size, stride,
-			handle->exp_stats_handle->dev_max_abs_buffer + buffer_id,
-			handle->exp_stats_handle->lose_threshold,
-			handle->exp_stats_handle->ignore_threshold
-			);
+	{
+		constexpr unsigned VEC_LEN = 4;
+
+		constexpr auto block_size = 1024;
+		const dim3 grid_size(
+				std::min<std::uint64_t>(((1lu * m * n + block_size - 1) / block_size + VEC_LEN - 1) / VEC_LEN, handle->num_sms * 4),
+				batch_size
+				);
+		exp_stats_ext_stage_2_kernel<block_size, VEC_LEN><<<grid_size, block_size, 0, handle->cuda_stream>>>(
+				handle->exp_stats_handle->dev_lose_counter_buffer + buffer_id,
+				handle->exp_stats_handle->dev_total_counter_buffer + buffer_id,
+				m, n,
+				ptr, ld,
+				batch_size, stride,
+				handle->exp_stats_handle->dev_max_abs_buffer + buffer_id,
+				handle->exp_stats_handle->lose_threshold,
+				handle->exp_stats_handle->ignore_threshold
+				);
+	}
 }
 
 void cumpsgemm::exp_stats::exp_stats_ext(

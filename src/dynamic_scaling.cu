@@ -129,11 +129,11 @@ void cumpsgemm::dynamic_scaling::scale_AB(
 		const unsigned exp_stats_buffer_id,
 		const unsigned dynamic_launch_buffer_id
 		) {
-	constexpr unsigned VEC_LEN = 8;
+	constexpr unsigned VEC_LEN = 2;
 
-	constexpr auto block_size = 1024;
+	constexpr auto block_size = 256;
 	const dim3 grid_size(
-			std::min<std::uint64_t>(((1lu * m * n + block_size - 1) / block_size + VEC_LEN - 1) / VEC_LEN, handle->num_sms),
+			((1lu * m * n + block_size - 1) / block_size + VEC_LEN - 1) / VEC_LEN,
 			batch_size
 			);
 
@@ -157,11 +157,11 @@ void cumpsgemm::dynamic_scaling::scale_C(
 		const unsigned exp_stats_buffer_B_id,
 		const unsigned dynamic_launch_buffer_id
 		) {
-	constexpr unsigned VEC_LEN = 8;
+	constexpr unsigned VEC_LEN = 2;
 
-	constexpr auto block_size = 1024;
+	constexpr auto block_size = 256;
 	const dim3 grid_size(
-			std::min<std::uint64_t>(((1lu * m * n + block_size - 1) / block_size + VEC_LEN - 1) / VEC_LEN, handle->num_sms),
+			((1lu * m * n + block_size - 1) / block_size + VEC_LEN - 1) / VEC_LEN,
 			batch_size
 			);
 

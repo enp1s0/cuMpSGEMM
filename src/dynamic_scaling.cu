@@ -108,7 +108,7 @@ __global__ void scaling_kernel(
 		const auto mode = *dynamic_mode;
 		if (mode != CUMPSGEMM_TF32TCEC) return;
 	}
-	const auto coef = (*max_abs_value_A_ptr * *max_abs_value_B_ptr) / (1u << 15);
+	const auto coef = (*max_abs_value_A_ptr * *max_abs_value_B_ptr) / (1u << 30);
 
 	scaling_core<BLOCK_SIZE, VEC_LEN>(
 			m, n,

@@ -538,3 +538,69 @@ void cumpsgemm::download_exp_stats_result(
 		) {
 	cumpsgemm::exp_stats::download_exp_stats(handle, buffer_id);
 }
+
+template <class T>
+unsigned cumpsgemm::exp_stats_ext(
+		cuMpSGEMM_handle_t handle,
+		const unsigned m,
+		const unsigned n,
+		const T* const ptr,
+		const unsigned ld,
+		const unsigned batch_size,
+		const unsigned stride
+		) {
+	cumpsgemm::exp_stats::exp_stats_ext(
+			handle,
+			m, n,
+			ptr, ld,
+			batch_size, stride
+			);
+	return cumpsgemm::exp_stats::get_current_exp_stats_buffer_id(handle);
+}
+template unsigned cumpsgemm::exp_stats_ext<float    >(cuMpSGEMM_handle_t, const unsigned, const unsigned, const float    * const, const unsigned, const unsigned, const unsigned);
+template unsigned cumpsgemm::exp_stats_ext<cuComplex>(cuMpSGEMM_handle_t, const unsigned, const unsigned, const cuComplex* const, const unsigned, const unsigned, const unsigned);
+
+void cumpsgemm::scale_AB(
+		cuMpSGEMM_handle_t handle,
+		const unsigned exp_stats_buffer_id,
+		const unsigned dynamic_launch_flag_buffer_id,
+		const unsigned m,
+		const unsigned n,
+		float* const ptr,
+		const unsigned ld,
+		const unsigned batch_size,
+		const unsigned stride
+		) {
+	cumpsgemm::dynamic_scaling::scale_AB(
+			handle,
+			m, n,
+			ptr, ld,
+			stride,
+			batch_size,
+			exp_stats_buffer_id,
+			dynamic_launch_flag_buffer_id
+			);
+}
+void cumpsgemm::scale_C(
+		cuMpSGEMM_handle_t handle,
+		const unsigned exp_stats_buffer_A_id,
+		const unsigned exp_stats_buffer_B_id,
+		const unsigned dynamic_launch_flag_buffer_id,
+		const unsigned m,
+		const unsigned n,
+		float* const ptr,
+		const unsigned ld,
+		const unsigned batch_size,
+		const unsigned stride
+		) {
+	cumpsgemm::dynamic_scaling::scale_C(
+			handle,
+			m, n,
+			ptr, ld,
+			stride,
+			batch_size,
+			exp_stats_buffer_A_id,
+			exp_stats_buffer_B_id,
+			dynamic_launch_flag_buffer_id
+			);
+}

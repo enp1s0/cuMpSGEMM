@@ -226,7 +226,8 @@ __global__ void exp_stats_ext_stage_2_kernel(
 	const auto local_mat_ptr = ptr + ib * stride;
 	const auto max_abs_value = *max_abs_ptr;
 	const auto abs_ignore_threshold = ignore_threshold * max_abs_value;
-	const auto abs_lose_threshold = ignore_threshold * max_abs_value;
+	const auto abs_lose_threshold = lose_threshold * max_abs_value;
+
 	for (std::size_t lid = (threadIdx.x + blockIdx.x * blockDim.x) * VEC_LEN; lid < m * n; lid += BLOCK_SIZE * gridDim.x * VEC_LEN) {
 		float vec[VEC_LEN];
 		if (lid + VEC_LEN < m * n) {

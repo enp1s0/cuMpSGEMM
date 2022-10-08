@@ -129,13 +129,21 @@ std::uint32_t cumpsgemm::exp_stats::get_current_exp_stats_buffer_id(
 }
 
 namespace {
+__device__ float abs_max_float(const float a) {return cutf::math::abs(a);}
+__device__ float abs_max_float(const cuComplex a) {return cutf::math::max(cutf::math::abs(a.x), cutf::math::abs(a.y));}
+
+template <class T>
+__device__ T make_zero() {return 0;}
+template <>
+__device__ cuComplex make_zero() {return make_float2(0, 0);}
+
 // Get the largest abs value
-template <unsigned BLOCK_SIZE, unsigned VEC_LEN>
+template <unsigned BLOCK_SIZE, unsigned VEC_LEN, class LOOP_T, class T>
 __global__ void exp_stats_ext_stage_1_kernel(
 		float * const result_ptr,
 		const unsigned m,
 		const unsigned n,
-		const float* const ptr,
+		const T* const ptr,
 		const unsigned ld,
 		const unsigned batch_size,
 		const unsigned stride
@@ -143,8 +151,8 @@ __global__ void exp_stats_ext_stage_1_kernel(
 	float local_max_abs_value = 0;
 	const auto ib = blockIdx.y;
 	const auto local_mat_ptr = ptr + ib * stride;
-	for (std::size_t lid = (threadIdx.x + blockIdx.x * blockDim.x) * VEC_LEN; lid < m * n; lid += BLOCK_SIZE * gridDim.x * VEC_LEN) {
-		float vec[VEC_LEN];
+	for (LOOP_T lid = (threadIdx.x + blockIdx.x * blockDim.x) * VEC_LEN; lid < m * n; lid += BLOCK_SIZE * gridDim.x * VEC_LEN) {
+		T vec[VEC_LEN];
 		if (lid + VEC_LEN < m * n) {
 			for (uint32_t i = 0; i < VEC_LEN; i++) {
 				const auto gid = lid + i;
@@ -157,7 +165,7 @@ __global__ void exp_stats_ext_stage_1_kernel(
 		} else {
 			for (uint32_t i = 0; i < VEC_LEN; i++) {
 				const auto gid = lid + i;
-				float v;
+				T v;
 				if (gid < m * n) {
 					const auto im = gid % m;
 					const auto in = gid / m;
@@ -165,13 +173,13 @@ __global__ void exp_stats_ext_stage_1_kernel(
 					const auto memory_index = im + ld * in;
 					v = local_mat_ptr[memory_index];
 				} else {
-					v = 0;
+					v = make_zero<T>();
 				}
 				vec[i] = v;
 			}
 		}
 		for (uint32_t i = 0; i < VEC_LEN; i++) {
-			local_max_abs_value = cutf::math::max(local_max_abs_value, cutf::math::abs(vec[i]));
+			local_max_abs_value = cutf::math::max(local_max_abs_value, abs_max_float(vec[i]));
 		}
 	}
 
@@ -205,14 +213,43 @@ __global__ void exp_stats_ext_stage_1_kernel(
 		atomicMax(reinterpret_cast<std::uint32_t*>(result_ptr), max_abs);
 	}
 }
+
+__device__ void update_counter(
+		unsigned& lose_counter,
+		unsigned& total_counter,
+		const float lose_threshold,
+		const float ignore_threshold,
+		const float w
+		) {
+	const auto v = cutf::math::abs(w);
+	if (v > ignore_threshold) {
+		total_counter++;
+		if (v < lose_threshold) {
+			lose_counter++;
+		}
+	}
+}
+
+__device__ void update_counter(
+		unsigned& lose_counter,
+		unsigned& total_counter,
+		const float lose_threshold,
+		const float ignore_threshold,
+		const cuComplex w
+		) {
+	update_counter(total_counter, lose_counter, ignore_threshold, lose_threshold, w.x);
+	update_counter(total_counter, lose_counter, ignore_threshold, lose_threshold, w.y);
+}
+
+
 // exp_stats for cuBLAS original functions
-template <unsigned BLOCK_SIZE, unsigned VEC_LEN>
+template <unsigned BLOCK_SIZE, unsigned VEC_LEN, class LOOP_T, class T>
 __global__ void exp_stats_ext_stage_2_kernel(
 		unsigned long long int* const lose_counter,
 		unsigned long long int* const total_counter,
 		const unsigned m,
 		const unsigned n,
-		const float* const ptr,
+		const T* const ptr,
 		const unsigned ld,
 		const unsigned batch_size,
 		const unsigned stride,
@@ -228,8 +265,8 @@ __global__ void exp_stats_ext_stage_2_kernel(
 	const auto abs_ignore_threshold = ignore_threshold * max_abs_value;
 	const auto abs_lose_threshold = lose_threshold * max_abs_value;
 
-	for (std::size_t lid = (threadIdx.x + blockIdx.x * blockDim.x) * VEC_LEN; lid < m * n; lid += BLOCK_SIZE * gridDim.x * VEC_LEN) {
-		float vec[VEC_LEN];
+	for (LOOP_T lid = (threadIdx.x + blockIdx.x * blockDim.x) * VEC_LEN; lid < m * n; lid += BLOCK_SIZE * gridDim.x * VEC_LEN) {
+		T vec[VEC_LEN];
 		if (lid + VEC_LEN < m * n) {
 			for (uint32_t i = 0; i < VEC_LEN; i++) {
 				const auto gid = lid + i;
@@ -242,7 +279,7 @@ __global__ void exp_stats_ext_stage_2_kernel(
 		} else {
 			for (uint32_t i = 0; i < VEC_LEN; i++) {
 				const auto gid = lid + i;
-				float v;
+				T v;
 				if (gid < m * n) {
 					const auto im = gid % m;
 					const auto in = gid / m;
@@ -250,20 +287,14 @@ __global__ void exp_stats_ext_stage_2_kernel(
 					const auto memory_index = im + ld * in;
 					v = local_mat_ptr[memory_index];
 				} else {
-					v = 0;
+					v = make_zero<T>();
 				}
 				vec[i] = v;
 			}
 		}
 
 		for (unsigned i = 0; i < VEC_LEN; i++) {
-			const auto v = cutf::math::abs(vec[i]);
-			if (v > abs_ignore_threshold) {
-				local_total_counter++;
-				if (v < abs_lose_threshold) {
-					local_lose_counter++;
-				}
-			}
+			update_counter(local_lose_counter, local_total_counter, abs_lose_threshold, abs_ignore_threshold, vec[i]);
 		}
 	}
 
@@ -299,11 +330,12 @@ __global__ void exp_stats_ext_stage_2_kernel(
 }
 } // unnamed namespace
 
+template <class T>
 void cumpsgemm::exp_stats::exp_stats_ext(
 		cuMpSGEMM_handle* handle,
 		const unsigned m,
 		const unsigned n,
-		const float* const ptr,
+		const T* const ptr,
 		const unsigned ld,
 		const unsigned batch_size,
 		const unsigned stride
@@ -313,32 +345,40 @@ void cumpsgemm::exp_stats::exp_stats_ext(
 			handle,
 			buffer_id
 			);
+	constexpr unsigned VEC_LEN = 4;
 
-	{
-		constexpr unsigned VEC_LEN = 4;
-
-		constexpr auto block_size = 1024;
-		const dim3 grid_size(
-				std::min<std::uint64_t>(((1lu * m * n + block_size - 1) / block_size + VEC_LEN - 1) / VEC_LEN, handle->num_sms * 4),
-				batch_size
-				);
-		exp_stats_ext_stage_1_kernel<block_size, VEC_LEN><<<grid_size, block_size, 0, handle->cuda_stream>>>(
+	constexpr auto block_size = 1024;
+	const dim3 grid_size(
+			std::min<std::uint64_t>(((1lu * m * n + block_size - 1) / block_size + VEC_LEN - 1) / VEC_LEN, handle->num_sms * 4),
+			batch_size
+			);
+	if (static_cast<std::size_t>(m) * n < (1lu << 32)) {
+		using LOOP_T = unsigned;
+		exp_stats_ext_stage_1_kernel<block_size, VEC_LEN, LOOP_T, T><<<grid_size, block_size, 0, handle->cuda_stream>>>(
 				handle->exp_stats_handle->dev_max_abs_buffer + buffer_id,
 				m, n,
 				ptr, ld,
 				batch_size, stride
 				);
-	}
-
-	{
-		constexpr unsigned VEC_LEN = 4;
-
-		constexpr auto block_size = 1024;
-		const dim3 grid_size(
-				std::min<std::uint64_t>(((1lu * m * n + block_size - 1) / block_size + VEC_LEN - 1) / VEC_LEN, handle->num_sms * 4),
-				batch_size
+		exp_stats_ext_stage_2_kernel<block_size, VEC_LEN, LOOP_T, T><<<grid_size, block_size, 0, handle->cuda_stream>>>(
+				handle->exp_stats_handle->dev_lose_counter_buffer + buffer_id,
+				handle->exp_stats_handle->dev_total_counter_buffer + buffer_id,
+				m, n,
+				ptr, ld,
+				batch_size, stride,
+				handle->exp_stats_handle->dev_max_abs_buffer + buffer_id,
+				handle->exp_stats_handle->lose_threshold,
+				handle->exp_stats_handle->ignore_threshold
 				);
-		exp_stats_ext_stage_2_kernel<block_size, VEC_LEN><<<grid_size, block_size, 0, handle->cuda_stream>>>(
+	} else {
+		using LOOP_T = std::uint64_t;
+		exp_stats_ext_stage_1_kernel<block_size, VEC_LEN, LOOP_T, T><<<grid_size, block_size, 0, handle->cuda_stream>>>(
+				handle->exp_stats_handle->dev_max_abs_buffer + buffer_id,
+				m, n,
+				ptr, ld,
+				batch_size, stride
+				);
+		exp_stats_ext_stage_2_kernel<block_size, VEC_LEN, LOOP_T, T><<<grid_size, block_size, 0, handle->cuda_stream>>>(
 				handle->exp_stats_handle->dev_lose_counter_buffer + buffer_id,
 				handle->exp_stats_handle->dev_total_counter_buffer + buffer_id,
 				m, n,
@@ -351,25 +391,8 @@ void cumpsgemm::exp_stats::exp_stats_ext(
 	}
 }
 
-void cumpsgemm::exp_stats::exp_stats_ext(
-		cuMpSGEMM_handle* handle,
-		const unsigned m,
-		const unsigned n,
-		const cuComplex* const ptr,
-		const unsigned ld,
-		const unsigned batch_size,
-		const unsigned stride
-		) {
-	cumpsgemm::exp_stats::exp_stats_ext(
-			handle,
-			2 * m,
-			n,
-			reinterpret_cast<const float*>(ptr),
-			ld,
-			batch_size,
-			2 * stride
-			);
-}
+template void cumpsgemm::exp_stats::exp_stats_ext<float    >(cuMpSGEMM_handle*, const unsigned, const unsigned, const float*     const, const unsigned, const unsigned, const unsigned);
+template void cumpsgemm::exp_stats::exp_stats_ext<cuComplex>(cuMpSGEMM_handle*, const unsigned, const unsigned, const cuComplex* const, const unsigned, const unsigned, const unsigned);
 
 void cumpsgemm::exp_stats::reset_exp_stats_buffer_id(
 		cuMpSGEMM_handle* handle

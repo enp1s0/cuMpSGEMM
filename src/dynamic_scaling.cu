@@ -6,11 +6,13 @@
 #include "dynamic_launch.hpp"
 
 namespace {
-template <unsigned BLOCK_SIZE, unsigned VEC_LEN>
+__device__ float  mul_a(const float v, const float a) {return v * a;}
+__device__ float2 mul_a(const cuComplex v, const float a) {return make_float2(v.x * a, v.y * a);}
+template <unsigned BLOCK_SIZE, unsigned VEC_LEN, class LOOP_T, class T>
 __device__ void scaling_core (
 		const unsigned m,
 		const unsigned n,
-		float* const ptr,
+		T* const ptr,
 		const unsigned ld,
 		const unsigned batch_size,
 		const unsigned stride,
@@ -18,8 +20,8 @@ __device__ void scaling_core (
 			) {
 	const auto ib = blockIdx.y;
 	auto local_mat_ptr = ptr + ib * stride;
-	for (std::size_t lid = (threadIdx.x + blockIdx.x * blockDim.x) * VEC_LEN; lid < m * n; lid += BLOCK_SIZE * gridDim.x * VEC_LEN) {
-		float vec[VEC_LEN];
+	for (LOOP_T lid = (threadIdx.x + blockIdx.x * blockDim.x) * VEC_LEN; lid < m * n; lid += BLOCK_SIZE * gridDim.x * VEC_LEN) {
+		T vec[VEC_LEN];
 		if (lid + VEC_LEN < m * n) {
 			for (uint32_t i = 0; i < VEC_LEN; i++) {
 				const auto gid = lid + i;
@@ -36,7 +38,7 @@ __device__ void scaling_core (
 				const auto in = gid / m;
 
 				const auto memory_index = im + ld * in;
-				local_mat_ptr[memory_index] = vec[i] * coef;
+				local_mat_ptr[memory_index] = mul_a(vec[i], coef);
 			}
 		} else {
 			for (uint32_t i = 0; i < VEC_LEN; i++) {
@@ -58,7 +60,7 @@ __device__ void scaling_core (
 					const auto in = gid / m;
 
 					const auto memory_index = im + ld * in;
-					local_mat_ptr[memory_index] = vec[i] * coef;
+					local_mat_ptr[memory_index] = mul_a(vec[i], coef);
 				} else {
 					break;
 				}
@@ -67,12 +69,12 @@ __device__ void scaling_core (
 	}
 }
 
-template <unsigned BLOCK_SIZE, unsigned VEC_LEN>
+template <unsigned BLOCK_SIZE, unsigned VEC_LEN, class T>
 __global__ void scaling_kernel(
 		const int* const dynamic_mode,
 		const unsigned m,
 		const unsigned n,
-		float* const ptr,
+		T* const ptr,
 		const unsigned ld,
 		const unsigned batch_size,
 		const unsigned stride,
@@ -84,20 +86,31 @@ __global__ void scaling_kernel(
 	}
 	const auto coef = (1u << 15) / *max_abs_value_ptr;
 
-	scaling_core<BLOCK_SIZE, VEC_LEN>(
-			m, n,
-			ptr, ld,
-			batch_size, stride,
-			coef
-			);
+	if (static_cast<std::size_t>(m) * n < (1lu << 32)) {
+		using LOOP_T = unsigned;
+		scaling_core<BLOCK_SIZE, VEC_LEN, LOOP_T, T>(
+				m, n,
+				ptr, ld,
+				batch_size, stride,
+				coef
+				);
+	} else {
+		using LOOP_T = std::size_t;
+		scaling_core<BLOCK_SIZE, VEC_LEN, LOOP_T, T>(
+				m, n,
+				ptr, ld,
+				batch_size, stride,
+				coef
+				);
+	}
 }
 
-template <unsigned BLOCK_SIZE, unsigned VEC_LEN>
+template <unsigned BLOCK_SIZE, unsigned VEC_LEN, class T>
 __global__ void scaling_kernel(
 		const int* const dynamic_mode,
 		const unsigned m,
 		const unsigned n,
-		float* const ptr,
+		T* const ptr,
 		const unsigned ld,
 		const unsigned batch_size,
 		const unsigned stride,
@@ -110,20 +123,32 @@ __global__ void scaling_kernel(
 	}
 	const auto coef = (*max_abs_value_A_ptr * *max_abs_value_B_ptr) / (1u << 30);
 
-	scaling_core<BLOCK_SIZE, VEC_LEN>(
-			m, n,
-			ptr, ld,
-			batch_size, stride,
-			coef
-			);
+	if (static_cast<std::size_t>(m) * n < (1lu << 32)) {
+		using LOOP_T = unsigned;
+		scaling_core<BLOCK_SIZE, VEC_LEN, LOOP_T, T>(
+				m, n,
+				ptr, ld,
+				batch_size, stride,
+				coef
+				);
+	} else {
+		using LOOP_T = std::uint64_t;
+		scaling_core<BLOCK_SIZE, VEC_LEN, LOOP_T, T>(
+				m, n,
+				ptr, ld,
+				batch_size, stride,
+				coef
+				);
+	}
 }
 } // unnamed namespace
 
+template <class T>
 void cumpsgemm::dynamic_scaling::scale_AB(
 		cuMpSGEMM_handle* handle,
 		const unsigned m,
 		const unsigned n,
-		float* const ptr, const unsigned ld,
+		T* const ptr, const unsigned ld,
 		const unsigned stride,
 		const unsigned batch_size,
 		const unsigned exp_stats_buffer_id,
@@ -137,7 +162,7 @@ void cumpsgemm::dynamic_scaling::scale_AB(
 			batch_size
 			);
 
-	scaling_kernel<block_size, VEC_LEN><<<grid_size, block_size, 0, handle->cuda_stream>>>(
+	scaling_kernel<block_size, VEC_LEN, T><<<grid_size, block_size, 0, handle->cuda_stream>>>(
 			handle->dynamic_launch_handle->flag_buffer + dynamic_launch_buffer_id,
 			m, n,
 			ptr, ld,
@@ -145,12 +170,31 @@ void cumpsgemm::dynamic_scaling::scale_AB(
 			handle->exp_stats_handle->dev_max_abs_buffer + exp_stats_buffer_id
 			);
 }
+template void cumpsgemm::dynamic_scaling::scale_AB<float>(
+		cuMpSGEMM_handle*,
+		const unsigned,
+		const unsigned,
+		float* const, const unsigned,
+		const unsigned,
+		const unsigned,
+		const unsigned,
+		const unsigned);
+template void cumpsgemm::dynamic_scaling::scale_AB<cuComplex>(
+		cuMpSGEMM_handle*,
+		const unsigned,
+		const unsigned,
+		cuComplex* const, const unsigned,
+		const unsigned,
+		const unsigned,
+		const unsigned,
+		const unsigned);
 
+template <class T>
 void cumpsgemm::dynamic_scaling::scale_C(
 		cuMpSGEMM_handle* handle,
 		const unsigned m,
 		const unsigned n,
-		float* const ptr, const unsigned ld,
+		T* const ptr, const unsigned ld,
 		const unsigned stride,
 		const unsigned batch_size,
 		const unsigned exp_stats_buffer_A_id,
@@ -165,7 +209,7 @@ void cumpsgemm::dynamic_scaling::scale_C(
 			batch_size
 			);
 
-	scaling_kernel<block_size, VEC_LEN><<<grid_size, block_size, 0, handle->cuda_stream>>>(
+	scaling_kernel<block_size, VEC_LEN, T><<<grid_size, block_size, 0, handle->cuda_stream>>>(
 			handle->dynamic_launch_handle->flag_buffer + dynamic_launch_buffer_id,
 			m, n,
 			ptr, ld,
@@ -174,6 +218,26 @@ void cumpsgemm::dynamic_scaling::scale_C(
 			handle->exp_stats_handle->dev_max_abs_buffer + exp_stats_buffer_B_id
 			);
 }
+template void cumpsgemm::dynamic_scaling::scale_C<float>(
+		cuMpSGEMM_handle*,
+		const unsigned,
+		const unsigned,
+		float* const, const unsigned,
+		const unsigned,
+		const unsigned,
+		const unsigned,
+		const unsigned,
+		const unsigned);
+template void cumpsgemm::dynamic_scaling::scale_C<cuComplex>(
+		cuMpSGEMM_handle*,
+		const unsigned,
+		const unsigned,
+		cuComplex* const, const unsigned,
+		const unsigned,
+		const unsigned,
+		const unsigned,
+		const unsigned,
+		const unsigned);
 
 float cumpsgemm::dynamic_scaling::get_max_exp(
 		cuMpSGEMM_handle* handle,

@@ -226,14 +226,14 @@ cublasStatus_t cumpsgemm::gemm(
 
 	}
 	if (handle->exp_stats_handle->enabled) {
-		cumpsgemm::exp_stats::exp_stats_ext(
+		cumpsgemm::exp_stats::exp_stats_ext<T>(
 				handle,
 				m, n,
 				c_dmem_ptr, ldc,
 				1,
 				0	
 				);
-		}
+	}
 
 	return CUBLAS_STATUS_SUCCESS;
 }
@@ -375,7 +375,7 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 	}
 
 	if (handle->exp_stats_handle->enabled) {
-		cumpsgemm::exp_stats::exp_stats_ext(
+		cumpsgemm::exp_stats::exp_stats_ext<T>(
 				handle,
 				m, n,
 				c_dmem_ptr, ldc,
@@ -560,13 +560,14 @@ unsigned cumpsgemm::exp_stats_ext(
 template unsigned cumpsgemm::exp_stats_ext<float    >(cuMpSGEMM_handle_t, const unsigned, const unsigned, const float    * const, const unsigned, const unsigned, const unsigned);
 template unsigned cumpsgemm::exp_stats_ext<cuComplex>(cuMpSGEMM_handle_t, const unsigned, const unsigned, const cuComplex* const, const unsigned, const unsigned, const unsigned);
 
+template <class T>
 void cumpsgemm::scale_AB(
 		cuMpSGEMM_handle_t handle,
 		const unsigned exp_stats_buffer_id,
 		const unsigned dynamic_launch_flag_buffer_id,
 		const unsigned m,
 		const unsigned n,
-		float* const ptr,
+		T* const ptr,
 		const unsigned ld,
 		const unsigned batch_size,
 		const unsigned stride
@@ -581,6 +582,30 @@ void cumpsgemm::scale_AB(
 			dynamic_launch_flag_buffer_id
 			);
 }
+template void cumpsgemm::scale_AB<float>(
+		cuMpSGEMM_handle_t,
+		const unsigned,
+		const unsigned,
+		const unsigned,
+		const unsigned,
+		float* const,
+		const unsigned,
+		const unsigned,
+		const unsigned
+		);
+template void cumpsgemm::scale_AB<cuComplex>(
+		cuMpSGEMM_handle_t,
+		const unsigned,
+		const unsigned,
+		const unsigned,
+		const unsigned,
+		cuComplex* const,
+		const unsigned,
+		const unsigned,
+		const unsigned
+		);
+
+template <class T>
 void cumpsgemm::scale_C(
 		cuMpSGEMM_handle_t handle,
 		const unsigned exp_stats_buffer_A_id,
@@ -588,7 +613,7 @@ void cumpsgemm::scale_C(
 		const unsigned dynamic_launch_flag_buffer_id,
 		const unsigned m,
 		const unsigned n,
-		float* const ptr,
+		T* const ptr,
 		const unsigned ld,
 		const unsigned batch_size,
 		const unsigned stride
@@ -604,3 +629,27 @@ void cumpsgemm::scale_C(
 			dynamic_launch_flag_buffer_id
 			);
 }
+template void cumpsgemm::scale_C<float>(
+		cuMpSGEMM_handle_t,
+		const unsigned,
+		const unsigned,
+		const unsigned,
+		const unsigned,
+		const unsigned,
+		float* const,
+		const unsigned,
+		const unsigned,
+		const unsigned
+		);
+template void cumpsgemm::scale_C<cuComplex>(
+		cuMpSGEMM_handle_t,
+		const unsigned,
+		const unsigned,
+		const unsigned,
+		const unsigned,
+		const unsigned,
+		cuComplex* const,
+		const unsigned,
+		const unsigned,
+		const unsigned
+		);

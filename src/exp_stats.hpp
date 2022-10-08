@@ -46,20 +46,12 @@ std::pair<std::size_t, std::size_t> get_exp_stats(
 		cuMpSGEMM_handle* handle,
 		const unsigned buffer_id
 		);
+template <class T>
 void exp_stats_ext(
 		cuMpSGEMM_handle* handle,
 		const unsigned m,
 		const unsigned n,
-		const float* const ptr,
-		const unsigned ld,
-		const unsigned batch_size,
-		const unsigned stride
-		);
-void exp_stats_ext(
-		cuMpSGEMM_handle* handle,
-		const unsigned m,
-		const unsigned n,
-		const cuComplex* const ptr,
+		const T* const ptr,
 		const unsigned ld,
 		const unsigned batch_size,
 		const unsigned stride

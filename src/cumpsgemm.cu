@@ -531,3 +531,10 @@ float cumpsgemm::get_max_exp(
 		) {
 	return cumpsgemm::dynamic_scaling::get_max_exp(handle, buffer_id);
 }
+
+void cumpsgemm::download_exp_stats_result(
+		cuMpSGEMM_handle_t handle,
+		const unsigned buffer_id
+		) {
+	cumpsgemm::exp_stats::download_exp_stats(handle, buffer_id);
+}

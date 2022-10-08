@@ -180,7 +180,12 @@ float cumpsgemm::dynamic_scaling::get_max_exp(
 		const unsigned exp_stats_buffer_id
 		) {
 	float max_exp;
-	CUTF_CHECK_ERROR(cutf::memory::copy_async(&max_exp, handle->exp_stats_handle->dev_max_abs_buffer, sizeof(float), handle->cuda_stream));
+	CUTF_CHECK_ERROR(cudaMemcpyAsync(
+				&max_exp,
+				handle->exp_stats_handle->dev_max_abs_buffer + exp_stats_buffer_id
+				, sizeof(float),
+				cudaMemcpyDefault,
+				handle->cuda_stream));
 	CUTF_CHECK_ERROR(cudaStreamSynchronize(handle->cuda_stream));
 	return max_exp;
 }

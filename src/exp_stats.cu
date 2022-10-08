@@ -2,7 +2,6 @@
 #include <cutf/math.hpp>
 #include <cutf/experimental/fp.hpp>
 #include <cumpsgemm/cumpsgemm.hpp>
-#include <chrono>
 #include <thread>
 #include "exp_stats.hpp"
 
@@ -34,11 +33,9 @@ std::pair<std::size_t, std::size_t> cumpsgemm::exp_stats::get_exp_stats(
 		cuMpSGEMM_handle* handle,
 		const unsigned buffer_id
 		) {
-	const auto start_clock = std::chrono::system_clock::now();
 	volatile ulong2* p1 = handle->exp_stats_handle->host_counter_buffer;
 	while (p1[buffer_id].x == handle->exp_stats_handle->buffer_empty_value) {
 	}
-	const auto end_clock = std::chrono::system_clock::now();
 
 	return std::pair<std::size_t, std::size_t>{
 		p1[buffer_id].y,
@@ -204,9 +201,8 @@ __global__ void exp_stats_ext_stage_1_kernel(
 	}
 
 	if (threadIdx.x == 0) {
-		const auto max_abs = cutf::experimental::fp::reinterpret_as_fp(
-			cutf::experimental::fp::reinterpret_as_uint(local_max_abs_value) & 0x7fa00000u);
-		atomicAdd(result_ptr, max_abs);
+		const std::uint32_t max_abs = cutf::experimental::fp::reinterpret_as_uint(local_max_abs_value) & 0x7fa00000u;
+		atomicMax(reinterpret_cast<std::uint32_t*>(result_ptr), max_abs);
 	}
 }
 // exp_stats for cuBLAS original functions

@@ -4,3 +4,6 @@
 [submodule "submodules/wmma_extension"]
 	path = submodules/wmma_extension
 	url = https://github.com/wmmae/wmma_extension
+[submodule "submodules/cuGEMM-Mx2x2"]
+	path = submodules/cuGEMM-Mx2x2
+	url = https://github.com/enp1s0/cuGEMM-Mx2x2

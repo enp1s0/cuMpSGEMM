@@ -4,6 +4,7 @@
 #include <dlfcn.h>
 #include <cumpsgemm/cumpsgemm.hpp>
 #include <cumpsgemm/hijack_control.hpp>
+#include <cugemm_Mx2x2.hpp>
 #include "handle.hpp"
 #include "exp_stats.hpp"
 #include "dynamic_launch.hpp"
@@ -12,6 +13,7 @@ namespace {
 
 cuMpSGEMM_handle_t internal_global_cuMpSGEMM_handle = nullptr;
 std::string internal_global_last_called_function_str = "";
+bool global_internal_gemm_Mx2x2_enabled = false;
 
 enum hijack_control_t {
 	static_mode,
@@ -202,6 +204,23 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 
 	cublasStatus_t res;
 
+	if (compute_mode == CUMPSGEMM_CUBLAS &&
+			((m & (m - 1)) == 0) && n == 2 && k == 2 &&
+			global_internal_gemm_Mx2x2_enabled) {
+
+		mtk::cugemm::gemm_Mx2x2(
+				op_A, op_B,
+				m,
+				*alpha,
+				a_dmem_ptr, lda,
+				b_dmem_ptr, ldb,
+				*beta,
+				c_dmem_ptr, ldc
+				);
+
+		return CUBLAS_STATUS_SUCCESS;
+	}
+
 	if (compute_mode == CUMPSGEMM_CUBLAS || compute_mode == CUMPSGEMM_CUBLAS_FP16TC || compute_mode == CUMPSGEMM_CUBLAS_TF32TC || compute_mode == CUMPSGEMM_CUBLAS_SIMT) {
 		cublasMath_t math_mode;
 		cublasGetMathMode(cublas_handle, &math_mode);
@@ -305,6 +324,24 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 	}
 
 	cublasStatus_t res;
+
+	if (compute_mode == CUMPSGEMM_CUBLAS &&
+			((m & (m - 1)) == 0) && n == 2 && k == 2 &&
+			global_internal_gemm_Mx2x2_enabled) {
+
+		mtk::cugemm::gemm_strided_batch_Mx2x2(
+				op_A, op_B,
+				m,
+				*alpha,
+				a_dmem_ptr, lda, stridea,
+				b_dmem_ptr, ldb, strideb,
+				*beta,
+				c_dmem_ptr, ldc, stridec,
+				batch_count
+				);
+
+		return CUBLAS_STATUS_SUCCESS;
+	}
 
 	if (compute_mode == CUMPSGEMM_CUBLAS || compute_mode == CUMPSGEMM_CUBLAS_FP16TC || compute_mode == CUMPSGEMM_CUBLAS_TF32TC || compute_mode == CUMPSGEMM_CUBLAS_SIMT) {
 		cublasMath_t math_mode;
@@ -683,4 +720,12 @@ void cumpsgemm::hijack_control::set_dynamic_launch_flag_buffer_by_exp_stats(
 			handle->exp_stats_handle->dev_lost_counter_buffer  + exp_stats_buffer_id_B,
 			ratio_threshold
 			);
+}
+
+void cumpsgemm::hijack_control::enable_custom_gemm_Mx2x2() {
+	global_internal_gemm_Mx2x2_enabled  = true;
+}
+
+void cumpsgemm::hijack_control::disable_custom_gemm_Mx2x2() {
+	global_internal_gemm_Mx2x2_enabled  = true;
 }

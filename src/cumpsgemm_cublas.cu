@@ -20,13 +20,6 @@ enum hijack_control_t {
 } hijack_mode = dynamic_mode;
 cuMpSGEMM_compute_mode_t internal_global_compute_mode = CUMPSGEMM_CUBLAS;
 
-template <class T>
-std::string get_type_name_str();
-template <>
-std::string get_type_name_str<float>() {return "float";};
-template <>
-std::string get_type_name_str<cuComplex>() {return "cuComplex";};
-
 const std::string info_env_name = "CUMPSGEMM_INFO";
 void cuMpSGEMM_log(
 		const std::string str
@@ -263,7 +256,7 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 
 	} else {
 		if (profiling_flag) {
-			const std::string func_name = "gemm<" + get_type_name_str<T>() + ">";
+			const std::string func_name = std::string(std::is_same<T, float>::value ? "s" : "c") + "gemm_" + std::string(cuMpSGEMM_get_compute_mode_string(compute_mode));
 			snprintf(profile_result.function_name, profile_result.function_name_length - 1, "%s-%s%s-m%lu-n%lu-k%lu", func_name.c_str(), cumpsgemm::CULiP::get_cublasOperation_t_string(op_A), cumpsgemm::CULiP::get_cublasOperation_t_string(op_B), m, n, k);
 			cumpsgemm::CULiP::launch_function(cuda_stream, &cumpsgemm::CULiP::record_timestamp, (void*)&profile_result.start_timestamp);
 		}
@@ -396,7 +389,7 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 		}
 	} else {
 		if (profiling_flag) {
-			const std::string func_name = "gemm_stridedBatch<" + get_type_name_str<T>() + ">";
+			const std::string func_name = std::string(std::is_same<T, float>::value ? "s" : "c") + "gemm_stridedBatch_" + std::string(cuMpSGEMM_get_compute_mode_string(compute_mode));
 			snprintf(profile_result.function_name, profile_result.function_name_length - 1, "%s-%s%s-m%lu-n%lu-k%lu-batchCount%lu", func_name.c_str(), cumpsgemm::CULiP::get_cublasOperation_t_string(op_A), cumpsgemm::CULiP::get_cublasOperation_t_string(op_B), m, n, k, batch_count);
 			cumpsgemm::CULiP::launch_function(cuda_stream, &cumpsgemm::CULiP::record_timestamp, (void*)&profile_result.start_timestamp);
 		}

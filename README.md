@@ -21,7 +21,7 @@ cd cuMpSGEMM
 mkdir build
 cd build
 cmake ..
-# It may takes ~15 min
+# It may take ~15 min
 make -j4
 ```
 

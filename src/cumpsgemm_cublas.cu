@@ -96,6 +96,20 @@ cuMpSGEMM_handle_t cuMpSGEMM_get_internal_global_handle() {
 	return internal_global_cuMpSGEMM_handle;
 }
 
+const std::string gemm_Mx2x2_env_name = "CUMPSGEMM_CUSTOM_GEMM_MX2X2";
+bool is_gemm_Mx2x2_enabled() {
+	if (global_internal_gemm_Mx2x2_enabled) {
+		return true;
+	}
+
+	const auto env = getenv(gemm_Mx2x2_env_name.c_str());
+	if (env == nullptr || std::string(env) == "0") {
+		return false;
+	}
+
+	return true;
+}
+
 const std::string rule_lib_name = "libcumpsgemm_rule.so";
 const std::string cublas_lib_name = "libcublas.so";
 } // noname namespace
@@ -213,7 +227,7 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 	// -----------------------------------
 	if (compute_mode == CUMPSGEMM_CUBLAS &&
 			((m & (m - 1)) == 0) && n == 2 && k == 2 &&
-			global_internal_gemm_Mx2x2_enabled) {
+			is_gemm_Mx2x2_enabled()) {
 
 		if (profiling_flag) {
 			const std::string func_name = "gemm_Mx2x2";
@@ -388,7 +402,7 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 	// -----------------------------------
 	if (compute_mode == CUMPSGEMM_CUBLAS &&
 			((m & (m - 1)) == 0) && n == 2 && k == 2 &&
-			global_internal_gemm_Mx2x2_enabled) {
+			is_gemm_Mx2x2_enabled()) {
 
 		if (profiling_flag) {
 			const std::string func_name = "gemm_strided_batch_Mx2x2";

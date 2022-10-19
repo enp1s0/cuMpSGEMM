@@ -106,6 +106,9 @@ export CUMPSGEMM_INFO=[0|1]
 
 # Output error message
 export CUMPSGEMM_ERROR_LOG=[0|1]
+
+# Enable custom gemm_Mx2x2 (https://github.com/enp1s0/cuGEMM-Mx2x2)
+export CUMPSGEMM_CUSTOM_GEMM_MX2X2=[0|1]
 ```
 
 ### CULiP integration

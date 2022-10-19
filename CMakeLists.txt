@@ -30,12 +30,13 @@ set(
 	${SRCDIR}/handle.cu
 	${SRCDIR}/dynamic_launch.cu
 	${SRCDIR}/culip.cu
+	${SUBMODULEDIR}/cuGEMM-Mx2x2/src/main.cu
 	${HEADERS}
 	)
 
 add_library(libobjs OBJECT ${LIBSRCS})
 set_property(TARGET libobjs PROPERTY POSITION_INDEPENDENT_CODE 1)
-target_include_directories(libobjs PUBLIC ${INCDIR} ${SUBMODULEDIR}/cutf/include ${SUBMODULEDIR}/wmma_extension/include)
+target_include_directories(libobjs PUBLIC ${INCDIR} ${SUBMODULEDIR}/cutf/include ${SUBMODULEDIR}/wmma_extension/include ${SUBMODULEDIR}/cuGEMM-Mx2x2/include)
 
 ## static library
 add_library(cumpsgemm_static STATIC $<TARGET_OBJECTS:libobjs>)

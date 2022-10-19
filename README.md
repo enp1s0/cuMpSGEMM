@@ -94,12 +94,6 @@ To hijack the cuBLAS static library, the same name library is created.
 In this process, the build script decomposes the cuBLAS static library and composes the TCEC SGEMM and decomposed modules except sgemm.o etc.
 This is not the reverse engineering, decompiling or disassembling that is prohibited by [NVIDIA EULA](https://docs.nvidia.com/cuda/eula/index.html).
 
-## CULiP integration
-To output [CULiP](https://github.com/enp1s0/CULiP) logs, specify a following environmental variable.
-```bash
-export CUMPSGEMM_ENABLE_CULIP_PROFILING=1
-```
-
 ## Test
 ```
 Usage : ./build/cumpsgemm_test sgemm [exp2|seq] [min_N] [max_N] [interval]
@@ -123,6 +117,12 @@ export CUMPSGEMM_INFO=[0|1]
 
 # Output error message
 export CUMPSGEMM_ERROR_LOG=[0|1]
+```
+
+### CULiP integration
+To output [CULiP](https://github.com/enp1s0/CULiP) logs, specify a following environmental variable.
+```bash
+export CUMPSGEMM_ENABLE_CULIP_PROFILING=1
 ```
 
 ## License

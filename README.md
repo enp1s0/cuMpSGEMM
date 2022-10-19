@@ -21,8 +21,8 @@ cd cuMpSGEMM
 mkdir build
 cd build
 cmake ..
+# It may takes ~15 min
 make -j4
-./prepare_hijacking.sh build
 ```
 
 - For other Ampere GPUs
@@ -39,21 +39,10 @@ This throughput of this library is only optimized for A100 GPU.
 ## Usage
 
 ### 1. Hijack cuBLAS library
-
-#### Shared library
-
 Before executing a target application, set an environmental variable as follows.
 ```bash
 export LD_PRELOAD=/path/to/cumpsgemm/hijack/lib/libcumpsgemm.so:$LD_PRELOAD
 ```
-
-#### Static library (Unstable)
-
-Before building the target application,
-```bash
-export LIBRARY_PATH=/path/to/cumpsgemm/hijack/lib:$LIBRARY_PATH
-```
-and build (e.g. make)
 
 ### 2. Control SGEMM computing mode
 By the default rule, the SGEMM computing mode can be changed via an environmental variable as follows:

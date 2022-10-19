@@ -208,9 +208,18 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 
 	cublasStatus_t res;
 
+	// -----------------------------------
+	// gemm_Mx2x2
+	// -----------------------------------
 	if (compute_mode == CUMPSGEMM_CUBLAS &&
 			((m & (m - 1)) == 0) && n == 2 && k == 2 &&
 			global_internal_gemm_Mx2x2_enabled) {
+
+		if (profiling_flag) {
+			const std::string func_name = "gemm_Mx2x2";
+			snprintf(profile_result.function_name, profile_result.function_name_length - 1, "%s-%s%s-m%lu-n%lu-k%lu", func_name.c_str(), cumpsgemm::CULiP::get_cublasOperation_t_string(op_A), cumpsgemm::CULiP::get_cublasOperation_t_string(op_B), m, n, k);
+			cumpsgemm::CULiP::launch_function(cuda_stream, &cumpsgemm::CULiP::record_timestamp, (void*)&profile_result.start_timestamp);
+		}
 
 		mtk::cugemm::gemm_Mx2x2(
 				op_A, op_B,
@@ -222,10 +231,21 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 				c_dmem_ptr, ldc
 				);
 
+		if (profiling_flag) {
+			// Record end rimestamp
+			cumpsgemm::CULiP::launch_function(cuda_stream, &cumpsgemm::CULiP::record_timestamp, (void*)&profile_result.end_timestamp);
+
+			// Print result
+			cumpsgemm::CULiP::launch_function(cuda_stream, &cumpsgemm::CULiP::print_profile_result, (void*)&profile_result);
+		}
+
 		return CUBLAS_STATUS_SUCCESS;
 	}
 
 	if (compute_mode == CUMPSGEMM_CUBLAS || compute_mode == CUMPSGEMM_CUBLAS_FP16TC || compute_mode == CUMPSGEMM_CUBLAS_TF32TC || compute_mode == CUMPSGEMM_CUBLAS_SIMT) {
+		// -----------------------------------
+		// cuBLAS
+		// -----------------------------------
 		cublasMath_t math_mode;
 		cublasGetMathMode(cublas_handle, &math_mode);
 		if (compute_mode == CUMPSGEMM_CUBLAS_TF32TC) {
@@ -274,6 +294,9 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 		}
 
 	} else {
+		// -----------------------------------
+		// cuMpSGEMM
+		// -----------------------------------
 		if (profiling_flag) {
 			const std::string func_name = std::string(std::is_same<T, float>::value ? "s" : "c") + "gemm_" + std::string(cuMpSGEMM_get_compute_mode_string(compute_mode));
 			snprintf(profile_result.function_name, profile_result.function_name_length - 1, "%s-%s%s-m%lu-n%lu-k%lu", func_name.c_str(), cumpsgemm::CULiP::get_cublasOperation_t_string(op_A), cumpsgemm::CULiP::get_cublasOperation_t_string(op_B), m, n, k);
@@ -360,9 +383,19 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 
 	cublasStatus_t res;
 
+	// -----------------------------------
+	// gemm_Mx2x2
+	// -----------------------------------
 	if (compute_mode == CUMPSGEMM_CUBLAS &&
 			((m & (m - 1)) == 0) && n == 2 && k == 2 &&
 			global_internal_gemm_Mx2x2_enabled) {
+
+		if (profiling_flag) {
+			const std::string func_name = "gemm_strided_batch_Mx2x2";
+			snprintf(profile_result.function_name, profile_result.function_name_length - 1, "%s-%s%s-m%lu-n%lu-k%lu-batchCount%lu",
+					func_name.c_str(), cumpsgemm::CULiP::get_cublasOperation_t_string(op_A), cumpsgemm::CULiP::get_cublasOperation_t_string(op_B), m, n, k, batch_count);
+			cumpsgemm::CULiP::launch_function(cuda_stream, &cumpsgemm::CULiP::record_timestamp, (void*)&profile_result.start_timestamp);
+		}
 
 		mtk::cugemm::gemm_strided_batch_Mx2x2(
 				op_A, op_B,
@@ -375,10 +408,21 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 				batch_count
 				);
 
+		if (profiling_flag) {
+			// Record end rimestamp
+			cumpsgemm::CULiP::launch_function(cuda_stream, &cumpsgemm::CULiP::record_timestamp, (void*)&profile_result.end_timestamp);
+
+			// Print result
+			cumpsgemm::CULiP::launch_function(cuda_stream, &cumpsgemm::CULiP::print_profile_result, (void*)&profile_result);
+		}
+
 		return CUBLAS_STATUS_SUCCESS;
 	}
 
 	if (compute_mode == CUMPSGEMM_CUBLAS || compute_mode == CUMPSGEMM_CUBLAS_FP16TC || compute_mode == CUMPSGEMM_CUBLAS_TF32TC || compute_mode == CUMPSGEMM_CUBLAS_SIMT) {
+		// -----------------------------------
+		// cuBLAS
+		// -----------------------------------
 		cublasMath_t math_mode;
 		cublasGetMathMode(cublas_handle, &math_mode);
 		if (compute_mode == CUMPSGEMM_CUBLAS_TF32TC) {
@@ -425,6 +469,9 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 					);
 		}
 	} else {
+		// -----------------------------------
+		// cuMpSGEMM
+		// -----------------------------------
 		if (profiling_flag) {
 			const std::string func_name = std::string(std::is_same<T, float>::value ? "s" : "c") + "gemm_stridedBatch_" + std::string(cuMpSGEMM_get_compute_mode_string(compute_mode));
 			snprintf(profile_result.function_name, profile_result.function_name_length - 1, "%s-%s%s-m%lu-n%lu-k%lu-batchCount%lu", func_name.c_str(), cumpsgemm::CULiP::get_cublasOperation_t_string(op_A), cumpsgemm::CULiP::get_cublasOperation_t_string(op_B), m, n, k, batch_count);
@@ -834,5 +881,5 @@ void cumpsgemm::hijack_control::enable_custom_gemm_Mx2x2() {
 }
 
 void cumpsgemm::hijack_control::disable_custom_gemm_Mx2x2() {
-	global_internal_gemm_Mx2x2_enabled  = true;
+	global_internal_gemm_Mx2x2_enabled  = false;
 }

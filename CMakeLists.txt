@@ -29,6 +29,7 @@ set(
 	${SRCDIR}/default_cumpsgemm_rule.cu
 	${SRCDIR}/handle.cu
 	${SRCDIR}/dynamic_launch.cu
+	${SRCDIR}/culip.cu
 	${SUBMODULEDIR}/cuGEMM-Mx2x2/src/main.cu
 	${HEADERS}
 	)

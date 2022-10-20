@@ -241,7 +241,42 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 				a_dmem_ptr, lda,
 				b_dmem_ptr, ldb,
 				*beta,
-				c_dmem_ptr, ldc
+				c_dmem_ptr, ldc,
+				cuda_stream
+				);
+
+		if (profiling_flag) {
+			// Record end rimestamp
+			cumpsgemm::CULiP::launch_function(cuda_stream, &cumpsgemm::CULiP::record_timestamp, (void*)&profile_result.end_timestamp);
+
+			// Print result
+			cumpsgemm::CULiP::launch_function(cuda_stream, &cumpsgemm::CULiP::print_profile_result, (void*)&profile_result);
+		}
+
+		return CUBLAS_STATUS_SUCCESS;
+	}
+
+	// -----------------------------------
+	// gemm_2xNx2
+	// -----------------------------------
+	if (((n & (n - 1)) == 0) && m == 2 && k == 2 &&
+			is_gemm_Mx2x2_enabled()) {
+
+		if (profiling_flag) {
+			const std::string func_name = std::string(std::is_same<T, float>::value ? "s" : "c") + "gemm_2xNx2";
+			snprintf(profile_result.function_name, profile_result.function_name_length - 1, "%s-%s%s-m%lu-n%lu-k%lu", func_name.c_str(), cumpsgemm::CULiP::get_cublasOperation_t_string(op_A), cumpsgemm::CULiP::get_cublasOperation_t_string(op_B), m, n, k);
+			cumpsgemm::CULiP::launch_function(cuda_stream, &cumpsgemm::CULiP::record_timestamp, (void*)&profile_result.start_timestamp);
+		}
+
+		mtk::cugemm::gemm_2xNx2(
+				op_A, op_B,
+				n,
+				*alpha,
+				a_dmem_ptr, lda,
+				b_dmem_ptr, ldb,
+				*beta,
+				c_dmem_ptr, ldc,
+				cuda_stream
 				);
 
 		if (profiling_flag) {
@@ -417,7 +452,44 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 				b_dmem_ptr, ldb, strideb,
 				*beta,
 				c_dmem_ptr, ldc, stridec,
-				batch_count
+				batch_count,
+				cuda_stream
+				);
+
+		if (profiling_flag) {
+			// Record end rimestamp
+			cumpsgemm::CULiP::launch_function(cuda_stream, &cumpsgemm::CULiP::record_timestamp, (void*)&profile_result.end_timestamp);
+
+			// Print result
+			cumpsgemm::CULiP::launch_function(cuda_stream, &cumpsgemm::CULiP::print_profile_result, (void*)&profile_result);
+		}
+
+		return CUBLAS_STATUS_SUCCESS;
+	}
+
+	// -----------------------------------
+	// gemm_2xNx2
+	// -----------------------------------
+	if (((n & (n - 1)) == 0) && m == 2 && k == 2 &&
+			is_gemm_Mx2x2_enabled()) {
+
+		if (profiling_flag) {
+			const std::string func_name = std::string(std::is_same<T, float>::value ? "s" : "c") + "gemm_strided_batch_2xNx2";
+			snprintf(profile_result.function_name, profile_result.function_name_length - 1, "%s-%s%s-m%lu-n%lu-k%lu-batchCount%lu",
+					func_name.c_str(), cumpsgemm::CULiP::get_cublasOperation_t_string(op_A), cumpsgemm::CULiP::get_cublasOperation_t_string(op_B), m, n, k, batch_count);
+			cumpsgemm::CULiP::launch_function(cuda_stream, &cumpsgemm::CULiP::record_timestamp, (void*)&profile_result.start_timestamp);
+		}
+
+		mtk::cugemm::gemm_strided_batch_2xNx2(
+				op_A, op_B,
+				n,
+				*alpha,
+				a_dmem_ptr, lda, stridea,
+				b_dmem_ptr, ldb, strideb,
+				*beta,
+				c_dmem_ptr, ldc, stridec,
+				batch_count,
+				cuda_stream
 				);
 
 		if (profiling_flag) {

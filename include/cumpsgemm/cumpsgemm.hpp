@@ -113,6 +113,18 @@ void scale_C(
 		const unsigned batch_size = 1,
 		const unsigned stride = 0
 		);
+template <class T>
+void reset_scale_AB(
+		cuMpSGEMM_handle_t handle,
+		const unsigned exp_stats_buffer_id,
+		const unsigned dynamic_launch_flag_buffer_id,
+		const unsigned m,
+		const unsigned n,
+		T* const ptr,
+		const unsigned ld,
+		const unsigned batch_size = 1,
+		const unsigned stride = 0
+		);
 float get_max_exp(
 		cuMpSGEMM_handle_t handle,
 		const unsigned dynamic_launch_flag_buffer_id

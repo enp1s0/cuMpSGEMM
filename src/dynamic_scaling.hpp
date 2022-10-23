@@ -30,5 +30,16 @@ float get_max_exp(
 		cuMpSGEMM_handle* handle,
 		const unsigned exp_stats_buffer_id
 		);
+template <class T>
+void reset_scale_AB(
+		cuMpSGEMM_handle* handle,
+		const unsigned m,
+		const unsigned n,
+		T* const ptr, const unsigned ld,
+		const unsigned stride,
+		const unsigned batch_size,
+		const unsigned exp_stats_buffer_id,
+		const unsigned dynamic_launch_buffer_id
+		);
 } // dynamic_scaling
 } // cumpsgemm

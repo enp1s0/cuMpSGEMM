@@ -361,7 +361,7 @@ int sgemm_test_core(
 	const auto alpha = one<T>(), beta = zero<T>();
 
 	unsigned module_stage = 0;
-	auto gemm_func = [&]() {
+	auto gemm_func = [&](const bool reset_scaling = false) {
 		if (compute_mode == CUMPSGEMM_CUBLAS) {
 			cublas_gemm(
 					cublas_handle,
@@ -378,11 +378,11 @@ int sgemm_test_core(
 			if (scaling) {
 				cumpsgemm::exp_stats_ext(cuMpSGEMM_handle, (op_A == CUBLAS_OP_N ? m : k), (op_A == CUBLAS_OP_N ? k : m), a_ptr, lda);
 				exp_stats_id_A = cumpsgemm::get_current_exp_stats_buffer_id(cuMpSGEMM_handle);
-				cumpsgemm::scale_AB(cuMpSGEMM_handle, exp_stats_id_A, 0, (op_A == CUBLAS_OP_N ? m : k), (op_A == CUBLAS_OP_N ? k : m), a_ptr, lda);
+				cumpsgemm::scale_AB(cuMpSGEMM_handle, exp_stats_id_A, 1, (op_A == CUBLAS_OP_N ? m : k), (op_A == CUBLAS_OP_N ? k : m), a_ptr, lda);
 
 				cumpsgemm::exp_stats_ext(cuMpSGEMM_handle, (op_B == CUBLAS_OP_N ? k : n), (op_B == CUBLAS_OP_N ? n : k), b_ptr, ldb);
 				exp_stats_id_B = cumpsgemm::get_current_exp_stats_buffer_id(cuMpSGEMM_handle);
-				cumpsgemm::scale_AB(cuMpSGEMM_handle, exp_stats_id_B, 0, (op_B == CUBLAS_OP_N ? k : n), (op_B == CUBLAS_OP_N ? n : k), b_ptr, ldb);
+				cumpsgemm::scale_AB(cuMpSGEMM_handle, exp_stats_id_B, 1, (op_B == CUBLAS_OP_N ? k : n), (op_B == CUBLAS_OP_N ? n : k), b_ptr, ldb);
 			}
 			cumpsgemm::gemm(
 					cuMpSGEMM_handle,
@@ -397,12 +397,16 @@ int sgemm_test_core(
 					&module_stage
 					);
 			if (scaling) {
-				cumpsgemm::scale_C(cuMpSGEMM_handle, exp_stats_id_A, exp_stats_id_B, 0, m, n, c_ptr, ldc);
+				cumpsgemm::scale_C(cuMpSGEMM_handle, exp_stats_id_A, exp_stats_id_B, 1, m, n, c_ptr, ldc);
+			}
+			if (reset_scaling) {
+				cumpsgemm::reset_scale_AB(cuMpSGEMM_handle, exp_stats_id_A, 1, (op_A == CUBLAS_OP_N ? m : k), (op_A == CUBLAS_OP_N ? k : m), a_ptr, lda);
+				cumpsgemm::reset_scale_AB(cuMpSGEMM_handle, exp_stats_id_B, 1, (op_B == CUBLAS_OP_N ? k : n), (op_B == CUBLAS_OP_N ? n : k), b_ptr, ldb);
 			}
 		}
 	};
 
-	gemm_func();
+	gemm_func(true);
 
 	CUTF_CHECK_ERROR(cudaDeviceSynchronize());
 
@@ -466,7 +470,7 @@ int sgemm_strided_batch_test_core(
 
 	unsigned module_stage = 0;
 
-	auto gemm_func = [&]() {
+	auto gemm_func = [&](const bool reset_scaling = false) {
 		if (compute_mode == CUMPSGEMM_CUBLAS) {
 			cublas_gemm_strided_batch(
 					cublas_handle,
@@ -506,10 +510,14 @@ int sgemm_strided_batch_test_core(
 			if (scaling) {
 				cumpsgemm::scale_C(cuMpSGEMM_handle, exp_stats_id_A, exp_stats_id_B, 0, m, n, c_ptr, ldc, batch_count, stride_c);
 			}
+			if (reset_scaling) {
+				cumpsgemm::reset_scale_AB(cuMpSGEMM_handle, exp_stats_id_A, 0, (op_A == CUBLAS_OP_N ? m : k), (op_A == CUBLAS_OP_N ? k : m), a_ptr, lda, batch_count, stride_a);
+				cumpsgemm::reset_scale_AB(cuMpSGEMM_handle, exp_stats_id_B, 0, (op_B == CUBLAS_OP_N ? k : n), (op_B == CUBLAS_OP_N ? n : k), b_ptr, ldb, batch_count, stride_b);
+			}
 		}
 	};
 
-	gemm_func();
+	gemm_func(true);
 
 	CUTF_CHECK_ERROR(cudaDeviceSynchronize());
 

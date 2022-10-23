@@ -8,6 +8,9 @@
 namespace {
 __device__ float  mul_a(const float v, const float a) {return v * a;}
 __device__ float2 mul_a(const cuComplex v, const float a) {return make_float2(v.x * a, v.y * a);}
+
+constexpr float half_exp_max = 1u << 14;
+
 template <unsigned BLOCK_SIZE, unsigned VEC_LEN, class LOOP_T, class T>
 __device__ void scaling_core (
 		const unsigned m,
@@ -82,9 +85,9 @@ __global__ void scaling_kernel(
 		) {
 	if (dynamic_mode != nullptr) {
 		const auto mode = *dynamic_mode;
-		if (mode != CUMPSGEMM_TF32TCEC) return;
+		if (mode != CUMPSGEMM_FP16TCEC) return;
 	}
-	const auto coef = (1u << 15) / *max_abs_value_ptr;
+	const auto coef = half_exp_max / *max_abs_value_ptr;
 
 	scaling_core<BLOCK_SIZE, VEC_LEN, LOOP_T, T>(
 			m, n,
@@ -108,9 +111,34 @@ __global__ void scaling_kernel(
 		) {
 	if (dynamic_mode != nullptr) {
 		const auto mode = *dynamic_mode;
-		if (mode != CUMPSGEMM_TF32TCEC) return;
+		if (mode != CUMPSGEMM_FP16TCEC) return;
 	}
-	const auto coef = (*max_abs_value_A_ptr * *max_abs_value_B_ptr) / (1u << 30);
+	const auto coef = static_cast<float>(*max_abs_value_A_ptr * *max_abs_value_B_ptr) / (half_exp_max * half_exp_max);
+
+	scaling_core<BLOCK_SIZE, VEC_LEN, LOOP_T, T>(
+			m, n,
+			ptr, ld,
+			batch_size, stride,
+			coef
+			);
+}
+
+template <unsigned BLOCK_SIZE, unsigned VEC_LEN, class T, class LOOP_T>
+__global__ void reset_scaling_kernel(
+		const int* const dynamic_mode,
+		const unsigned m,
+		const unsigned n,
+		T* const ptr,
+		const unsigned ld,
+		const unsigned batch_size,
+		const unsigned stride,
+		const float* const max_abs_value_ptr
+		) {
+	if (dynamic_mode != nullptr) {
+		const auto mode = *dynamic_mode;
+		if (mode != CUMPSGEMM_FP16TCEC) return;
+	}
+	const auto coef = *max_abs_value_ptr / half_exp_max;
 
 	scaling_core<BLOCK_SIZE, VEC_LEN, LOOP_T, T>(
 			m, n,
@@ -237,6 +265,64 @@ template void cumpsgemm::dynamic_scaling::scale_C<cuComplex>(
 		const unsigned,
 		cuComplex* const, const unsigned,
 		const unsigned,
+		const unsigned,
+		const unsigned,
+		const unsigned,
+		const unsigned);
+
+template <class T>
+void cumpsgemm::dynamic_scaling::reset_scale_AB(
+		cuMpSGEMM_handle* handle,
+		const unsigned m,
+		const unsigned n,
+		T* const ptr, const unsigned ld,
+		const unsigned stride,
+		const unsigned batch_size,
+		const unsigned exp_stats_buffer_id,
+		const unsigned dynamic_launch_buffer_id
+		) {
+	constexpr unsigned VEC_LEN = 2;
+
+	constexpr auto block_size = 256;
+	const dim3 grid_size(
+			((1lu * m * n + block_size - 1) / block_size + VEC_LEN - 1) / VEC_LEN,
+			(stride == 0) ? 1 : batch_size
+			);
+
+	if (static_cast<std::size_t>(m) * n < (1lu << 32)) {
+		using LOOP_T = unsigned;
+		reset_scaling_kernel<block_size, VEC_LEN, T, LOOP_T><<<grid_size, block_size, 0, handle->cuda_stream>>>(
+				handle->dynamic_launch_handle->flag_buffer + dynamic_launch_buffer_id,
+				m, n,
+				ptr, ld,
+				batch_size, stride,
+				handle->exp_stats_handle->dev_max_abs_buffer + exp_stats_buffer_id
+				);
+	} else {
+		using LOOP_T = std::size_t;
+		reset_scaling_kernel<block_size, VEC_LEN, T, LOOP_T><<<grid_size, block_size, 0, handle->cuda_stream>>>(
+				handle->dynamic_launch_handle->flag_buffer + dynamic_launch_buffer_id,
+				m, n,
+				ptr, ld,
+				batch_size, stride,
+				handle->exp_stats_handle->dev_max_abs_buffer + exp_stats_buffer_id
+				);
+	}
+}
+template void cumpsgemm::dynamic_scaling::reset_scale_AB<float>(
+		cuMpSGEMM_handle*,
+		const unsigned,
+		const unsigned,
+		float* const, const unsigned,
+		const unsigned,
+		const unsigned,
+		const unsigned,
+		const unsigned);
+template void cumpsgemm::dynamic_scaling::reset_scale_AB<cuComplex>(
+		cuMpSGEMM_handle*,
+		const unsigned,
+		const unsigned,
+		cuComplex* const, const unsigned,
 		const unsigned,
 		const unsigned,
 		const unsigned,

@@ -653,3 +653,48 @@ template void cumpsgemm::scale_C<cuComplex>(
 		const unsigned,
 		const unsigned
 		);
+
+template <class T>
+void cumpsgemm::reset_scale_AB(
+		cuMpSGEMM_handle_t handle,
+		const unsigned exp_stats_buffer_id,
+		const unsigned dynamic_launch_flag_buffer_id,
+		const unsigned m,
+		const unsigned n,
+		T* const ptr,
+		const unsigned ld,
+		const unsigned batch_size,
+		const unsigned stride
+		) {
+	cumpsgemm::dynamic_scaling::reset_scale_AB(
+			handle,
+			m, n,
+			ptr, ld,
+			stride,
+			batch_size,
+			exp_stats_buffer_id,
+			dynamic_launch_flag_buffer_id
+			);
+}
+template void cumpsgemm::reset_scale_AB<float>(
+		cuMpSGEMM_handle_t,
+		const unsigned,
+		const unsigned,
+		const unsigned,
+		const unsigned,
+		float* const,
+		const unsigned,
+		const unsigned,
+		const unsigned
+		);
+template void cumpsgemm::reset_scale_AB<cuComplex>(
+		cuMpSGEMM_handle_t,
+		const unsigned,
+		const unsigned,
+		const unsigned,
+		const unsigned,
+		cuComplex* const,
+		const unsigned,
+		const unsigned,
+		const unsigned
+		);

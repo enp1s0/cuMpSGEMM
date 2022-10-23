@@ -15,6 +15,51 @@ enum gemm_type {
 	s, c
 };
 
+enum implementation_type {
+	CUBLAS   = CUMPSGEMM_CUBLAS,
+	TF32TCEC = CUMPSGEMM_TF32TCEC,
+	TF32TC   = CUMPSGEMM_TF32TC,
+	FP16TCEC = CUMPSGEMM_FP16TCEC,
+	FP16TC   = CUMPSGEMM_FP16TC,
+	FP16TCEC_scaling = 30
+};
+
+cuMpSGEMM_compute_mode_t get_compute_mode(
+		const implementation_type imp
+		) {
+	switch (imp) {
+	case FP16TCEC_scaling:
+		return CUMPSGEMM_FP16TCEC;
+	default:
+		return (cuMpSGEMM_compute_mode_t)imp;
+	}
+}
+
+bool is_scaling_enabled(
+		const implementation_type imp
+		) {
+	switch (imp) {
+	case FP16TCEC_scaling:
+		return true;
+	default:
+		return false;
+	}
+}
+
+std::string get_implementation_type_name_str(
+		const implementation_type imp
+		) {
+	switch (imp) {
+	case CUBLAS:           return "CUBLAS";
+	case FP16TCEC_scaling: return "FP16TCEC_scaling";
+	case FP16TCEC:         return "FP16TCEC";
+	case FP16TC:           return "FP16TC";
+	case TF32TCEC:         return "TF32TCEC";
+	case TF32TC:           return "TF32TC";
+	default:               return "Unknown";
+	}
+}
+
 double error_threshold(
 		const cuMpSGEMM_compute_mode_t compute_mode,
 		const std::size_t N
@@ -310,7 +355,8 @@ int sgemm_test_core(
 		T* const a_ptr, const unsigned lda,
 		T* const b_ptr, const unsigned ldb,
 		T* const c_ptr, const unsigned ldc,
-		const cuMpSGEMM_compute_mode_t compute_mode
+		const cuMpSGEMM_compute_mode_t compute_mode,
+		const bool scaling = false
 		) {
 	const auto alpha = one<T>(), beta = zero<T>();
 
@@ -328,6 +374,16 @@ int sgemm_test_core(
 					c_ptr, ldc
 					);
 		} else {
+			unsigned exp_stats_id_A, exp_stats_id_B;
+			if (scaling) {
+				cumpsgemm::exp_stats_ext(cuMpSGEMM_handle, (op_A == CUBLAS_OP_N ? m : k), (op_A == CUBLAS_OP_N ? k : m), a_ptr, lda);
+				exp_stats_id_A = cumpsgemm::get_current_exp_stats_buffer_id(cuMpSGEMM_handle);
+				cumpsgemm::scale_AB(cuMpSGEMM_handle, exp_stats_id_A, 0, (op_A == CUBLAS_OP_N ? m : k), (op_A == CUBLAS_OP_N ? k : m), a_ptr, lda);
+
+				cumpsgemm::exp_stats_ext(cuMpSGEMM_handle, (op_B == CUBLAS_OP_N ? k : n), (op_B == CUBLAS_OP_N ? n : k), b_ptr, ldb);
+				exp_stats_id_B = cumpsgemm::get_current_exp_stats_buffer_id(cuMpSGEMM_handle);
+				cumpsgemm::scale_AB(cuMpSGEMM_handle, exp_stats_id_B, 0, (op_B == CUBLAS_OP_N ? k : n), (op_B == CUBLAS_OP_N ? n : k), b_ptr, ldb);
+			}
 			cumpsgemm::gemm(
 					cuMpSGEMM_handle,
 					op_A, op_B,
@@ -340,6 +396,9 @@ int sgemm_test_core(
 					compute_mode,
 					&module_stage
 					);
+			if (scaling) {
+				cumpsgemm::scale_C(cuMpSGEMM_handle, exp_stats_id_A, exp_stats_id_B, 0, m, n, c_ptr, ldc);
+			}
 		}
 	};
 
@@ -400,7 +459,8 @@ int sgemm_strided_batch_test_core(
 		T* const b_ptr, const unsigned ldb, const long long int stride_b,
 		T* const c_ptr, const unsigned ldc, const long long int stride_c,
 		const long long int batch_count,
-		const cuMpSGEMM_compute_mode_t compute_mode
+		const cuMpSGEMM_compute_mode_t compute_mode,
+		const bool scaling = false
 		) {
 	const auto alpha = one<T>(), beta = zero<T>();
 
@@ -420,6 +480,16 @@ int sgemm_strided_batch_test_core(
 					batch_count
 					);
 		} else {
+			unsigned exp_stats_id_A, exp_stats_id_B;
+			if (scaling) {
+				cumpsgemm::exp_stats_ext(cuMpSGEMM_handle, (op_A == CUBLAS_OP_N ? m : k), (op_A == CUBLAS_OP_N ? k : m), a_ptr, lda, batch_count, stride_a);
+				exp_stats_id_A = cumpsgemm::get_current_exp_stats_buffer_id(cuMpSGEMM_handle);
+				cumpsgemm::scale_AB(cuMpSGEMM_handle, exp_stats_id_A, 0, (op_A == CUBLAS_OP_N ? m : k), (op_A == CUBLAS_OP_N ? k : m), a_ptr, lda, batch_count, stride_a);
+
+				cumpsgemm::exp_stats_ext(cuMpSGEMM_handle, (op_B == CUBLAS_OP_N ? k : n), (op_B == CUBLAS_OP_N ? n : k), b_ptr, ldb, batch_count, stride_b);
+				exp_stats_id_B = cumpsgemm::get_current_exp_stats_buffer_id(cuMpSGEMM_handle);
+				cumpsgemm::scale_AB(cuMpSGEMM_handle, exp_stats_id_B, 0, (op_B == CUBLAS_OP_N ? k : n), (op_B == CUBLAS_OP_N ? n : k), b_ptr, ldb, batch_count, stride_b);
+			}
 			cumpsgemm::gemm_stridedBatch(
 					cuMpSGEMM_handle,
 					op_A, op_B,
@@ -433,6 +503,9 @@ int sgemm_strided_batch_test_core(
 					compute_mode,
 					&module_stage
 					);
+			if (scaling) {
+				cumpsgemm::scale_C(cuMpSGEMM_handle, exp_stats_id_A, exp_stats_id_B, 0, m, n, c_ptr, ldc, batch_count, stride_c);
+			}
 		}
 	};
 
@@ -485,7 +558,7 @@ int sgemm_strided_batch_test_core(
 	}
 }
 
-void gemm_test(const std::size_t min_N, const std::size_t max_N, const std::size_t interval, const bool only_cublas, const gemm_type gemm, const bool is_seq) {
+void gemm_test(const std::size_t min_N, const std::size_t max_N, const std::size_t interval, const std::vector<implementation_type>& imp_list, const gemm_type gemm, const bool is_seq) {
 	constexpr uint64_t seed = 0;
 	const std::size_t max_num_elements = (is_seq ? max_N * max_N : (1lu << (2 * max_N))) * (gemm == gemm_type::c ? 2 : 1);
 	float* a_ptr = cutf::memory::malloc<float>(max_num_elements);
@@ -496,17 +569,6 @@ void gemm_test(const std::size_t min_N, const std::size_t max_N, const std::size
 	CUTF_CHECK_ERROR(curandSetPseudoRandomGeneratorSeed(*curand_gen.get(), seed));
 	CUTF_CHECK_ERROR(cutf::curand::generate_uniform(*curand_gen.get(), a_ptr, max_num_elements));
 	CUTF_CHECK_ERROR(cutf::curand::generate_uniform(*curand_gen.get(), b_ptr, max_num_elements));
-
-	std::vector<cuMpSGEMM_compute_mode_t> modes;
-
-	if (!only_cublas) {
-		modes.push_back(CUMPSGEMM_FP16TCEC);
-		modes.push_back(CUMPSGEMM_FP16TC);
-		modes.push_back(CUMPSGEMM_TF32TCEC);
-		modes.push_back(CUMPSGEMM_TF32TC);
-	} else {
-		modes.push_back(CUMPSGEMM_CUBLAS);
-	}
 
 	std::vector<cublasOperation_t> sgemm_ops = {
 		CUBLAS_OP_N,
@@ -537,8 +599,10 @@ void gemm_test(const std::size_t min_N, const std::size_t max_N, const std::size
 		}
 	}
 
-	if (gemm == gemm_type::s) {
-		for (const auto mode : modes) {
+	for (const auto imp : imp_list) {
+		const auto mode = get_compute_mode(imp);
+		const auto scaling = is_scaling_enabled(imp);
+		if (gemm == gemm_type::s) {
 			for (const auto op_A : sgemm_ops) {
 				for (const auto op_B : sgemm_ops) {
 					for (const auto N : N_list) {
@@ -551,7 +615,8 @@ void gemm_test(const std::size_t min_N, const std::size_t max_N, const std::size
 								a_ptr, N,
 								b_ptr, N,
 								c_ptr, N,
-								mode
+								mode,
+								scaling
 								);
 						num_tests++;
 						if (res == 0) {
@@ -560,9 +625,7 @@ void gemm_test(const std::size_t min_N, const std::size_t max_N, const std::size
 					}
 				}
 			}
-		}
-	} else if (gemm == gemm_type::c) {
-		for (const auto mode : modes) {
+		} else if (gemm == gemm_type::c) {
 			for (const auto op_A : cgemm_ops) {
 				for (const auto op_B : cgemm_ops) {
 					for (const auto N : N_list) {
@@ -575,7 +638,8 @@ void gemm_test(const std::size_t min_N, const std::size_t max_N, const std::size
 								reinterpret_cast<cuComplex*>(a_ptr), N,
 								reinterpret_cast<cuComplex*>(b_ptr), N,
 								reinterpret_cast<cuComplex*>(c_ptr), N,
-								mode
+								mode,
+								scaling
 								);
 						num_tests++;
 						if (res == 0) {
@@ -600,7 +664,7 @@ void gemm_test(const std::size_t min_N, const std::size_t max_N, const std::size
 	cutf::memory::free(c_ptr);
 }
 
-void gemm_strided_batch_test(const std::size_t min_N, const std::size_t max_N, const std::size_t interval, const std::size_t batch_count, const bool only_cublas, const gemm_type gemm, const bool is_seq) {
+void gemm_strided_batch_test(const std::size_t min_N, const std::size_t max_N, const std::size_t interval, const std::size_t batch_count, const std::vector<implementation_type>& imp_list, const gemm_type gemm, const bool is_seq) {
 	constexpr uint64_t seed = 0;
 	const std::size_t max_num_elements = (is_seq ? max_N * max_N : (1lu << (2 * max_N))) * (gemm == gemm_type::c ? 2 : 1) * batch_count;
 	float* a_ptr = cutf::memory::malloc<float>(max_num_elements);
@@ -612,17 +676,6 @@ void gemm_strided_batch_test(const std::size_t min_N, const std::size_t max_N, c
 	CUTF_CHECK_ERROR(cutf::curand::generate_uniform(*curand_gen.get(), a_ptr, max_num_elements));
 	CUTF_CHECK_ERROR(cutf::curand::generate_uniform(*curand_gen.get(), b_ptr, max_num_elements));
 
-
-	std::vector<cuMpSGEMM_compute_mode_t> modes;
-
-	if (!only_cublas) {
-		modes.push_back(CUMPSGEMM_FP16TCEC);
-		modes.push_back(CUMPSGEMM_FP16TC);
-		modes.push_back(CUMPSGEMM_TF32TCEC);
-		modes.push_back(CUMPSGEMM_TF32TC);
-	} else {
-		modes.push_back(CUMPSGEMM_CUBLAS);
-	}
 
 	std::vector<cublasOperation_t> sgemm_ops = {
 		CUBLAS_OP_N,
@@ -655,8 +708,10 @@ void gemm_strided_batch_test(const std::size_t min_N, const std::size_t max_N, c
 
 	const auto stride = is_seq ? max_N * max_N : (1lu << (2 * max_N));
 
-	if (gemm == gemm_type::s) {
-		for (const auto mode : modes) {
+	for (const auto imp : imp_list) {
+		const auto mode = get_compute_mode(imp);
+		const auto scaling = is_scaling_enabled(imp);
+		if (gemm == gemm_type::s) {
 			for (const auto op_A : sgemm_ops) {
 				for (const auto op_B : sgemm_ops) {
 					for (const auto N : N_list) {
@@ -679,9 +734,7 @@ void gemm_strided_batch_test(const std::size_t min_N, const std::size_t max_N, c
 					}
 				}
 			}
-		}
-	} else if (gemm == gemm_type::c) {
-		for (const auto mode : modes) {
+		} else if (gemm == gemm_type::c) {
 			for (const auto op_A : cgemm_ops) {
 				for (const auto op_B : cgemm_ops) {
 					for (const auto N : N_list) {
@@ -1068,22 +1121,51 @@ void gemm_strided_batch_exp_stats_test(
 
 void print_usage(const char* program_name) {
 	std::fprintf(stderr,
-			"Usage : %s sgemm [exp2|seq] [min_N] [max_N] [interval]\n"
-			"      : %s cgemm [exp2|seq] [min_N] [max_N] [interval]\n"
-			"      : %s sgemm_strided_batch [exp2|seq] [min_N] [max_N] [interval] [batch_count]\n"
-			"      : %s cgemm_strided_batch [exp2|seq] [min_N] [max_N] [interval] [batch_count]\n"
-			"      : %s cublas_sgemm [exp2|seq] [min_N] [max_N] [interval]\n"
-			"      : %s cublas_cgemm [exp2|seq] [min_N] [max_N] [interval]\n"
-			"      : %s cublas_sgemm_strided_batch [exp2|seq] [min_N] [max_N] [interval] [batch_count]\n"
-			"      : %s cublas_cgemm_strided_batch [exp2|seq] [min_N] [max_N] [interval] [batch_count]\n"
+			"Usage : %s sgemm [exp2|seq] [min_N] [max_N] [interval] [compute mode list...]\n"
+			"      : %s cgemm [exp2|seq] [min_N] [max_N] [interval] [compute mode list...]\n"
+			"      : %s sgemm_strided_batch [exp2|seq] [min_N] [max_N] [interval] [batch_count] [compute mode list...]\n"
+			"      : %s cgemm_strided_batch [exp2|seq] [min_N] [max_N] [interval] [batch_count] [compute mode list...]\n"
 			"      : %s log [/path/to/log]\n"
 			"      : %s sgemm_exp_stats [N] [ignore_threshold] [lose_threshold]\n"
 			"      : %s cgemm_exp_stats [N] [ignore_threshold] [lose_threshold]\n"
 			"      : %s sgemm_strided_batch_exp_stats [N] [batch_size] [ignore_threshold] [lose_threshold]\n"
-			"      : %s cgemm_strided_batch_exp_stats [N] [batch_size] [ignore_threshold] [lose_threshold]\n",
-			program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name
+			"      : %s cgemm_strided_batch_exp_stats [N] [batch_size] [ignore_threshold] [lose_threshold]\n"
+			"- compute mode : FP16TCEC, TF32TCEC, FP16TC, TF32TC, FP16TCEC_scaling, CUBLAS\n"
+			,
+			program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name
 			);
 	std::fflush(stderr);
+}
+
+std::vector<implementation_type> gen_implementation_list(
+		const char* const * argv_implementation_list_start_ptr,
+		const unsigned len
+		) {
+	std::vector<implementation_type> imp_list(len);
+	for (unsigned i = 0; i < len; i++) {
+		const std::string imp_name_str = argv_implementation_list_start_ptr[i];
+		if (imp_name_str == "CUBLAS") {                  imp_list[i] = CUBLAS;
+		} else if (imp_name_str == "FP16TCEC") {         imp_list[i] = FP16TCEC;
+		} else if (imp_name_str == "FP16TC") {           imp_list[i] = FP16TC;
+		} else if (imp_name_str == "TF32TCEC") {         imp_list[i] = TF32TCEC;
+		} else if (imp_name_str == "TF32TC") {           imp_list[i] = TF32TC;
+		} else if (imp_name_str == "FP16TCEC_scaling") { imp_list[i] = FP16TCEC_scaling;
+		} else {
+			std::printf("Unknown compute mode : %s\n", imp_name_str.c_str());
+		}
+	}
+	return imp_list;
+}
+
+void print_implementation_type_list(
+		const std::vector<implementation_type>& imp_list
+		) {
+	std::printf("Testing implementations: ");
+	for (const auto imp : imp_list) {
+		std::printf("%s ", get_implementation_type_name_str(imp).c_str());
+	}
+	std::printf("\n");
+	std::fflush(stdout);
 }
 
 int main(int argc, char** argv) {
@@ -1125,29 +1207,21 @@ int main(int argc, char** argv) {
 	const bool is_seq = std::string(argv[2]) != "exp2";
 
 	if (command == "sgemm" || command == "cgemm") {
-		if (argc < 1 + 1 + 3) {
+		if (argc < 1 + 1 + 3 + 1) {
 			print_usage(argv[0]);
 			return 1;
 		}
-		gemm_test(std::stoi(argv[3]), std::stoi(argv[4]), std::stoi(argv[5]), false, (command == "sgemm" ? gemm_type::s : gemm_type::c), is_seq);
+		const auto imp_list = gen_implementation_list(argv + 6, argc - 6);
+		print_implementation_type_list(imp_list);
+		gemm_test(std::stoi(argv[3]), std::stoi(argv[4]), std::stoi(argv[5]), imp_list, (command == "sgemm" ? gemm_type::s : gemm_type::c), is_seq);
 	} else if (command == "sgemm_strided_batch" || command == "cgemm_strided_batch") {
-		if (argc < 1 + 1 + 3 + 1) {
+		if (argc < 1 + 1 + 3 + 1 + 1) {
 			print_usage(argv[0]);
 			return 1;
 		}
-		gemm_strided_batch_test(std::stoi(argv[3]), std::stoi(argv[4]), std::stoi(argv[5]), std::stoi(argv[6]), false, (command == "sgemm_strided_batch" ? gemm_type::s : gemm_type::c), is_seq);
-	} else if (command == "cublas_sgemm" || command == "cublas_cgemm") {
-		if (argc < 1 + 1 + 3) {
-			print_usage(argv[0]);
-			return 1;
-		}
-		gemm_test(std::stoi(argv[3]), std::stoi(argv[4]), std::stoi(argv[5]), true, (command == "cublas_sgemm" ? gemm_type::s : gemm_type::c), is_seq);
-	} else if (command == "cublas_sgemm_strided_batch" || command == "cublas_cgemm_strided_batch") {
-		if (argc < 1 + 1 + 3 + 1) {
-			print_usage(argv[0]);
-			return 1;
-		}
-		gemm_strided_batch_test(std::stoi(argv[3]), std::stoi(argv[4]), std::stoi(argv[5]), std::stoi(argv[6]), true, (command == "cublas_sgemm_strided_batch" ? gemm_type::s : gemm_type::c), is_seq);
+		const auto imp_list = gen_implementation_list(argv + 7, argc - 7);
+		print_implementation_type_list(imp_list);
+		gemm_strided_batch_test(std::stoi(argv[3]), std::stoi(argv[4]), std::stoi(argv[5]), std::stoi(argv[6]), imp_list, (command == "sgemm_strided_batch" ? gemm_type::s : gemm_type::c), is_seq);
 	} else {
 		print_usage(argv[0]);
 		return 1;

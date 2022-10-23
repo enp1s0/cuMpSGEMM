@@ -137,7 +137,7 @@ void cumpsgemm::dynamic_scaling::scale_AB(
 	constexpr auto block_size = 256;
 	const dim3 grid_size(
 			((1lu * m * n + block_size - 1) / block_size + VEC_LEN - 1) / VEC_LEN,
-			batch_size
+			(stride == 0) ? 1 : batch_size
 			);
 
 	if (static_cast<std::size_t>(m) * n < (1lu << 32)) {
@@ -196,7 +196,7 @@ void cumpsgemm::dynamic_scaling::scale_C(
 	constexpr auto block_size = 256;
 	const dim3 grid_size(
 			((1lu * m * n + block_size - 1) / block_size + VEC_LEN - 1) / VEC_LEN,
-			batch_size
+			(stride == 0) ? 1 : batch_size
 			);
 
 	if (static_cast<std::size_t>(m) * n < (1lu << 32)) {

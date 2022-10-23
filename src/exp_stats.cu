@@ -342,7 +342,7 @@ void launch_exp_stats_ext(
 		) {
 		const dim3 grid_size(
 				std::min<std::uint64_t>(((1lu * m * n + BLOCK_SIZE - 1) / BLOCK_SIZE + VEC_LEN - 1) / VEC_LEN, handle->num_sms * 4),
-				batch_size
+				(stride == 0) ? 1 : batch_size
 				);
 		exp_stats_ext_stage_1_kernel<BLOCK_SIZE, VEC_LEN, LOOP_T, T><<<grid_size, BLOCK_SIZE, 0, handle->cuda_stream>>>(
 				handle->exp_stats_handle->dev_max_abs_buffer + buffer_id,

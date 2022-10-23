@@ -12,6 +12,8 @@ namespace cumpsgemm {
 namespace hijack_control {
 void set_compute_mode(const cuMpSGEMM_compute_mode_t) {};
 void unset_compute_mode() {};
+void enable_custom_gemm_Mx2x2() {};
+void disable_custom_gemm_Mx2x2() {};
 
 // exp stats
 std::pair<std::size_t, std::size_t> get_exp_stats(const unsigned buffer_id) {return std::pair<std::size_t, std::size_t>{1, 1};};
@@ -41,6 +43,13 @@ void set_compute_mode(const cuMpSGEMM_compute_mode_t compute_mode) {
 void unset_compute_mode() {
 	cumpsgemm::hijack_control::unset_compute_mode();
 }
+
+void enable_custom_gemm_Mx2x2() {
+	cumpsgemm::hijack_control::enable_custom_gemm_Mx2x2();
+};
+void disable_custom_gemm_Mx2x2() {
+	cumpsgemm::hijack_control::disable_custom_gemm_Mx2x2();
+};
 
 pybind11::dict get_exp_stats(const unsigned buffer_id) {
 	const auto r = cumpsgemm::hijack_control::get_exp_stats(buffer_id);
@@ -169,8 +178,10 @@ void set_dynamic_launch_flag_buffer_by_exp_stats(const unsigned exp_stats_id_A, 
 PYBIND11_MODULE(cumpsgemm_hijack_control, m) {
 	m.doc() = "cuMpSGEMM hijack control API";
 
-	m.def("unset_compute_mode"                 , &unset_compute_mode, "unset_compute_mode");
-	m.def("set_compute_mode"                   , &set_compute_mode  , "set_compute_mode"  , pybind11::arg("compute_mode"));
+	m.def("unset_compute_mode"                 , &unset_compute_mode       , "unset_compute_mode");
+	m.def("set_compute_mode"                   , &set_compute_mode         , "set_compute_mode"  , pybind11::arg("compute_mode"));
+	m.def("enable_custom_gemm_Mx2x2"           , &enable_custom_gemm_Mx2x2 , "enable_custom_gemm_Mx2x2");
+	m.def("disable_custom_gemm_Mx2x2"          , &disable_custom_gemm_Mx2x2, "disable_custom_gemm_Mx2x2");
 
 	m.def("get_exp_stats"                      , &get_exp_stats                     , "get_exp_stats", pybind11::arg("buffer_id"));
 	m.def("get_current_exp_stats_buffer_id"    , &get_current_exp_stats_buffer_id   , "get_current_exp_stats_buffer_id");

@@ -9,6 +9,8 @@ cuMpSGEMM_handle_t get_internal_global_handle();
 
 void set_compute_mode(const cuMpSGEMM_compute_mode_t mode);
 void unset_compute_mode();
+void enable_custom_gemm_Mx2x2();
+void disable_custom_gemm_Mx2x2();
 
 void enable_exp_stats();
 void disable_exp_stats();

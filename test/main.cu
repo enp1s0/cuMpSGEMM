@@ -406,7 +406,7 @@ int sgemm_test_core(
 		}
 	};
 
-	gemm_func(true);
+	gemm_func(scaling);
 
 	CUTF_CHECK_ERROR(cudaDeviceSynchronize());
 
@@ -517,7 +517,7 @@ int sgemm_strided_batch_test_core(
 		}
 	};
 
-	gemm_func(true);
+	gemm_func(scaling);
 
 	CUTF_CHECK_ERROR(cudaDeviceSynchronize());
 

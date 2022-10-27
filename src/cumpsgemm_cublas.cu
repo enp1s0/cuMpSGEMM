@@ -183,10 +183,6 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 		const T* beta,
 		T* const c_dmem_ptr, const uint64_t ldc
 		) {
-	if (std::is_same<T, float>::value && (op_A == CUBLAS_OP_C || op_B == CUBLAS_OP_C)) {
-		return CUBLAS_STATUS_INVALID_VALUE;
-	}
-
 	cudaStream_t cuda_stream;
 	cublasGetStream(cublas_handle, &cuda_stream);
 
@@ -391,10 +387,6 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 		T* const c_dmem_ptr, const uint64_t ldc, const uint64_t stridec,
 		const uint64_t batch_count
 		) {
-	if (std::is_same<T, float>::value && (op_A == CUBLAS_OP_C || op_B == CUBLAS_OP_C)) {
-		return CUBLAS_STATUS_INVALID_VALUE;
-	}
-
 	cudaStream_t cuda_stream;
 	cublasGetStream(cublas_handle, &cuda_stream);
 

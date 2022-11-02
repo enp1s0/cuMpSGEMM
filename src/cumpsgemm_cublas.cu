@@ -186,6 +186,10 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 	cudaStream_t cuda_stream;
 	cublasGetStream(cublas_handle, &cuda_stream);
 
+	if (m == 0 || n == 0 || k == 0 || lda == 0 || ldb == 0 || ldc == 0) {
+		return CUBLAS_STATUS_INVALID_VALUE;
+	}
+
 	cumpsgemm::CULiP::profile_result profile_result;
 	const auto profiling_flag = cumpsgemm::CULiP::is_profiling_enabled();
 
@@ -389,6 +393,10 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 		) {
 	cudaStream_t cuda_stream;
 	cublasGetStream(cublas_handle, &cuda_stream);
+
+	if (m == 0 || n == 0 || k == 0 || lda == 0 || ldb == 0 || ldc == 0 || batch_count == 0) {
+		return CUBLAS_STATUS_INVALID_VALUE;
+	}
 
 	cumpsgemm::CULiP::profile_result profile_result;
 	const auto profiling_flag = cumpsgemm::CULiP::is_profiling_enabled();

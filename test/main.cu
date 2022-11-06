@@ -1198,7 +1198,7 @@ void gemm_exp_stats_test(
 		residual /= batch_size;
 		const auto check = residual < error_threshold(compute_mode, N);
 
-		std::printf("# [%s:%8s, N=%lu, u=%e, i=%e]\n"
+		std::printf("# [%s:%8s, N=%lu, batch_size=%lu, u=%e, i=%e]\n"
 				"  A = [underflow: %10lu / %10lu (%6.2f), max_exp=%e, buffer_id = %u -> mode=%s]\n"
 				"  B = [underflow: %10lu / %10lu (%6.2f), max_exp=%e, buffer_id = %u -> mode=%s]\n"
 				"  C = [underflow: %10lu / %10lu (%6.2f), max_exp=%e, buffer_id = %u]\n"
@@ -1208,6 +1208,7 @@ void gemm_exp_stats_test(
 				(gemm == gemm_type::s ? "sgemm" : "cgemm"),
 				cuMpSGEMM_get_compute_mode_string(compute_mode),
 				N,
+				batch_size,
 				underflow_threshold,
 				ignore_threshold,
 
@@ -1316,7 +1317,7 @@ int main(int argc, char** argv) {
 			print_usage(argv[0]);
 			return 1;
 		}
-		gemm_exp_stats_test(std::stoi(argv[2]), std::stoi(argv[3]), std::stof(argv[4]), (command == "sgemm_strided_batch_exp_stats" ? gemm_type::s : gemm_type::c), std::stof(argv[5]));
+		gemm_exp_stats_test(std::stoi(argv[2]), std::stoi(argv[4]), std::stof(argv[5]), (command == "sgemm_strided_batch_exp_stats" ? gemm_type::s : gemm_type::c), std::stof(argv[3]));
 		return 0;
 	}
 

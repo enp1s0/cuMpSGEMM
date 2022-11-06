@@ -1317,7 +1317,7 @@ int main(int argc, char** argv) {
 			print_usage(argv[0]);
 			return 1;
 		}
-		gemm_exp_stats_test(std::stoi(argv[2]), std::stoi(argv[4]), std::stof(argv[5]), (command == "sgemm_strided_batch_exp_stats" ? gemm_type::s : gemm_type::c), std::stof(argv[3]));
+		gemm_exp_stats_test(std::stoi(argv[2]), std::stof(argv[4]), std::stof(argv[5]), (command == "sgemm_strided_batch_exp_stats" ? gemm_type::s : gemm_type::c), std::stoi(argv[3]));
 		return 0;
 	}
 

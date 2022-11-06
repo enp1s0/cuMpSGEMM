@@ -19,7 +19,8 @@ unsigned get_current_exp_stats_buffer_id();
 void reset_exp_stats_buffer_id();
 void set_exp_stats_params(
 		const float ignore_threshold,
-		const float lose_threshold
+		const float underflow_threshold,
+		const float underflow_tolerance_rate
 		);
 void exp_stats(
 		const unsigned m,
@@ -33,18 +34,26 @@ bool is_exp_stats_enabled();
 std::string get_last_called_function_str();
 void set_last_called_function_str(const std::string func_str);
 void clear_last_called_function_str();
-void download_exp_stats_result(const unsigned id);
 
 unsigned get_next_dynamic_launch_flag_buffer_id();
 void set_dynamic_launch_flag_buffer_id_use(unsigned id);
-void set_dynamic_launch_flag_buffer_by_exp_stats(
-		const unsigned exp_stats_buffer_A_id,
-		const unsigned exp_stats_buffer_B_id,
+void set_dynamic_launch_buffer_by_exp_stats(
 		const unsigned dynamic_launch_flag_buffer_id,
-		const float ratio_threshold
+		const unsigned exp_stats_buffer_A_id,
+		const unsigned exp_stats_buffer_B_id
 		);
 
-void scale_AB(
+void scale_A(
+		const unsigned exp_stats_buffer_id,
+		const unsigned dynamic_launch_flag_buffer_id,
+		const unsigned m,
+		const unsigned n,
+		float* const ptr,
+		const unsigned ld,
+		const unsigned batch_size = 1,
+		const unsigned stride = 0
+		);
+void scale_B(
 		const unsigned exp_stats_buffer_id,
 		const unsigned dynamic_launch_flag_buffer_id,
 		const unsigned m,

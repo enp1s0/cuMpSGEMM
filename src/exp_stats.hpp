@@ -6,15 +6,17 @@ namespace exp_stats {
 struct exp_stats_handle {
 	bool enabled;
 
-	cumpsgemm::counter_t* dev_total_counter_buffer;
-	cumpsgemm::counter_t* dev_lose_counter_buffer;
+	cumpsgemm::counter_t* dev_total_count_buffer;
+	cumpsgemm::counter_t* dev_underflow_count_buffer;
+	int*                  dev_compute_mode_buffer;
 	float* dev_max_abs_buffer;
 
 	ulong2* host_counter_buffer;
 	static constexpr cumpsgemm::counter_t buffer_empty_value = ~0llu;
 
 	float ignore_threshold;
-	float lose_threshold;
+	float underflow_threshold;
+	float underflow_ratio_tolerance;
 
 	std::uint32_t buffer_length;
 	std::uint32_t current_buffer_id;
@@ -56,5 +58,6 @@ void exp_stats_ext(
 		const unsigned batch_size,
 		const unsigned stride
 		);
+cuMpSGEMM_compute_mode_t get_compute_mode_level(cuMpSGEMM_handle* handle, const unsigned buffer_id);
 } // namespace exp_stats
 } // namespace cumpsgemm

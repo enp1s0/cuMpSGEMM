@@ -12,6 +12,7 @@
 #include "device_tcec_wrapper.hpp"
 #include "handle.hpp"
 #include "dmem_accessor.hpp"
+#include "dynamic_launch_utils.hpp"
 
 namespace {
 constexpr unsigned smem_A_skew = 8;
@@ -488,7 +489,7 @@ __global__ void gemm_kernel(
 		T* const c_dmem_ptr, const unsigned ldc
 		) {
 	if (dynamic_mode != nullptr) {
-		const auto mode = *dynamic_mode;
+		const auto mode = cumpsgemm::dynamic_launch::utils::get_gemm_flag(*dynamic_mode);
 		if ((std::is_same<TC_T, nvcuda::wmma::precision::tf32>::value && std::is_same<EC, mtk::wmma::tcec::with_ec>::value) && (mode != CUMPSGEMM_TF32TCEC)) return;
 		if ((std::is_same<TC_T, half                         >::value && std::is_same<EC, mtk::wmma::tcec::with_ec>::value) && (mode != CUMPSGEMM_FP16TCEC)) return;
 	}
@@ -537,7 +538,7 @@ __global__ void gemm_batchStrided_kernel(
 		const unsigned num_blocks_per_gemm
 		) {
 	if (dynamic_mode != nullptr) {
-		const auto mode = *dynamic_mode;
+		const auto mode = cumpsgemm::dynamic_launch::utils::get_gemm_flag(*dynamic_mode);
 		if ((std::is_same<TC_T, nvcuda::wmma::precision::tf32>::value && std::is_same<EC, mtk::wmma::tcec::with_ec>::value) && (mode != CUMPSGEMM_TF32TCEC)) return;
 		if ((std::is_same<TC_T, half                         >::value && std::is_same<EC, mtk::wmma::tcec::with_ec>::value) && (mode != CUMPSGEMM_FP16TCEC)) return;
 	}

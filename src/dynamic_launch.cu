@@ -46,6 +46,19 @@ unsigned cumpsgemm::dynamic_launch::get_next_dynamic_launch_flag_buffer_id(
 	return 2;
 }
 
+unsigned cumpsgemm::dynamic_launch::get_current_dynamic_launch_flag_buffer_id(
+		cuMpSGEMM_handle* handle
+		) {
+	return handle->dynamic_launch_handle->current_buffer_id;
+}
+
+int cumpsgemm::dynamic_launch::get_dynamic_launch_buffer(cuMpSGEMM_handle* handle, const unsigned buffer_id) {
+	int mode;
+	cutf::memory::copy(&mode, handle->dynamic_launch_handle->flag_buffer + buffer_id, 1);
+
+	return mode;
+}
+
 void cumpsgemm::dynamic_launch::set_dynamic_launch_flag_buffer_id(
 		cuMpSGEMM_handle* handle,
 		const unsigned id

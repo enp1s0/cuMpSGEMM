@@ -7,105 +7,6 @@
 
 namespace {
 constexpr unsigned warp_size = 32;
-
-__global__ void download_exp_stats_kernel(
-		ulong2* const host_result_counter_ptr,
-		const cumpsgemm::counter_t* const dev_total_counter_ptr,
-		const cumpsgemm::counter_t* const dev_lose_counter_ptr
-		) {
-	const auto v = make_ulong2(*dev_total_counter_ptr, *dev_lose_counter_ptr);
-	*host_result_counter_ptr = v;
-}
-} // unnamed namespace
-
-void cumpsgemm::exp_stats::download_exp_stats(
-		cuMpSGEMM_handle* handle,
-		const unsigned buffer_id
-		) {
-	download_exp_stats_kernel<<<1, 1, 0, handle->cuda_stream>>>(
-			handle->exp_stats_handle->host_counter_buffer + buffer_id,
-			handle->exp_stats_handle->dev_total_counter_buffer + buffer_id,
-			handle->exp_stats_handle->dev_lose_counter_buffer + buffer_id
-			);
-}
-
-std::pair<std::size_t, std::size_t> cumpsgemm::exp_stats::get_exp_stats(
-		cuMpSGEMM_handle* handle,
-		const unsigned buffer_id
-		) {
-	volatile ulong2* p1 = handle->exp_stats_handle->host_counter_buffer;
-	while (p1[buffer_id].x == handle->exp_stats_handle->buffer_empty_value) {
-	}
-
-	return std::pair<std::size_t, std::size_t>{
-		p1[buffer_id].y,
-		p1[buffer_id].x
-	};
-}
-
-void cumpsgemm::set_exp_stats_params(
-		cuMpSGEMM_handle_t handle,
-		const float ignore_threshold,
-		const float lose_threshold
-		) {
-	handle->exp_stats_handle->ignore_threshold = ignore_threshold;
-	handle->exp_stats_handle->lose_threshold = lose_threshold;
-}
-
-void cumpsgemm::enable_exp_stats(
-		cuMpSGEMM_handle_t handle
-		) {
-	handle->exp_stats_handle->enabled = true;
-}
-
-void cumpsgemm::disable_exp_stats(
-		cuMpSGEMM_handle_t handle
-		) {
-	handle->exp_stats_handle->enabled = false;
-}
-
-void cumpsgemm::exp_stats::resize_counter(
-		cuMpSGEMM_handle_t handle,
-		const std::size_t new_length
-		) {
-	CUTF_CHECK_ERROR(cudaFree    (handle->exp_stats_handle->dev_lose_counter_buffer ));
-	CUTF_CHECK_ERROR(cudaFree    (handle->exp_stats_handle->dev_total_counter_buffer));
-	CUTF_CHECK_ERROR(cudaFree    (handle->exp_stats_handle->dev_max_abs_buffer      ));
-	CUTF_CHECK_ERROR(cudaFreeHost(handle->exp_stats_handle->host_counter_buffer     ));
-
-	handle->exp_stats_handle->buffer_length = new_length;
-
-	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->exp_stats_handle->dev_lose_counter_buffer ), sizeof(cumpsgemm::counter_t) * handle->exp_stats_handle->buffer_length));
-	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->exp_stats_handle->dev_total_counter_buffer), sizeof(cumpsgemm::counter_t) * handle->exp_stats_handle->buffer_length));
-	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->exp_stats_handle->dev_max_abs_buffer      ), sizeof(float               ) * handle->exp_stats_handle->buffer_length));
-	CUTF_CHECK_ERROR(cudaMallocHost(&(handle->exp_stats_handle->host_counter_buffer     ), sizeof(ulong2)               * handle->exp_stats_handle->buffer_length));
-}
-
-namespace {
-__global__ void init_counter_kernel(
-		cumpsgemm::counter_t* const total_counter_ptr,
-		cumpsgemm::counter_t* const lose_counter_ptr,
-		float* const max_abs_value_ptr
-		) {
-	*total_counter_ptr = 0;
-	*lose_counter_ptr  = 0;
-	*max_abs_value_ptr = 0;
-}
-} // unnamed namespace
-
-void cumpsgemm::exp_stats::init_counter (
-		cuMpSGEMM_handle_t handle,
-		const unsigned buffer_id
-		) {
-	init_counter_kernel<<<1, 1, 0, handle->cuda_stream>>>(
-			handle->exp_stats_handle->dev_total_counter_buffer + buffer_id,
-			handle->exp_stats_handle->dev_lose_counter_buffer + buffer_id,
-			handle->exp_stats_handle->dev_max_abs_buffer + buffer_id
-			);
-	(*(handle->exp_stats_handle->host_counter_buffer + buffer_id)).x = handle->exp_stats_handle->buffer_empty_value;
-#ifdef CUMPSGEMM_CHECK_KERNEL_ERROR
-	CUTF_CHECK_ERROR(cudaStreamSynchronize(cuda_stream));
-#endif
 }
 
 // Ring buffer id calculator.
@@ -122,6 +23,7 @@ std::uint32_t cumpsgemm::exp_stats::get_next_exp_stats_buffer_id(
 	handle->exp_stats_handle->current_buffer_id = 2;
 	return 2;
 }
+
 std::uint32_t cumpsgemm::exp_stats::get_current_exp_stats_buffer_id(
 		cuMpSGEMM_handle* handle
 		) {
@@ -137,10 +39,52 @@ __device__ T make_zero() {return 0;}
 template <>
 __device__ cuComplex make_zero() {return make_float2(0, 0);}
 
+__device__ void update_count(
+		const float a,
+		unsigned& local_total_count,
+		unsigned& local_underflow_count,
+		const float ignore_threshold,
+		const float underflow_threshold
+		) {
+	const auto abs_a = cutf::math::abs(a);
+
+	if (abs_a >= ignore_threshold) {
+		local_total_count++;
+		if (abs_a < underflow_threshold) {
+			local_underflow_count++;
+		}
+	}
+}
+
+__device__ void update_count(
+		const cuComplex a,
+		unsigned& local_total_count,
+		unsigned& local_underflow_count,
+		const float ignore_threshold,
+		const float underflow_threshold
+		) {
+	update_count(a.x, local_total_count, local_underflow_count, ignore_threshold, underflow_threshold);
+	update_count(a.y, local_total_count, local_underflow_count, ignore_threshold, underflow_threshold);
+}
+
+__global__ void init_exp_stats_buffer(
+		float* const max_exp_buffer,
+		cumpsgemm::counter_t* const total_count_buffer,
+		cumpsgemm::counter_t* const underflow_count_buffer
+		) {
+	*max_exp_buffer = 0;
+	*total_count_buffer = 0;
+	*underflow_count_buffer = 0;
+}
+
 // Get the largest abs value
 template <unsigned BLOCK_SIZE, unsigned VEC_LEN, class LOOP_T, class T>
 __global__ void exp_stats_ext_stage_1_kernel(
-		float * const result_ptr,
+		float* const max_exp_buffer,
+		cumpsgemm::counter_t* const total_count_buffer,
+		cumpsgemm::counter_t* const underflow_count_buffer,
+		const float underflow_threshold,
+		const float ignore_threshold,
 		const unsigned m,
 		const unsigned n,
 		const T* const ptr,
@@ -148,9 +92,13 @@ __global__ void exp_stats_ext_stage_1_kernel(
 		const unsigned batch_size,
 		const unsigned stride
 		) {
-	float local_max_abs_value = 0;
 	const auto ib = blockIdx.y;
 	const auto local_mat_ptr = ptr + ib * stride;
+
+	float local_max_abs_value = 0;
+	unsigned local_total_count = 0;
+	unsigned local_underflow_count = 0;
+
 	for (LOOP_T lid = (threadIdx.x + blockIdx.x * blockDim.x) * VEC_LEN; lid < m * n; lid += BLOCK_SIZE * gridDim.x * VEC_LEN) {
 		T vec[VEC_LEN];
 		if (lid + VEC_LEN < m * n) {
@@ -180,6 +128,7 @@ __global__ void exp_stats_ext_stage_1_kernel(
 		}
 		for (uint32_t i = 0; i < VEC_LEN; i++) {
 			local_max_abs_value = cutf::math::max(local_max_abs_value, abs_max_float(vec[i]));
+			update_count(vec[i], local_total_count, local_underflow_count, ignore_threshold, underflow_threshold);
 		}
 	}
 
@@ -188,82 +137,90 @@ __global__ void exp_stats_ext_stage_1_kernel(
 				__shfl_xor_sync(~0u, local_max_abs_value, offset),
 				local_max_abs_value
 				);
+		local_total_count +=
+				__shfl_xor_sync(~0u, local_total_count, offset);
+		local_underflow_count +=
+				__shfl_xor_sync(~0u, local_underflow_count, offset);
 	}
 
-	__shared__ float smem[BLOCK_SIZE];
+	__shared__ float smem_max_abs_value  [BLOCK_SIZE];
+	__shared__ float smem_total_count    [BLOCK_SIZE];
+	__shared__ float smem_underflow_count[BLOCK_SIZE];
 
 	if ((threadIdx.x & 0x1f) == 0) {
-		smem[threadIdx.x >> 5] = local_max_abs_value;
+		smem_max_abs_value  [threadIdx.x >> 5] = local_max_abs_value;
+		smem_total_count    [threadIdx.x >> 5] = local_total_count;
+		smem_underflow_count[threadIdx.x >> 5] = local_underflow_count;
 	}
 	__syncthreads();
 
 	if (threadIdx.x >= BLOCK_SIZE / warp_size) return;
 
-	local_max_abs_value = smem[threadIdx.x];
+	local_max_abs_value   = smem_max_abs_value  [threadIdx.x];
+	local_total_count     = smem_total_count    [threadIdx.x];
+	local_underflow_count = smem_underflow_count[threadIdx.x];
 
 	for (std::uint32_t offset = (BLOCK_SIZE / warp_size) >> 1; offset >= 1; offset >>= 1) {
 		local_max_abs_value = cutf::math::max(
 				__shfl_xor_sync(~0u, local_max_abs_value, offset),
 				local_max_abs_value
 				);
+		local_total_count +=
+				__shfl_xor_sync(~0u, local_total_count, offset);
+		local_underflow_count +=
+				__shfl_xor_sync(~0u, local_underflow_count, offset);
 	}
 
 	if (threadIdx.x == 0) {
-		const std::uint32_t max_abs = cutf::experimental::fp::reinterpret_as_uint(local_max_abs_value) & 0x7fa00000u;
-		atomicMax(reinterpret_cast<std::uint32_t*>(result_ptr), max_abs);
+		const std::uint32_t max_abs = cutf::experimental::fp::reinterpret_as_uint(local_max_abs_value) & 0x7f800000u;
+		atomicMax(reinterpret_cast<std::uint32_t*>(max_exp_buffer), max_abs);
+		atomicAdd(total_count_buffer, local_total_count);
+		atomicAdd(underflow_count_buffer, local_underflow_count);
 	}
 }
 
-__device__ void update_counter(
-		unsigned& lose_counter,
-		unsigned& total_counter,
-		const float lose_threshold,
-		const float ignore_threshold,
-		const float w
+__global__ void update_dynamic_mode_1_kernel(
+		int* const dynamic_mode,
+		cumpsgemm::counter_t* const total_count_buffer,
+		cumpsgemm::counter_t* const underflow_count_buffer,
+		const float underflow_ratio_tolerance
 		) {
-	const auto v = cutf::math::abs(w);
-	if (v > ignore_threshold) {
-		total_counter++;
-		if (v < lose_threshold) {
-			lose_counter++;
-		}
+	if (*underflow_count_buffer < (*total_count_buffer) * underflow_ratio_tolerance) {
+		*dynamic_mode = CUMPSGEMM_FP16TCEC;
+	} else {
+		*dynamic_mode = CUMPSGEMM_UNDEFINED;
+		*total_count_buffer = 0;
+		*underflow_count_buffer = 0;
 	}
 }
-
-__device__ void update_counter(
-		unsigned& lose_counter,
-		unsigned& total_counter,
-		const float lose_threshold,
-		const float ignore_threshold,
-		const cuComplex w
-		) {
-	update_counter(total_counter, lose_counter, ignore_threshold, lose_threshold, w.x);
-	update_counter(total_counter, lose_counter, ignore_threshold, lose_threshold, w.y);
-}
-
 
 // exp_stats for cuBLAS original functions
 template <unsigned BLOCK_SIZE, unsigned VEC_LEN, class LOOP_T, class T>
 __global__ void exp_stats_ext_stage_2_kernel(
-		unsigned long long int* const lose_counter,
-		unsigned long long int* const total_counter,
+		const int* const dynamic_mode,
+		cumpsgemm::counter_t* const total_count_buffer,
+		cumpsgemm::counter_t* const underflow_count_buffer,
+		const float* const max_exp_buffer,
+		const float underflow_threshold,
+		const float ignore_threshold,
 		const unsigned m,
 		const unsigned n,
 		const T* const ptr,
 		const unsigned ld,
 		const unsigned batch_size,
-		const unsigned stride,
-		const float* const max_abs_ptr,
-		const float lose_threshold,
-		const float ignore_threshold
+		const unsigned stride
 		) {
-	unsigned local_lose_counter = 0;
-	unsigned local_total_counter = 0;
+	// Launch-and-exit
+	if (dynamic_mode == nullptr || *dynamic_mode != CUMPSGEMM_UNDEFINED) {
+		return;
+	}
+	unsigned local_total_count = 0;
+	unsigned local_underflow_count = 0;
 	const auto ib = blockIdx.y;
 	const auto local_mat_ptr = ptr + ib * stride;
-	const auto max_abs_value = *max_abs_ptr;
-	const auto abs_ignore_threshold = ignore_threshold * max_abs_value;
-	const auto abs_lose_threshold = lose_threshold * max_abs_value;
+	const auto max_exp_value = *max_exp_buffer;
+	const auto abs_ignore_threshold = ignore_threshold * max_exp_value;
+	const auto abs_underflow_threshold = underflow_threshold * max_exp_value;
 
 	for (LOOP_T lid = (threadIdx.x + blockIdx.x * blockDim.x) * VEC_LEN; lid < m * n; lid += BLOCK_SIZE * gridDim.x * VEC_LEN) {
 		T vec[VEC_LEN];
@@ -294,43 +251,64 @@ __global__ void exp_stats_ext_stage_2_kernel(
 		}
 
 		for (unsigned i = 0; i < VEC_LEN; i++) {
-			update_counter(local_lose_counter, local_total_counter, abs_lose_threshold, abs_ignore_threshold, vec[i]);
+			update_count(vec[i], local_total_count, local_underflow_count, abs_ignore_threshold, abs_underflow_threshold);
 		}
 	}
 
 	for (std::uint32_t offset = warp_size >> 1; offset >= 1; offset >>= 1) {
-		local_lose_counter  += __shfl_xor_sync(~0u, local_lose_counter , offset);
-		local_total_counter += __shfl_xor_sync(~0u, local_total_counter, offset);
+		local_total_count +=
+				__shfl_xor_sync(~0u, local_total_count, offset);
+		local_underflow_count +=
+				__shfl_xor_sync(~0u, local_underflow_count, offset);
 	}
 
-	__shared__ unsigned smem[BLOCK_SIZE];
-	unsigned *smem_lose_counter_ptr = reinterpret_cast<unsigned*>(smem);
-	unsigned *smem_total_counter_ptr  = smem_lose_counter_ptr + (BLOCK_SIZE / warp_size);
+	__shared__ float smem_total_count    [BLOCK_SIZE];
+	__shared__ float smem_underflow_count[BLOCK_SIZE];
 
 	if ((threadIdx.x & 0x1f) == 0) {
-		smem_lose_counter_ptr [threadIdx.x >> 5] = local_lose_counter;
-		smem_total_counter_ptr[threadIdx.x >> 5] = local_total_counter;
+		smem_total_count    [threadIdx.x >> 5] = local_total_count;
+		smem_underflow_count[threadIdx.x >> 5] = local_underflow_count;
 	}
 	__syncthreads();
 
 	if (threadIdx.x >= BLOCK_SIZE / warp_size) return;
 
-	local_total_counter = smem_total_counter_ptr[threadIdx.x];
-	local_lose_counter  = smem_lose_counter_ptr [threadIdx.x];
+	local_total_count     = smem_total_count    [threadIdx.x];
+	local_underflow_count = smem_underflow_count[threadIdx.x];
 
 	for (std::uint32_t offset = (BLOCK_SIZE / warp_size) >> 1; offset >= 1; offset >>= 1) {
-		local_lose_counter  += __shfl_xor_sync(~0u, local_lose_counter , offset);
-		local_total_counter += __shfl_xor_sync(~0u, local_total_counter, offset);
+		local_total_count +=
+				__shfl_xor_sync(~0u, local_total_count, offset);
+		local_underflow_count +=
+				__shfl_xor_sync(~0u, local_underflow_count, offset);
 	}
 
 	if (threadIdx.x == 0) {
-		atomicAdd(lose_counter , local_lose_counter);
-		atomicAdd(total_counter, local_total_counter);
+		atomicAdd(total_count_buffer, local_total_count);
+		atomicAdd(underflow_count_buffer, local_underflow_count);
+	}
+}
+
+__global__ void update_dynamic_mode_2_kernel(
+		int* const dynamic_mode,
+		cumpsgemm::counter_t* const total_count_buffer,
+		cumpsgemm::counter_t* const underflow_count_buffer,
+		const float underflow_ratio_tolerance
+		) {
+	// Launch-and-exit
+	if (dynamic_mode == nullptr || *dynamic_mode != CUMPSGEMM_UNDEFINED) {
+		return;
+	}
+
+	if (*underflow_count_buffer < (*total_count_buffer) * underflow_ratio_tolerance) {
+		*dynamic_mode = CUMPSGEMM_FP16TCEC_SCALING;
+	} else {
+		*dynamic_mode = CUMPSGEMM_TF32TCEC;
 	}
 }
 
 template <class T, unsigned BLOCK_SIZE, unsigned VEC_LEN, class LOOP_T>
-void launch_exp_stats_ext(
+void launch_compute_mode_set_kernel (
 		cuMpSGEMM_handle* handle,
 		const unsigned m,
 		const unsigned n,
@@ -344,22 +322,61 @@ void launch_exp_stats_ext(
 				std::min<std::uint64_t>(((1lu * m * n + BLOCK_SIZE - 1) / BLOCK_SIZE + VEC_LEN - 1) / VEC_LEN, handle->num_sms * 4),
 				(stride == 0) ? 1 : batch_size
 				);
+
+		// 0
+		init_exp_stats_buffer<<<1, 1, 0, handle->cuda_stream>>>(
+				handle->exp_stats_handle->dev_max_abs_buffer         + buffer_id,
+				handle->exp_stats_handle->dev_total_count_buffer     + buffer_id,
+				handle->exp_stats_handle->dev_underflow_count_buffer + buffer_id
+				);
+
+		// 1
 		exp_stats_ext_stage_1_kernel<BLOCK_SIZE, VEC_LEN, LOOP_T, T><<<grid_size, BLOCK_SIZE, 0, handle->cuda_stream>>>(
-				handle->exp_stats_handle->dev_max_abs_buffer + buffer_id,
+				handle->exp_stats_handle->dev_max_abs_buffer         + buffer_id,
+				handle->exp_stats_handle->dev_total_count_buffer     + buffer_id,
+				handle->exp_stats_handle->dev_underflow_count_buffer + buffer_id,
+				handle->exp_stats_handle->underflow_threshold,
+				handle->exp_stats_handle->ignore_threshold,
 				m, n,
 				ptr, ld,
 				batch_size, stride
 				);
+
+		// 2
+		update_dynamic_mode_1_kernel<<<1, 1, 0, handle->cuda_stream>>>(
+				handle->exp_stats_handle->dev_compute_mode_buffer    + buffer_id,
+				handle->exp_stats_handle->dev_total_count_buffer     + buffer_id,
+				handle->exp_stats_handle->dev_underflow_count_buffer + buffer_id,
+				handle->exp_stats_handle->underflow_ratio_tolerance
+				);
+
+		// 3
 		exp_stats_ext_stage_2_kernel<BLOCK_SIZE, VEC_LEN, LOOP_T, T><<<grid_size, BLOCK_SIZE, 0, handle->cuda_stream>>>(
-				handle->exp_stats_handle->dev_lose_counter_buffer + buffer_id,
-				handle->exp_stats_handle->dev_total_counter_buffer + buffer_id,
+				handle->exp_stats_handle->dev_compute_mode_buffer    + buffer_id,
+				handle->exp_stats_handle->dev_total_count_buffer     + buffer_id,
+				handle->exp_stats_handle->dev_underflow_count_buffer + buffer_id,
+				handle->exp_stats_handle->dev_max_abs_buffer         + buffer_id,
+				handle->exp_stats_handle->underflow_threshold,
+				handle->exp_stats_handle->ignore_threshold,
 				m, n,
 				ptr, ld,
-				batch_size, stride,
-				handle->exp_stats_handle->dev_max_abs_buffer + buffer_id,
-				handle->exp_stats_handle->lose_threshold,
-				handle->exp_stats_handle->ignore_threshold
+				batch_size, stride
 				);
+
+		// 4
+		update_dynamic_mode_2_kernel<<<1, 1, 0, handle->cuda_stream>>>(
+				handle->exp_stats_handle->dev_compute_mode_buffer    + buffer_id,
+				handle->exp_stats_handle->dev_total_count_buffer     + buffer_id,
+				handle->exp_stats_handle->dev_underflow_count_buffer + buffer_id,
+				handle->exp_stats_handle->underflow_ratio_tolerance
+				);
+}
+
+__global__ void configure_buffer_kernel(
+		int* const compute_mode_buffer
+		) {
+	compute_mode_buffer[0] = CUMPSGEMM_TF32TCEC;
+	compute_mode_buffer[1] = CUMPSGEMM_FP16TCEC;
 }
 } // unnamed namespace
 
@@ -374,19 +391,18 @@ void cumpsgemm::exp_stats::exp_stats_ext(
 		const unsigned stride
 		) {
 	const auto buffer_id = cumpsgemm::exp_stats::get_next_exp_stats_buffer_id(handle);
-	cumpsgemm::exp_stats::init_counter(
-			handle,
-			buffer_id
-			);
+	using launch_func_t = void (*)(cuMpSGEMM_handle*, const unsigned, const unsigned, const T* const, const unsigned, const unsigned, const unsigned, const unsigned);
+	launch_func_t launch_func;
 	if (static_cast<std::size_t>(m) * n < (1lu << 15)) {
-		launch_exp_stats_ext<T, 64, 4, unsigned>(handle, m, n, ptr, ld, batch_size, stride, buffer_id);
+		launch_func = launch_compute_mode_set_kernel<T, 64, 4, unsigned>;
 	} else if (static_cast<std::size_t>(m) * n < (1lu << 22)) {
-		launch_exp_stats_ext<T, 128, 4, unsigned>(handle, m, n, ptr, ld, batch_size, stride, buffer_id);
+		launch_func = launch_compute_mode_set_kernel<T, 128, 4, unsigned>;
 	} else if (static_cast<std::size_t>(m) * n < (1lu << 32)) {
-		launch_exp_stats_ext<T, 1024, 4, unsigned>(handle, m, n, ptr, ld, batch_size, stride, buffer_id);
+		launch_func = launch_compute_mode_set_kernel<T, 1024, 4, unsigned>;
 	} else {
-		launch_exp_stats_ext<T, 1024, 4, std::size_t>(handle, m, n, ptr, ld, batch_size, stride, buffer_id);
+		launch_func = launch_compute_mode_set_kernel<T, 1024, 4, std::size_t>;
 	}
+	launch_func(handle, m, n, ptr, ld, batch_size, stride, buffer_id);
 }
 
 template void cumpsgemm::exp_stats::exp_stats_ext<float    >(cuMpSGEMM_handle*, const unsigned, const unsigned, const float*     const, const unsigned, const unsigned, const unsigned);
@@ -407,26 +423,100 @@ void init_exp_stats_counter_buffer(
 	handle->exp_stats_handle->enabled = false;
 	handle->exp_stats_handle->buffer_length = 10000;
 	handle->exp_stats_handle->ignore_threshold = 0;
-	handle->exp_stats_handle->lose_threshold = 0;
+	handle->exp_stats_handle->underflow_threshold = 0;
+	handle->exp_stats_handle->underflow_ratio_tolerance = 0;
 	handle->exp_stats_handle->counter_init_disabled = false;
-	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->exp_stats_handle->dev_lose_counter_buffer ), sizeof(cumpsgemm::counter_t) * handle->exp_stats_handle->buffer_length));
-	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->exp_stats_handle->dev_total_counter_buffer), sizeof(cumpsgemm::counter_t) * handle->exp_stats_handle->buffer_length));
-	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->exp_stats_handle->dev_max_abs_buffer      ), sizeof(float               ) * handle->exp_stats_handle->buffer_length));
-	CUTF_CHECK_ERROR(cudaMallocHost(&(handle->exp_stats_handle->host_counter_buffer     ), sizeof(ulong2              ) * handle->exp_stats_handle->buffer_length));
+	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->exp_stats_handle->dev_total_count_buffer    ), sizeof(cumpsgemm::counter_t) * handle->exp_stats_handle->buffer_length));
+	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->exp_stats_handle->dev_underflow_count_buffer), sizeof(cumpsgemm::counter_t) * handle->exp_stats_handle->buffer_length));
+	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->exp_stats_handle->dev_max_abs_buffer        ), sizeof(float               ) * handle->exp_stats_handle->buffer_length));
+	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->exp_stats_handle->dev_compute_mode_buffer   ), sizeof(int                 ) * handle->exp_stats_handle->buffer_length));
 
-	// For not exp_stats-d matrices
-	handle->exp_stats_handle->host_counter_buffer[0].x = 1;
-	handle->exp_stats_handle->host_counter_buffer[0].y = 1;
-	handle->exp_stats_handle->host_counter_buffer[1].x = 0;
-	handle->exp_stats_handle->host_counter_buffer[1].y = 1;
+	configure_buffer_kernel<<<1, 1, 0, handle->cuda_stream>>>(
+			handle->exp_stats_handle->dev_compute_mode_buffer
+			);
 }
 
 void destroy_exp_stats_counter_buffer(
 		cuMpSGEMM_handle* handle
 		) {
-	CUTF_CHECK_ERROR(cudaFree    (handle->exp_stats_handle->dev_lose_counter_buffer ));
-	CUTF_CHECK_ERROR(cudaFree    (handle->exp_stats_handle->dev_total_counter_buffer));
-	CUTF_CHECK_ERROR(cudaFreeHost(handle->exp_stats_handle->host_counter_buffer     ));
+	CUTF_CHECK_ERROR(cudaFree    (handle->exp_stats_handle->dev_total_count_buffer    ));
+	CUTF_CHECK_ERROR(cudaFree    (handle->exp_stats_handle->dev_underflow_count_buffer));
+	CUTF_CHECK_ERROR(cudaFree    (handle->exp_stats_handle->dev_max_abs_buffer        ));
+	CUTF_CHECK_ERROR(cudaFree    (handle->exp_stats_handle->dev_compute_mode_buffer   ));
 
 	delete handle->exp_stats_handle;
+}
+
+namespace {
+__global__ void download_value_kernel(std::size_t* const dst_ptr, const cumpsgemm::counter_t* const src_ptr) {
+	*dst_ptr = *src_ptr;
+}
+} // noname
+
+
+std::pair<std::size_t, std::size_t> cumpsgemm::exp_stats::get_exp_stats(
+		cuMpSGEMM_handle_t handle,
+		const unsigned exp_stats_buffer_id
+		) {
+	auto host = cutf::memory::get_host_unique_ptr<std::size_t>(2);
+	download_value_kernel<<<1, 1, 0, handle->cuda_stream>>>(host.get() + 0, handle->exp_stats_handle->dev_total_count_buffer     + exp_stats_buffer_id);
+	download_value_kernel<<<1, 1, 0, handle->cuda_stream>>>(host.get() + 1, handle->exp_stats_handle->dev_underflow_count_buffer + exp_stats_buffer_id);
+
+	CUTF_CHECK_ERROR(cudaStreamSynchronize(handle->cuda_stream));
+
+	return std::pair<std::size_t, std::size_t>{host.get()[1], host.get()[0]};
+}
+
+void cumpsgemm::set_exp_stats_params(
+		cuMpSGEMM_handle_t handle,
+		const float ignore_threshold,
+		const float underflow_threshold,
+		const float underflow_ratio_tolerance
+		) {
+	handle->exp_stats_handle->ignore_threshold          = ignore_threshold;
+	handle->exp_stats_handle->underflow_threshold       = underflow_threshold;
+	handle->exp_stats_handle->underflow_ratio_tolerance = underflow_ratio_tolerance;
+}
+
+void cumpsgemm::enable_exp_stats(
+		cuMpSGEMM_handle_t handle
+		) {
+	handle->exp_stats_handle->enabled = true;
+}
+
+void cumpsgemm::disable_exp_stats(
+		cuMpSGEMM_handle_t handle
+		) {
+	handle->exp_stats_handle->enabled = false;
+}
+
+void cumpsgemm::exp_stats::resize_counter(
+		cuMpSGEMM_handle_t handle,
+		const std::size_t new_length
+		) {
+	CUTF_CHECK_ERROR(cudaFree    (handle->exp_stats_handle->dev_total_count_buffer    ));
+	CUTF_CHECK_ERROR(cudaFree    (handle->exp_stats_handle->dev_underflow_count_buffer));
+	CUTF_CHECK_ERROR(cudaFree    (handle->exp_stats_handle->dev_max_abs_buffer        ));
+	CUTF_CHECK_ERROR(cudaFree    (handle->exp_stats_handle->dev_compute_mode_buffer   ));
+
+	handle->exp_stats_handle->buffer_length = new_length;
+
+	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->exp_stats_handle->dev_total_count_buffer    ), sizeof(cumpsgemm::counter_t) * handle->exp_stats_handle->buffer_length));
+	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->exp_stats_handle->dev_underflow_count_buffer), sizeof(cumpsgemm::counter_t) * handle->exp_stats_handle->buffer_length));
+	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->exp_stats_handle->dev_max_abs_buffer        ), sizeof(float               ) * handle->exp_stats_handle->buffer_length));
+	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->exp_stats_handle->dev_compute_mode_buffer   ), sizeof(int                 ) * handle->exp_stats_handle->buffer_length));
+
+	configure_buffer_kernel<<<1, 1, 0, handle->cuda_stream>>>(
+			handle->exp_stats_handle->dev_compute_mode_buffer
+			);
+}
+
+cuMpSGEMM_compute_mode_t cumpsgemm::exp_stats::get_compute_mode_level(
+		cuMpSGEMM_handle* handle,
+		const unsigned buffer_id
+		) {
+	int mode = 0;
+	cutf::memory::copy(&mode, handle->exp_stats_handle->dev_compute_mode_buffer + buffer_id, 1);
+
+	return (cuMpSGEMM_compute_mode_t)mode;
 }

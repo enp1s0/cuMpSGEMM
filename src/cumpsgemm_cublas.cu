@@ -190,12 +190,12 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 		const T* beta,
 		T* const c_dmem_ptr, const uint64_t ldc
 		) {
-	if (std::is_same<T, float>::value && (op_A == CUBLAS_OP_C || op_B == CUBLAS_OP_C)) {
-		return CUBLAS_STATUS_INVALID_VALUE;
-	}
-
 	cudaStream_t cuda_stream;
 	cublasGetStream(cublas_handle, &cuda_stream);
+
+	if (m == 0 || n == 0 || k == 0 || lda == 0 || ldb == 0 || ldc == 0) {
+		return CUBLAS_STATUS_INVALID_VALUE;
+	}
 
 	cumpsgemm::CULiP::profile_result profile_result;
 	const auto profiling_flag = cumpsgemm::CULiP::is_profiling_enabled();
@@ -398,12 +398,12 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 		T* const c_dmem_ptr, const uint64_t ldc, const uint64_t stridec,
 		const uint64_t batch_count
 		) {
-	if (std::is_same<T, float>::value && (op_A == CUBLAS_OP_C || op_B == CUBLAS_OP_C)) {
-		return CUBLAS_STATUS_INVALID_VALUE;
-	}
-
 	cudaStream_t cuda_stream;
 	cublasGetStream(cublas_handle, &cuda_stream);
+
+	if (m == 0 || n == 0 || k == 0 || lda == 0 || ldb == 0 || ldc == 0 || batch_count == 0) {
+		return CUBLAS_STATUS_INVALID_VALUE;
+	}
 
 	cumpsgemm::CULiP::profile_result profile_result;
 	const auto profiling_flag = cumpsgemm::CULiP::is_profiling_enabled();

@@ -29,13 +29,17 @@ cumpsgemm::kernel_module_code::code_t gen_module_code(
 	case CUMPSGEMM_TF32TCEC: code |= cumpsgemm::kernel_module_code::tf32 | cumpsgemm::kernel_module_code::with_ec   ;break;
 	default:break;
 	}
-	switch (op_A) {
+	auto op_A_ = op_A;
+	if (std::is_same<T, float>::value && op_A == CUBLAS_OP_C) op_A_ = CUBLAS_OP_T;
+	switch (op_A_) {
 	case CUBLAS_OP_N: code |= cumpsgemm::kernel_module_code::op_a_col_major;break;
 	case CUBLAS_OP_T: code |= cumpsgemm::kernel_module_code::op_a_row_major;break;
 	case CUBLAS_OP_C: code |= cumpsgemm::kernel_module_code::op_a_conjugate;break;
 	default:break;
 	}
-	switch (op_B) {
+	auto op_B_ = op_B;
+	if (std::is_same<T, float>::value && op_B == CUBLAS_OP_C) op_B_ = CUBLAS_OP_T;
+	switch (op_B_) {
 	case CUBLAS_OP_N: code |= cumpsgemm::kernel_module_code::op_b_col_major;break;
 	case CUBLAS_OP_T: code |= cumpsgemm::kernel_module_code::op_b_row_major;break;
 	case CUBLAS_OP_C: code |= cumpsgemm::kernel_module_code::op_b_conjugate;break;

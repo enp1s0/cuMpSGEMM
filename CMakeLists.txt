@@ -83,12 +83,3 @@ target_link_libraries(cumpsgemm_test PRIVATE
 	cuda
 	curand
 	)
-
-add_executable(cumpsgemm_hijack_test ${TESTSRCDIR}/hijack.cu ${HEADERS})
-target_include_directories(cumpsgemm_hijack_test PRIVATE ${INCDIR} ${SUBMODULEDIR}/cutf/include)
-target_link_libraries(cumpsgemm_hijack_test PRIVATE
-	CUDA::cublas
-	cumpsgemm_static
-	cuda
-	curand
-	)

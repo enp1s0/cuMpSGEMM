@@ -549,16 +549,6 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 		}
 
 		cublasSetMathMode(cublas_handle, math_mode);
-
-		if (cumpsgemm::hijack_control::get_internal_global_handle()->exp_stats_handle->enabled) {
-			cumpsgemm::exp_stats::exp_stats_ext(
-					cumpsgemm::hijack_control::get_internal_global_handle(),
-					m, n,
-					c_dmem_ptr, ldc,
-					batch_count,
-					stridec
-					);
-		}
 	} else {
 		// -----------------------------------
 		// cuMpSGEMM
@@ -855,23 +845,6 @@ void cumpsgemm::hijack_control::unset_compute_mode() {
 	hijack_mode = dynamic_mode;
 }
 
-std::pair<std::size_t, std::size_t> cumpsgemm::hijack_control::get_exp_stats(const unsigned buffer_id) {
-	return cumpsgemm::exp_stats::get_exp_stats(get_internal_global_handle(), buffer_id);
-}
-
-unsigned cumpsgemm::hijack_control::get_current_exp_stats_buffer_id() {
-	return cumpsgemm::exp_stats::get_current_exp_stats_buffer_id(cuMpSGEMM_get_internal_global_handle());
-}
-
-void cumpsgemm::hijack_control::enable_exp_stats() {
-	cumpsgemm::enable_exp_stats(get_internal_global_handle());
-}
-
-void cumpsgemm::hijack_control::disable_exp_stats() {
-	cumpsgemm::disable_exp_stats(get_internal_global_handle());
-	cumpsgemm::hijack_control::unset_compute_mode();
-}
-
 void cumpsgemm::hijack_control::set_exp_stats_params(
 		const float ignore_threshold,
 		const float underflow_threshold,
@@ -880,28 +853,8 @@ void cumpsgemm::hijack_control::set_exp_stats_params(
 	cumpsgemm::set_exp_stats_params(get_internal_global_handle(), ignore_threshold, underflow_threshold, underflow_tolerance_rate);
 }
 
-bool cumpsgemm::hijack_control::is_exp_stats_enabled() {
-	return get_internal_global_handle()->exp_stats_handle->enabled;
-}
-
 void cumpsgemm::hijack_control::reset_exp_stats_buffer_id() {
 	cumpsgemm::exp_stats::reset_exp_stats_buffer_id(get_internal_global_handle());
-}
-
-void cumpsgemm::hijack_control::exp_stats(
-		const unsigned m,
-		const unsigned n,
-		const float* const ptr,
-		const unsigned ld,
-		const unsigned batch_size,
-		const unsigned stride
-		) {
-	cumpsgemm::exp_stats::exp_stats_ext(
-			get_internal_global_handle(),
-			m, n,
-			ptr, ld,
-			batch_size, stride
-			);
 }
 
 std::string cumpsgemm::hijack_control::get_last_called_function_str() {
@@ -918,100 +871,6 @@ void cumpsgemm::hijack_control::clear_last_called_function_str() {
 	cumpsgemm::hijack_control::set_last_called_function_str("");
 }
 
-unsigned cumpsgemm::hijack_control::get_next_dynamic_launch_flag_buffer_id() {
-	return cumpsgemm::dynamic_launch::get_next_dynamic_launch_flag_buffer_id(get_internal_global_handle());
-}
-
-void cumpsgemm::hijack_control::set_dynamic_launch_flag_buffer_id_use(unsigned id) {
-	cumpsgemm::dynamic_launch::set_dynamic_launch_flag_buffer_id(get_internal_global_handle(), id);
-}
-
-void cumpsgemm::hijack_control::set_dynamic_launch_buffer_by_exp_stats(
-		const unsigned dynamic_launch_flag_buffer_id,
-		const unsigned exp_stats_buffer_id_A,
-		const unsigned exp_stats_buffer_id_B
-		) {
-	cumpsgemm::dynamic_scaling::set_dynamic_launch_buffer_by_exp_stats(
-			get_internal_global_handle(),
-			dynamic_launch_flag_buffer_id,
-			exp_stats_buffer_id_A,
-			exp_stats_buffer_id_B
-			);
-}
-
-void cumpsgemm::hijack_control::scale_A(
-		const unsigned exp_stats_buffer_id,
-		const unsigned dynamic_launch_flag_buffer_id,
-		const unsigned m,
-		const unsigned n,
-		float* const ptr,
-		const unsigned ld,
-		const unsigned batch_size,
-		const unsigned stride
-		) {
-	cumpsgemm::dynamic_scaling::scale_A(
-			cumpsgemm::hijack_control::get_internal_global_handle(),
-			m, n,
-			ptr, ld,
-			batch_size,
-			stride,
-			exp_stats_buffer_id,
-			dynamic_launch_flag_buffer_id
-			);
-}
-
-void cumpsgemm::hijack_control::scale_B(
-		const unsigned exp_stats_buffer_id,
-		const unsigned dynamic_launch_flag_buffer_id,
-		const unsigned m,
-		const unsigned n,
-		float* const ptr,
-		const unsigned ld,
-		const unsigned batch_size,
-		const unsigned stride
-		) {
-	cumpsgemm::dynamic_scaling::scale_B(
-			cumpsgemm::hijack_control::get_internal_global_handle(),
-			m, n,
-			ptr, ld,
-			batch_size,
-			stride,
-			exp_stats_buffer_id,
-			dynamic_launch_flag_buffer_id
-			);
-}
-
-void cumpsgemm::hijack_control::scale_C(
-		const unsigned exp_stats_buffer_A_id,
-		const unsigned exp_stats_buffer_B_id,
-		const unsigned dynamic_launch_flag_buffer_id,
-		const unsigned m,
-		const unsigned n,
-		float* const ptr,
-		const unsigned ld,
-		const unsigned batch_size,
-		const unsigned stride
-		) {
-	cumpsgemm::dynamic_scaling::scale_C(
-			cumpsgemm::hijack_control::get_internal_global_handle(),
-			m, n,
-			ptr, ld,
-			batch_size,
-			stride,
-			exp_stats_buffer_A_id,
-			exp_stats_buffer_B_id,
-			dynamic_launch_flag_buffer_id
-			);
-}
-
-float cumpsgemm::hijack_control::get_max_exp(
-		const unsigned dynamic_launch_flag_buffer_id
-		) {
-	return cumpsgemm::dynamic_scaling::get_max_exp(
-			cumpsgemm::hijack_control::get_internal_global_handle(),
-			dynamic_launch_flag_buffer_id
-			);
-}
 void cumpsgemm::hijack_control::enable_custom_gemm_Mx2x2() {
 	global_internal_gemm_Mx2x2_enabled  = true;
 }

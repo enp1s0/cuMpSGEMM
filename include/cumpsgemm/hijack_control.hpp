@@ -18,6 +18,9 @@ void set_exp_stats_params(
 		const float underflow_threshold,
 		const float underflow_tolerance_rate
 		);
+void enable_restoring_AB_after_scaling();
+void disable_restoring_AB_after_scaling();
+
 std::string get_last_called_function_str();
 void set_last_called_function_str(const std::string func_str);
 void clear_last_called_function_str();

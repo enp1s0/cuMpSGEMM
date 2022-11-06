@@ -7,6 +7,7 @@
 #include <cutf/curand.hpp>
 #include <cutf/memory.hpp>
 #include <cutf/cublas.hpp>
+#include <cutf/debug/time_breakdown.hpp>
 #include <cumpsgemm/cumpsgemm.hpp>
 
 constexpr unsigned test_count = 32;
@@ -1008,19 +1009,22 @@ void gemm_exp_stats_test(
 
 	modes.push_back(CUMPSGEMM_AUTO);
 
+	// Profiler
+	cutf::debug::time_breakdown::profiler profiler;
+
 	// Exp stats of A and B
 	unsigned A_exp_stats_buffer_id, B_exp_stats_buffer_id, C_exp_stats_buffer_id;
 	std::pair<std::size_t, std::size_t> A_exp_stats, B_exp_stats, C_exp_stats;
 
 	if (gemm == gemm_type::s) {
-		cumpsgemm::exp_stats_ext(cuMpSGEMM_handle, N, N, a_ptr, N, batch_size, N * N);
+		profiler.measure("exp_stats_A", [&](){cumpsgemm::exp_stats_ext(cuMpSGEMM_handle, N, N, a_ptr, N, batch_size, N * N);});
 		A_exp_stats_buffer_id = cumpsgemm::get_current_exp_stats_buffer_id(cuMpSGEMM_handle);
-		cumpsgemm::exp_stats_ext(cuMpSGEMM_handle, N, N, b_ptr, N, batch_size, N * N);
+		profiler.measure("exp_stats_B", [&](){cumpsgemm::exp_stats_ext(cuMpSGEMM_handle, N, N, b_ptr, N, batch_size, N * N);});
 		B_exp_stats_buffer_id = cumpsgemm::get_current_exp_stats_buffer_id(cuMpSGEMM_handle);
 	} else {
-		cumpsgemm::exp_stats_ext(cuMpSGEMM_handle, N, N, reinterpret_cast<cuComplex*>(a_ptr), N, batch_size, N * N);
+		profiler.measure("exp_stats_A", [&](){cumpsgemm::exp_stats_ext(cuMpSGEMM_handle, N, N, reinterpret_cast<cuComplex*>(a_ptr), N, batch_size, N * N);});
 		A_exp_stats_buffer_id = cumpsgemm::get_current_exp_stats_buffer_id(cuMpSGEMM_handle);
-		cumpsgemm::exp_stats_ext(cuMpSGEMM_handle, N, N, reinterpret_cast<cuComplex*>(b_ptr), N, batch_size, N * N);
+		profiler.measure("exp_stats_B", [&](){cumpsgemm::exp_stats_ext(cuMpSGEMM_handle, N, N, reinterpret_cast<cuComplex*>(b_ptr), N, batch_size, N * N);});
 		B_exp_stats_buffer_id = cumpsgemm::get_current_exp_stats_buffer_id(cuMpSGEMM_handle);
 	}
 	A_exp_stats = cumpsgemm::get_exp_stats(cuMpSGEMM_handle, A_exp_stats_buffer_id);
@@ -1031,7 +1035,7 @@ void gemm_exp_stats_test(
 	const auto scale_mode_AB = cumpsgemm::get_dynamic_launch_scaling_mode_AB(cuMpSGEMM_handle, dynamic_launch_id);
 
 	if (gemm == gemm_type::s) {
-		cumpsgemm::scale_A(
+		profiler.measure("scale_A", [&](){cumpsgemm::scale_A(
 				cuMpSGEMM_handle,
 				A_exp_stats_buffer_id,
 				dynamic_launch_id,
@@ -1039,8 +1043,8 @@ void gemm_exp_stats_test(
 				a_ptr, N,
 				batch_size,
 				N * N
-				);
-		cumpsgemm::scale_B(
+				);});
+		profiler.measure("scale_B", [&](){cumpsgemm::scale_B(
 				cuMpSGEMM_handle,
 				B_exp_stats_buffer_id,
 				dynamic_launch_id,
@@ -1048,9 +1052,9 @@ void gemm_exp_stats_test(
 				b_ptr, N,
 				batch_size,
 				N * N
-				);
+				);});
 	} else {
-		cumpsgemm::scale_A(
+		profiler.measure("scale_A", [&](){cumpsgemm::scale_A(
 				cuMpSGEMM_handle,
 				A_exp_stats_buffer_id,
 				dynamic_launch_id,
@@ -1058,8 +1062,8 @@ void gemm_exp_stats_test(
 				reinterpret_cast<cuComplex*>(a_ptr), N,
 				batch_size,
 				N * N
-				);
-		cumpsgemm::scale_B(
+				);});
+		profiler.measure("scale_B", [&](){cumpsgemm::scale_B(
 				cuMpSGEMM_handle,
 				B_exp_stats_buffer_id,
 				dynamic_launch_id,
@@ -1067,7 +1071,7 @@ void gemm_exp_stats_test(
 				reinterpret_cast<cuComplex*>(b_ptr), N,
 				batch_size,
 				N * N
-				);
+				);});
 	}
 
 	// Computation
@@ -1075,7 +1079,7 @@ void gemm_exp_stats_test(
 		if (gemm == gemm_type::s) {
 			const float alpha = 1.0f, beta = 0.0f;
 			if (batch_size == 1) {
-				cumpsgemm::gemm(
+				profiler.measure("gemm", [&](){cumpsgemm::gemm(
 						cuMpSGEMM_handle,
 						CUBLAS_OP_N,
 						CUBLAS_OP_N,
@@ -1086,9 +1090,9 @@ void gemm_exp_stats_test(
 						&beta,
 						c_ptr, N,
 						compute_mode
-						);
+						);});
 			} else {
-				cumpsgemm::gemm_stridedBatch(
+				profiler.measure("gemm", [&](){cumpsgemm::gemm_stridedBatch(
 						cuMpSGEMM_handle,
 						CUBLAS_OP_N,
 						CUBLAS_OP_N,
@@ -1100,13 +1104,13 @@ void gemm_exp_stats_test(
 						c_ptr, N, N * N,
 						batch_size,
 						compute_mode
-						);
+						);});
 			}
 		} else {
 			const cuComplex alpha = make_float2(1, 0);
 			const cuComplex beta = make_float2(0, 0);
 			if (batch_size == 1) {
-				cumpsgemm::gemm(
+				profiler.measure("gemm", [&](){cumpsgemm::gemm(
 						cuMpSGEMM_handle,
 						CUBLAS_OP_N,
 						CUBLAS_OP_N,
@@ -1117,9 +1121,9 @@ void gemm_exp_stats_test(
 						&beta,
 						reinterpret_cast<cuComplex*>(c_ptr), N,
 						compute_mode
-						);
+						);});
 			} else {
-				cumpsgemm::gemm_stridedBatch(
+				profiler.measure("gemm", [&](){cumpsgemm::gemm_stridedBatch(
 						cuMpSGEMM_handle,
 						CUBLAS_OP_N,
 						CUBLAS_OP_N,
@@ -1131,12 +1135,12 @@ void gemm_exp_stats_test(
 						reinterpret_cast<cuComplex*>(c_ptr), N, N * N,
 						batch_size,
 						CUMPSGEMM_TF32TCEC
-						);
+						);});
 			}
 		}
 
 		if (gemm == gemm_type::s) {
-			cumpsgemm::scale_C(
+			profiler.measure("scale_C", [&](){cumpsgemm::scale_C(
 					cuMpSGEMM_handle,
 					A_exp_stats_buffer_id,
 					B_exp_stats_buffer_id,
@@ -1145,9 +1149,9 @@ void gemm_exp_stats_test(
 					c_ptr, N,
 					batch_size,
 					N * N
-					);
+					);});
 		} else {
-			cumpsgemm::scale_C(
+			profiler.measure("scale_C", [&](){cumpsgemm::scale_C(
 					cuMpSGEMM_handle,
 					A_exp_stats_buffer_id,
 					B_exp_stats_buffer_id,
@@ -1156,7 +1160,7 @@ void gemm_exp_stats_test(
 					reinterpret_cast<cuComplex*>(c_ptr), N,
 					batch_size,
 					N * N
-					);
+					);});
 		}
 
 		// Exp stats of C
@@ -1231,6 +1235,8 @@ void gemm_exp_stats_test(
 				residual,
 				check ? "OK" : "NG"
 				);
+		profiler.print_result(stdout);
+		std::fflush(stdout);
 	}
 }
 

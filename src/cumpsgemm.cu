@@ -253,8 +253,6 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 		unsigned* const used_kernel_modeule_id
 		) {
 	if (m * n > (1lu << 24)) {
-		const auto orig_exp_stats_enabled = handle->exp_stats_handle->enabled;
-		handle->exp_stats_handle->enabled = 0;
 		for (std::uint64_t i = 0; i < batch_count; i++) {
 			cumpsgemm::gemm(
 					handle,
@@ -267,16 +265,6 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 					c_dmem_ptr + i * stridec, ldc,
 					compute_mode,
 					used_kernel_modeule_id
-					);
-		}
-		handle->exp_stats_handle->enabled = orig_exp_stats_enabled;
-		if (handle->exp_stats_handle->enabled) {
-			cumpsgemm::exp_stats::exp_stats_ext(
-					handle,
-					m, n,
-					c_dmem_ptr, ldc,
-					batch_count,
-					stridec
 					);
 		}
 		return CUBLAS_STATUS_SUCCESS;

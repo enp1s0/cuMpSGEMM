@@ -16,7 +16,7 @@ struct exp_stats_handle {
 
 	float ignore_threshold;
 	float underflow_threshold;
-	float underflow_ratio_tolerance;
+	float underflow_tolerance_rate;
 
 	std::uint32_t buffer_length;
 	std::uint32_t current_buffer_id;

@@ -4,10 +4,12 @@
 #include <dlfcn.h>
 #include <cumpsgemm/cumpsgemm.hpp>
 #include <cumpsgemm/hijack_control.hpp>
+#include <cutf/memory.hpp>
 #include <cugemm_Mx2x2.hpp>
 #include "handle.hpp"
 #include "exp_stats.hpp"
 #include "dynamic_launch.hpp"
+#include "dynamic_launch_utils.hpp"
 #include "dynamic_scaling.hpp"
 #include "culip.hpp"
 
@@ -24,39 +26,53 @@ enum hijack_control_t {
 } hijack_mode = dynamic_mode;
 cuMpSGEMM_compute_mode_t internal_global_compute_mode = CUMPSGEMM_CUBLAS;
 
+template <class Func>
+void cuMpSGEMM_run_if_env_defined(
+		const std::string env_str,
+		const Func func
+		) {
+	const auto env = getenv(env_str.c_str());
+	if (env != nullptr && std::string(env) != "0") {
+		func();
+	}
+}
+
 const std::string info_env_name = "CUMPSGEMM_INFO";
 void cuMpSGEMM_log(
 		const std::string str
 		) {
-	const auto env = getenv(info_env_name.c_str());
-	if (env != nullptr && std::string(env) != "0") {
-		std::fprintf(stdout, "[cuMpSGEMM LOG] %s\n",
-				str.c_str());
-		std::fflush(stdout);
-	}
+	cuMpSGEMM_run_if_env_defined(
+			info_env_name,
+			[&](){
+				std::fprintf(stdout, "[cuMpSGEMM LOG] %s\n",
+						str.c_str());
+				std::fflush(stdout);
+			});
 }
 
 const std::string error_env_name = "CUMPSGEMM_ERROR_LOG";
 void cuMpSGEMM_error(
 		const std::string str
 		) {
-	const auto env = getenv(error_env_name.c_str());
-	if (env != nullptr && std::string(env) != "0") {
-		std::fprintf(stdout, "[cuMpSGEMM ERROR] %s\n",
-				str.c_str());
-		std::fflush(stdout);
-	}
+	cuMpSGEMM_run_if_env_defined(
+			error_env_name,
+			[&](){
+				std::fprintf(stdout, "[cuMpSGEMM ERROR] %s\n",
+						str.c_str());
+				std::fflush(stdout);
+			});
 }
 
 void cuMpSGEMM_warning(
 		const std::string str
 		) {
-	const auto env = getenv(error_env_name.c_str());
-	if (env != nullptr && std::string(env) != "0") {
-		std::fprintf(stdout, "[cuMpSGEMM WARNING] %s\n",
-				str.c_str());
-		std::fflush(stdout);
-	}
+	cuMpSGEMM_run_if_env_defined(
+			error_env_name,
+			[&](){
+				std::fprintf(stdout, "[cuMpSGEMM WARNING] %s\n",
+						str.c_str());
+				std::fflush(stdout);
+			});
 }
 
 void* cuMpSGEMM_get_function_pointer(const std::string library_name, const std::string function_name) {
@@ -93,8 +109,40 @@ std::string get_cublas_op_str(const cublasOperation_t op) {
 
 cuMpSGEMM_handle_t cuMpSGEMM_get_internal_global_handle() {
 	if (internal_global_cuMpSGEMM_handle == nullptr) {
+		cuMpSGEMM_log("Initialize cuMpSGEMM handle...");
 		cuMpSGEMM_create(&internal_global_cuMpSGEMM_handle);
+
+
+		const auto init_float_by_env = [&](const std::string env_str, const float default_value) {
+			const auto env = getenv(env_str.c_str());
+			if (env != nullptr) {
+				return std::stof(env);
+			}
+			return default_value;
+		};
+
+		const auto init_int_by_env = [&](const std::string env_str, const int default_value) {
+			const auto env = getenv(env_str.c_str());
+			if (env != nullptr) {
+				return std::stoi(env);
+			}
+			return default_value;
+		};
+
+		// AUTO mode configure
+		const auto ignore_threshold         = init_float_by_env("CUMPSGEMM_AUTO_IGNORE_THRESHOLD"        , 0);
+		const auto underflow_threshold      = init_float_by_env("CUMPSGEMM_AUTO_UNDERFLOW_THRESHOLD"     , 1.f / 32768);
+		const auto underflow_tolerance_rate = init_float_by_env("CUMPSGEMM_AUTO_UNDERFLOW_TOLERANCE_RATE", 0);
+		const auto restore_AB_scaling       = init_int_by_env  ("CUMPSGEMM_AUTO_RESTORE_AB_SCALING"      , 1);
+
+		cuMpSGEMM_log("AUTO config: ignore_threshold=" + std::to_string(ignore_threshold));
+		cuMpSGEMM_log("AUTO config: underflow_threshold=" + std::to_string(underflow_threshold));
+		cuMpSGEMM_log("AUTO config: underflow_tolerance_rate=" + std::to_string(underflow_tolerance_rate));
+		cuMpSGEMM_log("AUTO config: restore_AB_scaling=" + std::to_string(restore_AB_scaling));
+
+		cumpsgemm::set_exp_stats_params(cuMpSGEMM_get_internal_global_handle(), ignore_threshold, underflow_threshold, underflow_tolerance_rate);
 	}
+
 	return internal_global_cuMpSGEMM_handle;
 }
 
@@ -370,6 +418,20 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 			// Kernel dicision
 			dynamic_launch_id = cumpsgemm::dynamic_launch::get_next_dynamic_launch_flag_buffer_id(cuMpSGEMM_get_internal_global_handle());
 			cumpsgemm::dynamic_scaling::set_dynamic_launch_buffer_by_exp_stats(cuMpSGEMM_get_internal_global_handle(), dynamic_launch_id, A_exp_stats_id, B_exp_stats_id);
+
+			cuMpSGEMM_run_if_env_defined(
+					info_env_name,
+					[&]() {
+					int flag;
+					cutf::memory::copy(&flag, cuMpSGEMM_get_internal_global_handle()->dynamic_launch_handle->flag_buffer + dynamic_launch_id, 1);
+					const auto gemm_mode = cumpsgemm::dynamic_launch::utils::get_gemm_flag(flag);
+					const auto scale_A = cumpsgemm::dynamic_launch::utils::get_scale_A_flag(flag);
+					const auto scale_B = cumpsgemm::dynamic_launch::utils::get_scale_B_flag(flag);
+					cuMpSGEMM_log(std::string("AUTO[ignore<") + std::to_string(cuMpSGEMM_get_internal_global_handle()->exp_stats_handle->ignore_threshold) + ", uf<"
+							+ std::to_string(cuMpSGEMM_get_internal_global_handle()->exp_stats_handle->underflow_threshold) + ", tolerance="
+							+ std::to_string(cuMpSGEMM_get_internal_global_handle()->exp_stats_handle->underflow_tolerance_rate)
+							+ "]: GEMM_MODE=" + cuMpSGEMM_get_compute_mode_string((cuMpSGEMM_compute_mode_t)gemm_mode) + ", scale_A=" + std::to_string(scale_A) + ", scale_B=" + std::to_string(scale_B));
+					});
 
 			// Scaling
 			cumpsgemm::dynamic_scaling::scale_A(cuMpSGEMM_get_internal_global_handle(), (op_A == CUBLAS_OP_N ? m : k), (op_A == CUBLAS_OP_N ? k : m), const_cast<T*>(a_dmem_ptr), lda, 0, 1, A_exp_stats_id, dynamic_launch_id);
@@ -885,10 +947,7 @@ cublasStatus_t cublasGemmStridedBatchedEx(cublasHandle_t handle, cublasOperation
 } // extern "C"
 
 cuMpSGEMM_handle* cumpsgemm::hijack_control::get_internal_global_handle() {
-	if (internal_global_cuMpSGEMM_handle == nullptr) {
-		cuMpSGEMM_create(&internal_global_cuMpSGEMM_handle);
-	}
-	return internal_global_cuMpSGEMM_handle;
+	return cuMpSGEMM_get_internal_global_handle();
 }
 
 void cumpsgemm::hijack_control::set_compute_mode(const cuMpSGEMM_compute_mode_t mode) {

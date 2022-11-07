@@ -183,9 +183,9 @@ __global__ void update_dynamic_mode_1_kernel(
 		int* const dynamic_mode,
 		cumpsgemm::counter_t* const total_count_buffer,
 		cumpsgemm::counter_t* const underflow_count_buffer,
-		const float underflow_ratio_tolerance
+		const float underflow_tolerance_rate
 		) {
-	if (*underflow_count_buffer < (*total_count_buffer) * underflow_ratio_tolerance) {
+	if (*underflow_count_buffer <= (*total_count_buffer) * underflow_tolerance_rate) {
 		*dynamic_mode = CUMPSGEMM_FP16TCEC;
 	} else {
 		*dynamic_mode = CUMPSGEMM_UNDEFINED;
@@ -293,14 +293,14 @@ __global__ void update_dynamic_mode_2_kernel(
 		int* const dynamic_mode,
 		cumpsgemm::counter_t* const total_count_buffer,
 		cumpsgemm::counter_t* const underflow_count_buffer,
-		const float underflow_ratio_tolerance
+		const float underflow_tolerance_rate
 		) {
 	// Launch-and-exit
 	if (dynamic_mode == nullptr || *dynamic_mode != CUMPSGEMM_UNDEFINED) {
 		return;
 	}
 
-	if (*underflow_count_buffer < (*total_count_buffer) * underflow_ratio_tolerance) {
+	if (*underflow_count_buffer <= (*total_count_buffer) * underflow_tolerance_rate) {
 		*dynamic_mode = CUMPSGEMM_FP16TCEC_SCALING;
 	} else {
 		*dynamic_mode = CUMPSGEMM_TF32TCEC;
@@ -347,7 +347,7 @@ void launch_compute_mode_set_kernel (
 				handle->exp_stats_handle->dev_compute_mode_buffer    + buffer_id,
 				handle->exp_stats_handle->dev_total_count_buffer     + buffer_id,
 				handle->exp_stats_handle->dev_underflow_count_buffer + buffer_id,
-				handle->exp_stats_handle->underflow_ratio_tolerance
+				handle->exp_stats_handle->underflow_tolerance_rate
 				);
 
 		// 3
@@ -356,8 +356,8 @@ void launch_compute_mode_set_kernel (
 				handle->exp_stats_handle->dev_total_count_buffer     + buffer_id,
 				handle->exp_stats_handle->dev_underflow_count_buffer + buffer_id,
 				handle->exp_stats_handle->dev_max_abs_buffer         + buffer_id,
-				handle->exp_stats_handle->underflow_threshold,
-				handle->exp_stats_handle->ignore_threshold,
+				handle->exp_stats_handle->underflow_threshold / 2,
+				handle->exp_stats_handle->ignore_threshold / 2,
 				m, n,
 				ptr, ld,
 				batch_size, stride
@@ -368,7 +368,7 @@ void launch_compute_mode_set_kernel (
 				handle->exp_stats_handle->dev_compute_mode_buffer    + buffer_id,
 				handle->exp_stats_handle->dev_total_count_buffer     + buffer_id,
 				handle->exp_stats_handle->dev_underflow_count_buffer + buffer_id,
-				handle->exp_stats_handle->underflow_ratio_tolerance
+				handle->exp_stats_handle->underflow_tolerance_rate
 				);
 }
 
@@ -423,8 +423,8 @@ void init_exp_stats_counter_buffer(
 	handle->exp_stats_handle->enabled = false;
 	handle->exp_stats_handle->buffer_length = 10000;
 	handle->exp_stats_handle->ignore_threshold = 0;
-	handle->exp_stats_handle->underflow_threshold = 0;
-	handle->exp_stats_handle->underflow_ratio_tolerance = 0;
+	handle->exp_stats_handle->underflow_threshold = 1.f / (1u << 15);
+	handle->exp_stats_handle->underflow_tolerance_rate = 0;
 	handle->exp_stats_handle->counter_init_disabled = false;
 	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->exp_stats_handle->dev_total_count_buffer    ), sizeof(cumpsgemm::counter_t) * handle->exp_stats_handle->buffer_length));
 	CUTF_CHECK_ERROR(cudaMalloc    (&(handle->exp_stats_handle->dev_underflow_count_buffer), sizeof(cumpsgemm::counter_t) * handle->exp_stats_handle->buffer_length));
@@ -471,11 +471,11 @@ void cumpsgemm::set_exp_stats_params(
 		cuMpSGEMM_handle_t handle,
 		const float ignore_threshold,
 		const float underflow_threshold,
-		const float underflow_ratio_tolerance
+		const float underflow_tolerance_rate
 		) {
 	handle->exp_stats_handle->ignore_threshold          = ignore_threshold;
 	handle->exp_stats_handle->underflow_threshold       = underflow_threshold;
-	handle->exp_stats_handle->underflow_ratio_tolerance = underflow_ratio_tolerance;
+	handle->exp_stats_handle->underflow_tolerance_rate = underflow_tolerance_rate;
 }
 
 void cumpsgemm::enable_exp_stats(

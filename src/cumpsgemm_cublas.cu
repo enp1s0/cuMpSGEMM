@@ -1001,6 +1001,11 @@ void cumpsgemm::hijack_control::disable_custom_gemm_Mx2x2() {
 void cumpsgemm::hijack_control::enable_restoring_AB_after_scaling() {
 	restore_AB = true;
 }
+
 void cumpsgemm::hijack_control::disable_restoring_AB_after_scaling() {
 	restore_AB = false;
+}
+
+bool cumpsgemm::hijack_control::is_library_loaded() {
+	return true;
 }

@@ -24,5 +24,7 @@ void disable_restoring_AB_after_scaling();
 std::string get_last_called_function_str();
 void set_last_called_function_str(const std::string func_str);
 void clear_last_called_function_str();
+
+bool is_library_loaded();
 } // namespace hijack_control
 } // namespace cumpsgemm

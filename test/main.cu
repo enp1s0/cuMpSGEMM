@@ -1263,15 +1263,15 @@ std::vector<implementation_type> gen_implementation_list(
 		const char* const * argv_implementation_list_start_ptr,
 		const unsigned len
 		) {
-	std::vector<implementation_type> imp_list(len);
+	std::vector<implementation_type> imp_list;
 	for (unsigned i = 0; i < len; i++) {
 		const std::string imp_name_str = argv_implementation_list_start_ptr[i];
-		if (imp_name_str == "CUBLAS") {                  imp_list[i] = CUBLAS;
-		} else if (imp_name_str == "FP16TCEC") {         imp_list[i] = FP16TCEC;
-		} else if (imp_name_str == "FP16TC") {           imp_list[i] = FP16TC;
-		} else if (imp_name_str == "TF32TCEC") {         imp_list[i] = TF32TCEC;
-		} else if (imp_name_str == "TF32TC") {           imp_list[i] = TF32TC;
-		} else if (imp_name_str == "FP16TCEC_scaling") { imp_list[i] = FP16TCEC_scaling;
+		if (imp_name_str == "CUBLAS") {                  imp_list.push_back(CUBLAS);
+		} else if (imp_name_str == "FP16TCEC") {         imp_list.push_back(FP16TCEC);
+		} else if (imp_name_str == "FP16TC") {           imp_list.push_back(FP16TC);
+		} else if (imp_name_str == "TF32TCEC") {         imp_list.push_back(TF32TCEC);
+		} else if (imp_name_str == "TF32TC") {           imp_list.push_back(TF32TC);
+		} else if (imp_name_str == "FP16TCEC_scaling") { imp_list.push_back(FP16TCEC_scaling);
 		} else {
 			std::printf("Unknown compute mode : %s\n", imp_name_str.c_str());
 		}

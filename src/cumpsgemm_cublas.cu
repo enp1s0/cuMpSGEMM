@@ -436,6 +436,9 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 			// Scaling
 			cumpsgemm::dynamic_scaling::scale_A(cuMpSGEMM_get_internal_global_handle(), (op_A == CUBLAS_OP_N ? m : k), (op_A == CUBLAS_OP_N ? k : m), const_cast<T*>(a_dmem_ptr), lda, 0, 1, A_exp_stats_id, dynamic_launch_id);
 			cumpsgemm::dynamic_scaling::scale_B(cuMpSGEMM_get_internal_global_handle(), (op_B == CUBLAS_OP_N ? k : n), (op_B == CUBLAS_OP_N ? n : k), const_cast<T*>(b_dmem_ptr), ldb, 0, 1, B_exp_stats_id, dynamic_launch_id);
+
+			// Enable dynamic launch
+			cumpsgemm::dynamic_launch::set_dynamic_launch_flag_buffer_id(cuMpSGEMM_get_internal_global_handle(), dynamic_launch_id);
 		}
 
 		res = cumpsgemm::gemm<T>(
@@ -458,6 +461,8 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 				cumpsgemm::dynamic_scaling::reset_scale_A(cuMpSGEMM_get_internal_global_handle(), (op_A == CUBLAS_OP_N ? m : k), (op_A == CUBLAS_OP_N ? k : m), const_cast<T*>(a_dmem_ptr), lda, 0, 1, A_exp_stats_id, dynamic_launch_id);
 				cumpsgemm::dynamic_scaling::reset_scale_B(cuMpSGEMM_get_internal_global_handle(), (op_B == CUBLAS_OP_N ? k : n), (op_B == CUBLAS_OP_N ? n : k), const_cast<T*>(b_dmem_ptr), ldb, 0, 1, B_exp_stats_id, dynamic_launch_id);
 			}
+
+			cumpsgemm::dynamic_launch::unset_dynamic_launch_flag_buffer_id(cuMpSGEMM_get_internal_global_handle());
 		}
 
 		if (profiling_flag) {

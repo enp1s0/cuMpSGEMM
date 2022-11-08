@@ -19,7 +19,7 @@ void set_exp_stats_params(
 		const float ignore_threshold,
 		const float underflow_threshold,
 		const float underflow_tolerance_rate
-		);
+		){};
 void enable_restoring_AB_after_scaling(){};
 void disable_restoring_AB_after_scaling(){};
 
@@ -70,6 +70,14 @@ bool is_library_loaded() {
 	return cumpsgemm::hijack_control::is_library_loaded();
 }
 
+void enable_restoring_AB_after_scaling(){
+	cumpsgemm::hijack_control::enable_restoring_AB_after_scaling();
+};
+
+void disable_restoring_AB_after_scaling(){
+	cumpsgemm::hijack_control::disable_restoring_AB_after_scaling();
+};
+
 void enable_auto_kernel_selection() {global_auto_kernel_selection_enabled = true;}
 void disable_auto_kernel_selection() {global_auto_kernel_selection_enabled = false;}
 bool is_auto_kernel_selection_enabled() {return global_auto_kernel_selection_enabled;}
@@ -86,11 +94,14 @@ PYBIND11_MODULE(cumpsgemm_hijack_control, m) {
 	m.def("set_compute_mode"                   , &set_compute_mode         , "set_compute_mode"  , pybind11::arg("compute_mode"));
 	m.def("enable_custom_gemm_Mx2x2"           , &enable_custom_gemm_Mx2x2 , "enable_custom_gemm_Mx2x2");
 	m.def("disable_custom_gemm_Mx2x2"          , &disable_custom_gemm_Mx2x2, "disable_custom_gemm_Mx2x2");
-	m.def("set_exp_stats_params"               , &set_exp_stats_params              , "set_exp_stats_params", pybind11::arg("ignore_threshold"), pybind11::arg("underflow_threshold"), pybind11::arg("underflow_tolerance_rate"));
+	m.def("set_exp_stats_params"               , &set_exp_stats_params     , "set_exp_stats_params", pybind11::arg("ignore_threshold"), pybind11::arg("underflow_threshold"), pybind11::arg("underflow_tolerance_rate"));
 
 	m.def("get_last_called_function_str"       , &get_last_called_function_str  , "get_last_called_function_str");
 	m.def("set_last_called_function_str"       , &set_last_called_function_str  , "set_last_called_function_str");
 	m.def("clear_last_called_function_str"     , &clear_last_called_function_str, "clear_last_called_function_str");
+
+	m.def("enable_restoring_AB_after_scaling"  , &enable_restoring_AB_after_scaling , "enable_restoring_AB_after_scaling");
+	m.def("disable_restoring_AB_after_scaling" , &disable_restoring_AB_after_scaling, "disable_restoring_AB_after_scaling");
 
 	pybind11::enum_<cuMpSGEMM_compute_mode_t>(m, "compute_mode")
 		.value("CUMPSGEMM_CUBLAS"       , CUMPSGEMM_CUBLAS       )
@@ -111,6 +122,7 @@ PYBIND11_MODULE(cumpsgemm_hijack_control, m) {
 	m.def("set_global_cublas_dim_mn_threshold" , &set_global_cublas_dim_mn_threshold, "set_global_cublas_dim_mn_threshold", pybind11::arg("dim"));
 	m.def("get_global_cublas_dim_mn_threshold" , &get_global_cublas_dim_mn_threshold, "get_global_cublas_dim_mn_threshold");
 	m.def("set_global_cublas_dim_k_threshold"  , &set_global_cublas_dim_k_threshold , "set_global_cublas_dim_k_threshold", pybind11::arg("dim"));
+	m.def("get_global_cublas_dim_k_threshold"  , &get_global_cublas_dim_k_threshold , "get_global_cublas_dim_k_threshold");
 	m.def("is_library_loaded"                  , &is_library_loaded                 , "is_library_loaded");
 
 }

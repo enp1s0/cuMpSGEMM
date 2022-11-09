@@ -24,14 +24,14 @@ void init_dynamic_launch_flag_buffer(
 	handle->dynamic_launch_handle->mode_A = CUMPSGEMM_TF32TCEC;
 	handle->dynamic_launch_handle->mode_B = CUMPSGEMM_FP16TCEC;
 
-	CUTF_CHECK_ERROR(cudaMalloc(&handle->dynamic_launch_handle->frag_buffer, sizeof(int) * handle->dynamic_launch_handle->flag_buffer_length));
-	init_flag_buffer<<<1, 1, 0, handle->cuda_stream>>>(handle->dynamic_launch_handle->frag_buffer);
+	CUTF_CHECK_ERROR(cudaMalloc(&handle->dynamic_launch_handle->flag_buffer, sizeof(int) * handle->dynamic_launch_handle->flag_buffer_length));
+	init_flag_buffer<<<1, 1, 0, handle->cuda_stream>>>(handle->dynamic_launch_handle->flag_buffer);
 }
 
 void destroy_launch_flag_buffer(
 		cuMpSGEMM_handle* handle
 		) {
-	CUTF_CHECK_ERROR(cudaFree(handle->dynamic_launch_handle->frag_buffer));
+	CUTF_CHECK_ERROR(cudaFree(handle->dynamic_launch_handle->flag_buffer));
 	delete handle->dynamic_launch_handle;
 }
 
@@ -44,6 +44,19 @@ unsigned cumpsgemm::dynamic_launch::get_next_dynamic_launch_flag_buffer_id(
 	}
 	handle->dynamic_launch_handle->flag_buffer_length = 2;
 	return 2;
+}
+
+unsigned cumpsgemm::dynamic_launch::get_current_dynamic_launch_flag_buffer_id(
+		cuMpSGEMM_handle* handle
+		) {
+	return handle->dynamic_launch_handle->current_buffer_id;
+}
+
+int cumpsgemm::dynamic_launch::get_dynamic_launch_buffer(cuMpSGEMM_handle* handle, const unsigned buffer_id) {
+	int mode;
+	cutf::memory::copy(&mode, handle->dynamic_launch_handle->flag_buffer + buffer_id, 1);
+
+	return mode;
 }
 
 void cumpsgemm::dynamic_launch::set_dynamic_launch_flag_buffer_id(

@@ -29,6 +29,7 @@ set(
 	${SRCDIR}/default_cumpsgemm_rule.cu
 	${SRCDIR}/handle.cu
 	${SRCDIR}/dynamic_launch.cu
+	${SRCDIR}/dynamic_scaling.cu
 	${SRCDIR}/culip.cu
 	${SUBMODULEDIR}/cuGEMM-Mx2x2/src/main.cu
 	${HEADERS}
@@ -77,15 +78,6 @@ set(TESTSRCDIR test)
 add_executable(cumpsgemm_test ${TESTSRCDIR}/main.cu ${HEADERS})
 target_include_directories(cumpsgemm_test PRIVATE ${INCDIR} ${SUBMODULEDIR}/cutf/include ${SUBMODULEDIR}/wmma_extension/include)
 target_link_libraries(cumpsgemm_test PRIVATE
-	CUDA::cublas
-	cumpsgemm_static
-	cuda
-	curand
-	)
-
-add_executable(cumpsgemm_hijack_test ${TESTSRCDIR}/hijack.cu ${HEADERS})
-target_include_directories(cumpsgemm_hijack_test PRIVATE ${INCDIR} ${SUBMODULEDIR}/cutf/include)
-target_link_libraries(cumpsgemm_hijack_test PRIVATE
 	CUDA::cublas
 	cumpsgemm_static
 	cuda

@@ -39,6 +39,17 @@ cublasStatus_t gemm_stridedBatch(
 		unsigned* const used_kernel_module_id = nullptr
 		);
 
+template <class T>
+unsigned exp_stats_ext(
+		cuMpSGEMM_handle_t handle,
+		const unsigned m,
+		const unsigned n,
+		const T* const ptr,
+		const unsigned ld,
+		const unsigned batch_size = 1,
+		const unsigned stride = 0
+		);
+
 std::pair<std::size_t, std::size_t> get_exp_stats(
 		cuMpSGEMM_handle_t handle,
 		const unsigned buffer_id
@@ -55,7 +66,8 @@ void reset_exp_stats_buffer_id(
 void set_exp_stats_params(
 		cuMpSGEMM_handle_t handle,
 		const float ignore_threshold,
-		const float lost_threshold
+		const float underflow_threshold,
+		const float underflow_ratio_tolerance
 		);
 
 void enable_exp_stats(
@@ -64,6 +76,104 @@ void enable_exp_stats(
 
 void disable_exp_stats(
 		cuMpSGEMM_handle_t handle
+		);
+
+float get_max_exp(
+		cuMpSGEMM_handle_t handle,
+		const unsigned buffer_id
+		);
+
+cuMpSGEMM_compute_mode_t get_exp_stats_compute_mode_level(
+		cuMpSGEMM_handle_t handle,
+		const unsigned buffer_id
+		);
+
+// dynamic scaling
+template <class T>
+void scale_A(
+		cuMpSGEMM_handle_t handle,
+		const unsigned exp_stats_buffer_id,
+		const unsigned dynamic_launch_flag_buffer_id,
+		const unsigned m,
+		const unsigned n,
+		T* const ptr,
+		const unsigned ld,
+		const unsigned batch_size = 1,
+		const unsigned stride = 0
+		);
+template <class T>
+void scale_B(
+		cuMpSGEMM_handle_t handle,
+		const unsigned exp_stats_buffer_id,
+		const unsigned dynamic_launch_flag_buffer_id,
+		const unsigned m,
+		const unsigned n,
+		T* const ptr,
+		const unsigned ld,
+		const unsigned batch_size = 1,
+		const unsigned stride = 0
+		);
+template <class T>
+void scale_C(
+		cuMpSGEMM_handle_t handle,
+		const unsigned exp_stats_buffer_A_id,
+		const unsigned exp_stats_buffer_B_id,
+		const unsigned dynamic_launch_flag_buffer_id,
+		const unsigned m,
+		const unsigned n,
+		T* const ptr,
+		const unsigned ld,
+		const unsigned batch_size = 1,
+		const unsigned stride = 0
+		);
+template <class T>
+void reset_scale_A(
+		cuMpSGEMM_handle_t handle,
+		const unsigned exp_stats_buffer_id,
+		const unsigned dynamic_launch_flag_buffer_id,
+		const unsigned m,
+		const unsigned n,
+		T* const ptr,
+		const unsigned ld,
+		const unsigned batch_size = 1,
+		const unsigned stride = 0
+		);
+template <class T>
+void reset_scale_B(
+		cuMpSGEMM_handle_t handle,
+		const unsigned exp_stats_buffer_id,
+		const unsigned dynamic_launch_flag_buffer_id,
+		const unsigned m,
+		const unsigned n,
+		T* const ptr,
+		const unsigned ld,
+		const unsigned batch_size = 1,
+		const unsigned stride = 0
+		);
+float get_max_exp(
+		cuMpSGEMM_handle_t handle,
+		const unsigned dynamic_launch_flag_buffer_id
+		);
+
+unsigned get_current_dynamic_launch_buffer_id(
+		cuMpSGEMM_handle_t handle
+		);
+unsigned get_next_dynamic_launch_buffer_id(
+		cuMpSGEMM_handle_t handle
+		);
+cuMpSGEMM_compute_mode_t get_dynamic_launch_gemm_compute_mode(
+		cuMpSGEMM_handle_t handle,
+		const unsigned buffer_id
+		);
+std::pair<int, int> get_dynamic_launch_scaling_mode_AB(
+		cuMpSGEMM_handle_t handle,
+		const unsigned buffer_id
+		);
+void set_dynamic_launch_buffer_by_exp_stats(
+		cuMpSGEMM_handle* handle,
+		const unsigned dynamic_launch_buffer_id,
+		const unsigned A_exp_stats_buffer_id,
+		const unsigned B_exp_stats_buffer_id
 		);
 } // namespace cumpsgemm
 #endif

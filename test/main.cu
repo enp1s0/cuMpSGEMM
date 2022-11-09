@@ -23,7 +23,6 @@ enum implementation_type {
 	FP16TCEC = CUMPSGEMM_FP16TCEC,
 	FP16TC   = CUMPSGEMM_FP16TC,
 	FP16TCEC_scaling = CUMPSGEMM_FP16TCEC_SCALING,
-	undefined = CUMPSGEMM_UNDEFINED,
 };
 
 cuMpSGEMM_compute_mode_t get_compute_mode(
@@ -58,7 +57,6 @@ std::string get_implementation_type_name_str(
 	case FP16TC:           return "FP16TC";
 	case TF32TCEC:         return "TF32TCEC";
 	case TF32TC:           return "TF32TC";
-	case undefined:        return "Undefined";
 	default:               return "Unknown(" + std::to_string(imp) + ")";
 	}
 }

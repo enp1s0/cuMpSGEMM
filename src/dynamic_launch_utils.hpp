@@ -2,6 +2,10 @@
 namespace cumpsgemm {
 namespace dynamic_launch {
 namespace utils {
+
+// Dynamic launch flag
+// 0b00...0| Scaling B flag (1 bit) | Scaling A flag (1 bit) | GEMM mode frag (5 bit) |
+
 __device__ __host__ inline void set_gemm_flag(
 		int& flag,
 		const int compute_mode

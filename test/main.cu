@@ -1200,8 +1200,8 @@ void gemm_exp_stats_test(
 				"  A = [underflow: %10lu / %10lu (%6.2f), max_exp=%e, buffer_id = %u -> mode=%s]\n"
 				"  B = [underflow: %10lu / %10lu (%6.2f), max_exp=%e, buffer_id = %u -> mode=%s]\n"
 				"  C = [underflow: %10lu / %10lu (%6.2f), max_exp=%e, buffer_id = %u]\n"
-				"  COMPUTE=[%s, SCALE_A=%d, SCALE_B=%d]\n"
-				"  ACCURACY=[%e, %s]\n",
+				"  Compute mode = [%s, SCALE_A=%d, SCALE_B=%d]\n"
+				"  Error = [%e, %s]\n",
 
 				(gemm == gemm_type::s ? "sgemm" : "cgemm"),
 				cuMpSGEMM_get_compute_mode_string(compute_mode),

@@ -4,6 +4,11 @@
 #include "cumpsgemm.h"
 
 namespace cumpsgemm {
+using handle_t = cuMpSGEMM_handle_t;
+inline void create(handle_t& handle) {cuMpSGEMM_create(&handle);}
+inline void destroy(handle_t handle) {cuMpSGEMM_destroy(handle);}
+inline void set_stream(handle_t& handle, cudaStream_t cuda_stream) {cuMpSGEMM_set_stream(handle, cuda_stream);}
+
 template <class T>
 cublasStatus_t gemm(
 		cuMpSGEMM_handle_t handle,

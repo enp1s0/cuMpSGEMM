@@ -19,6 +19,7 @@ cuMpSGEMM_handle_t internal_global_cuMpSGEMM_handle = nullptr;
 std::string internal_global_last_called_function_str = "";
 bool global_internal_gemm_Mx2x2_enabled = false;
 bool restore_AB = true;
+cumpsgemm::hijack_control::control_function_t internal_global_control_func;
 
 enum hijack_control_t {
 	static_mode,
@@ -206,6 +207,9 @@ extern "C" cuMpSGEMM_compute_mode_t cuMpSGEMM_get_compute_mode_internal (
 		const unsigned m, const unsigned n, const unsigned k
 		) {
 	if (hijack_mode == dynamic_mode) {
+		if (internal_global_control_func) {
+			return internal_global_control_func(op_A, op_B, m, n, k);
+		}
 		cuMpSGEMM_compute_mode_t (*func)(
 				const char* const func_name,
 				cublasHandle_t const cublas_handle,
@@ -1008,4 +1012,14 @@ void cumpsgemm::hijack_control::disable_restoring_AB_after_scaling() {
 
 bool cumpsgemm::hijack_control::is_library_loaded() {
 	return true;
+}
+
+void cumpsgemm::hijack_control::set_control_function(
+		const cumpsgemm::hijack_control::control_function_t control_func
+		) {
+	internal_global_control_func = control_func;
+}
+
+void cumpsgemm::hijack_control::unset_control_function() {
+	internal_global_control_func = 0;
 }

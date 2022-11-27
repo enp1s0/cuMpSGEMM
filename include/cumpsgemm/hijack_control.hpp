@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <vector>
+#include <functional>
 #include "detail/common.h"
 
 namespace cumpsgemm {
@@ -26,5 +27,11 @@ void set_last_called_function_str(const std::string func_str);
 void clear_last_called_function_str();
 
 bool is_library_loaded();
+
+using control_function_t = std::function<cuMpSGEMM_compute_mode_t(const int, const int, const unsigned, const unsigned, const unsigned)>;
+void set_control_function(
+		const control_function_t control_function
+		);
+void unset_control_function();
 } // namespace hijack_control
 } // namespace cumpsgemm

@@ -594,8 +594,8 @@ void gemm_test(const std::size_t min_N, const std::size_t max_N, const std::size
 	unsigned num_tests = 0;
 	unsigned num_passed = 0;
 	auto cublas_handle_uptr = cutf::cublas::get_cublas_unique_ptr();
-	cuMpSGEMM_handle_t cuMpSGEMM_handle;
-	cuMpSGEMM_create(&cuMpSGEMM_handle);
+	cumpsgemm::handle_t cuMpSGEMM_handle;
+	cumpsgemm::create(cuMpSGEMM_handle);
 
 	std::vector<std::size_t> N_list;
 	if (is_seq) {
@@ -666,7 +666,7 @@ void gemm_test(const std::size_t min_N, const std::size_t max_N, const std::size
 			num_tests
 			);
 
-	cuMpSGEMM_destroy(cuMpSGEMM_handle);
+	cumpsgemm::destroy(cuMpSGEMM_handle);
 
 	cutf::memory::free(a_ptr);
 	cutf::memory::free(b_ptr);
@@ -712,8 +712,8 @@ void gemm_strided_batch_test(const std::size_t min_N, const std::size_t max_N, c
 	unsigned num_tests = 0;
 	unsigned num_passed = 0;
 	auto cublas_handle_uptr = cutf::cublas::get_cublas_unique_ptr();
-	cuMpSGEMM_handle_t cuMpSGEMM_handle;
-	cuMpSGEMM_create(&cuMpSGEMM_handle);
+	cumpsgemm::handle_t cuMpSGEMM_handle;
+	cumpsgemm::create(cuMpSGEMM_handle);
 
 	const auto stride = is_seq ? max_N * max_N : (1lu << (2 * max_N));
 
@@ -775,7 +775,7 @@ void gemm_strided_batch_test(const std::size_t min_N, const std::size_t max_N, c
 			num_tests
 			);
 
-	cuMpSGEMM_destroy(cuMpSGEMM_handle);
+	cumpsgemm::destroy(cuMpSGEMM_handle);
 
 	cutf::memory::free(a_ptr);
 	cutf::memory::free(b_ptr);
@@ -793,8 +793,8 @@ void test_logged_shape(
 
 	auto cublas_handle_uptr = cutf::cublas::get_cublas_unique_ptr();
 
-	cuMpSGEMM_handle_t cuMpSGEMM_handle;
-	cuMpSGEMM_create(&cuMpSGEMM_handle);
+	cumpsgemm::handle_t cuMpSGEMM_handle;
+	cumpsgemm::create(cuMpSGEMM_handle);
 
 	std::size_t num_passed = 0;
 	std::size_t num_tested = 0;
@@ -972,7 +972,7 @@ void test_logged_shape(
 	ifs.close();
 	std::printf("%lu / %lu passed\n", num_passed, num_tested);
 
-	cuMpSGEMM_destroy(cuMpSGEMM_handle);
+	cumpsgemm::destroy(cuMpSGEMM_handle);
 }
 
 void gemm_exp_stats_test(
@@ -999,8 +999,8 @@ void gemm_exp_stats_test(
 
 	std::printf("## %s\n", __func__);
 	auto cublas_handle_uptr = cutf::cublas::get_cublas_unique_ptr();
-	cuMpSGEMM_handle_t cuMpSGEMM_handle;
-	cuMpSGEMM_create(&cuMpSGEMM_handle);
+	cumpsgemm::handle_t cuMpSGEMM_handle;
+	cumpsgemm::create(cuMpSGEMM_handle);
 	cumpsgemm::set_exp_stats_params(cuMpSGEMM_handle, ignore_threshold, underflow_threshold, 0.1f);
 
 	std::vector<cuMpSGEMM_compute_mode_t> modes;
@@ -1237,6 +1237,8 @@ void gemm_exp_stats_test(
 		profiler.print_result(stdout);
 		std::fflush(stdout);
 	}
+
+	cumpsgemm::destroy(cuMpSGEMM_handle);
 }
 
 void print_usage(const char* program_name) {

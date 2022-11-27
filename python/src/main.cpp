@@ -1,6 +1,7 @@
 #include <string>
 #include <utility>
 #include <pybind11/pybind11.h>
+#include <pybind11/functional.h>
 #include <cumpsgemm/hijack_control.hpp>
 
 int global_auto_kernel_selection_enabled = 0;
@@ -28,6 +29,9 @@ void set_last_called_function_str(const std::string func_str){};
 void clear_last_called_function_str(){};
 
 bool is_library_loaded() {return false;}
+
+void set_control_function(const control_function_t) {};
+void unset_control_function() {};
 } // namespace hijack_control
 } // namespace cumpsgemm
 
@@ -78,6 +82,16 @@ void disable_restoring_AB_after_scaling(){
 	cumpsgemm::hijack_control::disable_restoring_AB_after_scaling();
 };
 
+void set_control_function(
+	const cumpsgemm::hijack_control::control_function_t control_func
+	) {
+	cumpsgemm::hijack_control::set_control_function(control_func);
+}
+
+void unset_control_function() {
+	cumpsgemm::hijack_control::unset_control_function();
+}
+
 void enable_auto_kernel_selection() {global_auto_kernel_selection_enabled = true;}
 void disable_auto_kernel_selection() {global_auto_kernel_selection_enabled = false;}
 bool is_auto_kernel_selection_enabled() {return global_auto_kernel_selection_enabled;}
@@ -103,6 +117,9 @@ PYBIND11_MODULE(cumpsgemm_hijack_control, m) {
 	m.def("enable_restoring_AB_after_scaling"  , &enable_restoring_AB_after_scaling , "enable_restoring_AB_after_scaling");
 	m.def("disable_restoring_AB_after_scaling" , &disable_restoring_AB_after_scaling, "disable_restoring_AB_after_scaling");
 
+	m.def("set_control_function"               , &set_control_function     , "set_control_function"  , pybind11::arg("control_func"));
+	m.def("unset_control_function"             , &unset_control_function   , "unset_control_function");
+
 	pybind11::enum_<cuMpSGEMM_compute_mode_t>(m, "compute_mode")
 		.value("CUMPSGEMM_CUBLAS"       , CUMPSGEMM_CUBLAS       )
 		.value("CUMPSGEMM_FP16TCEC"     , CUMPSGEMM_FP16TCEC     )
@@ -124,6 +141,5 @@ PYBIND11_MODULE(cumpsgemm_hijack_control, m) {
 	m.def("set_global_cublas_dim_k_threshold"  , &set_global_cublas_dim_k_threshold , "set_global_cublas_dim_k_threshold", pybind11::arg("dim"));
 	m.def("get_global_cublas_dim_k_threshold"  , &get_global_cublas_dim_k_threshold , "get_global_cublas_dim_k_threshold");
 	m.def("is_library_loaded"                  , &is_library_loaded                 , "is_library_loaded");
-
 }
 

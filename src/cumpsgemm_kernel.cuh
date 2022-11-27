@@ -670,6 +670,80 @@ template <
 	class TC_T,
 	class EC
 >
+cumpsgemm::gemm_kernel_func_t<T> get_kernel_atomic_func_ptr() {
+	using A_DMEM_LOADER = cumpsgemm::device::dmem_loader<OP_A, T, SMEM_M, SMEM_K, smem_A_skew, BLOCK_SIZE>;
+	using B_DMEM_LOADER = cumpsgemm::device::dmem_loader<OP_B, T, SMEM_K, SMEM_N, smem_B_skew, BLOCK_SIZE>;
+	using C_DMEM_STORER = cumpsgemm::device::dmem_atomic_storer<T, SMEM_M, SMEM_N, smem_C_skew, BLOCK_SIZE>;
+	constexpr cumpsgemm::gemm_kernel_func_t<T> func_ptr = &(gemm_kernel<
+		T,
+		SMEM_M, SMEM_N, SMEM_K,
+		FRAG_M, FRAG_N, FRAG_K,
+		BLOCK_SIZE,
+		NUM_UNROLLINGS,
+		NUM_STAGES,
+		A_DMEM_LOADER,
+		B_DMEM_LOADER,
+		C_DMEM_STORER,
+		mma_smem<T, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, typename A_DMEM_LOADER::Layout, typename B_DMEM_LOADER::Layout, TC_T, EC>,
+		TC_T,
+		EC
+	>);
+	return func_ptr;
+}
+
+template <
+	class T,
+	unsigned SMEM_M,
+	unsigned SMEM_N,
+	unsigned SMEM_K,
+	unsigned FRAG_M,
+	unsigned FRAG_N,
+	unsigned FRAG_K,
+	unsigned BLOCK_SIZE,
+	unsigned NUM_UNROLLINGS,
+	unsigned NUM_STAGES,
+	class OP_A,
+	class OP_B,
+	class TC_T,
+	class EC
+>
+cumpsgemm::gemm_kernel_func_t<T> get_kernel_pipelined_atomic_func_ptr() {
+	using A_DMEM_LOADER = cumpsgemm::device::dmem_loader<OP_A, T, SMEM_M, SMEM_K, smem_A_skew, BLOCK_SIZE>;
+	using B_DMEM_LOADER = cumpsgemm::device::dmem_loader<OP_B, T, SMEM_K, SMEM_N, smem_B_skew, BLOCK_SIZE>;
+	using C_DMEM_STORER = cumpsgemm::device::dmem_atomic_storer<T, SMEM_M, SMEM_N, smem_C_skew, BLOCK_SIZE>;
+	constexpr cumpsgemm::gemm_kernel_func_t<T> func_ptr = &(gemm_kernel<
+		T,
+		SMEM_M, SMEM_N, SMEM_K,
+		FRAG_M, FRAG_N, FRAG_K,
+		BLOCK_SIZE,
+		NUM_UNROLLINGS,
+		NUM_STAGES,
+		cumpsgemm::device::dmem_loader<OP_A, T, SMEM_M, SMEM_K, smem_A_skew, BLOCK_SIZE>,
+		cumpsgemm::device::dmem_loader<OP_B, T, SMEM_K, SMEM_N, smem_B_skew, BLOCK_SIZE>,
+		cumpsgemm::device::dmem_storer<T, SMEM_M, SMEM_N, smem_C_skew, BLOCK_SIZE>,
+		mma_smem_pipeline<T, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, typename A_DMEM_LOADER::Layout, typename B_DMEM_LOADER::Layout, TC_T, EC>,
+		TC_T,
+		EC
+	>);
+	return func_ptr;
+}
+
+template <
+	class T,
+	unsigned SMEM_M,
+	unsigned SMEM_N,
+	unsigned SMEM_K,
+	unsigned FRAG_M,
+	unsigned FRAG_N,
+	unsigned FRAG_K,
+	unsigned BLOCK_SIZE,
+	unsigned NUM_UNROLLINGS,
+	unsigned NUM_STAGES,
+	class OP_A,
+	class OP_B,
+	class TC_T,
+	class EC
+>
 cumpsgemm::gemm_stridedBatch_kernel_func_t<T> get_stridedBatch_kernel_func_ptr() {
 	using A_DMEM_LOADER = cumpsgemm::device::dmem_loader<OP_A, T, SMEM_M, SMEM_K, smem_A_skew, BLOCK_SIZE>;
 	using B_DMEM_LOADER = cumpsgemm::device::dmem_loader<OP_B, T, SMEM_K, SMEM_N, smem_B_skew, BLOCK_SIZE>;
@@ -711,6 +785,80 @@ cumpsgemm::gemm_stridedBatch_kernel_func_t<T> get_stridedBatch_kernel_pipelined_
 	using A_DMEM_LOADER = cumpsgemm::device::dmem_loader<OP_A, T, SMEM_M, SMEM_K, smem_A_skew, BLOCK_SIZE>;
 	using B_DMEM_LOADER = cumpsgemm::device::dmem_loader<OP_B, T, SMEM_K, SMEM_N, smem_B_skew, BLOCK_SIZE>;
 	using C_DMEM_STORER = cumpsgemm::device::dmem_storer<T, SMEM_M, SMEM_N, smem_C_skew, BLOCK_SIZE>;
+	constexpr cumpsgemm::gemm_stridedBatch_kernel_func_t<T> func_ptr = &(gemm_batchStrided_kernel<
+		T,
+		SMEM_M, SMEM_N, SMEM_K,
+		FRAG_M, FRAG_N, FRAG_K,
+		BLOCK_SIZE,
+		NUM_UNROLLINGS,
+		NUM_STAGES,
+		cumpsgemm::device::dmem_loader<OP_A, T, SMEM_M, SMEM_K, smem_A_skew, BLOCK_SIZE>,
+		cumpsgemm::device::dmem_loader<OP_B, T, SMEM_K, SMEM_N, smem_B_skew, BLOCK_SIZE>,
+		cumpsgemm::device::dmem_storer<T, SMEM_M, SMEM_N, smem_C_skew, BLOCK_SIZE>,
+		mma_smem_pipeline<T, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, typename A_DMEM_LOADER::Layout, typename B_DMEM_LOADER::Layout, TC_T, EC>,
+		TC_T,
+		EC
+	>);
+	return func_ptr;
+}
+
+template <
+	class T,
+	unsigned SMEM_M,
+	unsigned SMEM_N,
+	unsigned SMEM_K,
+	unsigned FRAG_M,
+	unsigned FRAG_N,
+	unsigned FRAG_K,
+	unsigned BLOCK_SIZE,
+	unsigned NUM_UNROLLINGS,
+	unsigned NUM_STAGES,
+	class OP_A,
+	class OP_B,
+	class TC_T,
+	class EC
+>
+cumpsgemm::gemm_stridedBatch_kernel_func_t<T> get_stridedBatch_kernel_atomic_func_ptr() {
+	using A_DMEM_LOADER = cumpsgemm::device::dmem_loader<OP_A, T, SMEM_M, SMEM_K, smem_A_skew, BLOCK_SIZE>;
+	using B_DMEM_LOADER = cumpsgemm::device::dmem_loader<OP_B, T, SMEM_K, SMEM_N, smem_B_skew, BLOCK_SIZE>;
+	using C_DMEM_STORER = cumpsgemm::device::dmem_atomic_storer<T, SMEM_M, SMEM_N, smem_C_skew, BLOCK_SIZE>;
+	constexpr cumpsgemm::gemm_stridedBatch_kernel_func_t<T> func_ptr = &(gemm_batchStrided_kernel<
+		T,
+		SMEM_M, SMEM_N, SMEM_K,
+		FRAG_M, FRAG_N, FRAG_K,
+		BLOCK_SIZE,
+		NUM_UNROLLINGS,
+		NUM_STAGES,
+		cumpsgemm::device::dmem_loader<OP_A, T, SMEM_M, SMEM_K, smem_A_skew, BLOCK_SIZE>,
+		cumpsgemm::device::dmem_loader<OP_B, T, SMEM_K, SMEM_N, smem_B_skew, BLOCK_SIZE>,
+		cumpsgemm::device::dmem_storer<T, SMEM_M, SMEM_N, smem_C_skew, BLOCK_SIZE>,
+		mma_smem<T, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, typename A_DMEM_LOADER::Layout, typename B_DMEM_LOADER::Layout, TC_T, EC>,
+		TC_T,
+		EC
+	>);
+	return func_ptr;
+}
+
+template <
+	class T,
+	unsigned SMEM_M,
+	unsigned SMEM_N,
+	unsigned SMEM_K,
+	unsigned FRAG_M,
+	unsigned FRAG_N,
+	unsigned FRAG_K,
+	unsigned BLOCK_SIZE,
+	unsigned NUM_UNROLLINGS,
+	unsigned NUM_STAGES,
+	class OP_A,
+	class OP_B,
+	class TC_T,
+	class EC
+>
+cumpsgemm::gemm_stridedBatch_kernel_func_t<T> get_stridedBatch_kernel_pipelined_atomic_func_ptr() {
+	using A_DMEM_LOADER = cumpsgemm::device::dmem_loader<OP_A, T, SMEM_M, SMEM_K, smem_A_skew, BLOCK_SIZE>;
+	using B_DMEM_LOADER = cumpsgemm::device::dmem_loader<OP_B, T, SMEM_K, SMEM_N, smem_B_skew, BLOCK_SIZE>;
+	using C_DMEM_STORER = cumpsgemm::device::dmem_atomic_storer<T, SMEM_M, SMEM_N, smem_C_skew, BLOCK_SIZE>;
 	constexpr cumpsgemm::gemm_stridedBatch_kernel_func_t<T> func_ptr = &(gemm_batchStrided_kernel<
 		T,
 		SMEM_M, SMEM_N, SMEM_K,

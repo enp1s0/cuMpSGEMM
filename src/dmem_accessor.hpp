@@ -238,6 +238,43 @@ __device__ void dmem_store_core (
 		}
 	}
 }
+
+template <class T, unsigned SMEM_M, unsigned SMEM_N, unsigned SKEW, unsigned BLOCK_SIZE, class VEC_T>
+__device__ void dmem_atomic_store_core (
+			T* const dmem_ptr,
+			const unsigned ld,
+			const unsigned start_m,
+			const unsigned start_n,
+			const unsigned size_m,
+			const unsigned size_n,
+			const T* const smem_ptr,
+			const T alpha
+		){
+	constexpr unsigned v_bit_len = size_of<VEC_T>::value;
+	if constexpr ((v_bit_len / size_of<T>::value) != 0) {
+		const auto index = threadIdx.x * (v_bit_len / size_of<T>::value);
+		const auto m = index % SMEM_M;
+		const auto n = index / SMEM_M;
+		auto smem_local_ptr = smem_ptr + (m + n * (SMEM_M + SKEW));
+		auto dmem_local_ptr = dmem_ptr + (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
+
+		auto v = *reinterpret_cast<const VEC_T*>(smem_local_ptr);
+		for (unsigned i = 0; i < v_bit_len / size_of<T>::value; i++) {
+			reinterpret_cast<T*>(&v)[i] = mul(reinterpret_cast<T*>(&v)[i], alpha);
+		}
+		*reinterpret_cast<VEC_T*>(dmem_local_ptr) = v;
+
+		for (unsigned offset = 1; offset < SMEM_M * SMEM_N / (BLOCK_SIZE * (v_bit_len / size_of<T>::value)); offset++) {
+			smem_local_ptr += (SMEM_M + SKEW) * (v_bit_len / size_of<T>::value) * BLOCK_SIZE / SMEM_M;
+			dmem_local_ptr += static_cast<std::size_t>((v_bit_len / size_of<T>::value) * BLOCK_SIZE / SMEM_M) * ld;
+
+			auto v = *reinterpret_cast<const VEC_T*>(smem_local_ptr);
+			for (unsigned i = 0; i < v_bit_len / size_of<T>::value; i++) {
+				atomicAdd(dmem_local_ptr + i, mul(reinterpret_cast<T*>(&v)[i], alpha));
+			}
+		}
+	}
+}
 } // namespace detail
 
 template <class T, unsigned SMEM_M, unsigned SMEM_N, unsigned SKEW, unsigned BLOCK_SIZE>
@@ -301,6 +338,48 @@ struct dmem_storer {
 					}
 					__syncwarp();
 				}
+			}
+		}
+	}
+};
+
+template <class T, unsigned SMEM_M, unsigned SMEM_N, unsigned SKEW, unsigned BLOCK_SIZE>
+struct dmem_atomic_storer {
+	__device__ void operator() (
+			T* const dmem_ptr,
+			const unsigned ld,
+			const unsigned start_m,
+			const unsigned start_n,
+			const unsigned size_m,
+			const unsigned size_n,
+			const T* const smem_ptr,
+			const T alpha,
+			const T
+			) {
+		if (start_m + SMEM_M <= size_m && start_n + SMEM_N <= size_n) {
+			if (ld % (16 / size_of<T>::value) == 0) {
+				detail::dmem_atomic_store_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, ulong2, false>(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha);
+			} else if ((ld % (8 / size_of<T>::value) == 0)) {
+				detail::dmem_atomic_store_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, ulong1, false>(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha);
+			} else {
+				detail::dmem_atomic_store_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, uint1 , false>(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha);
+			}
+		} else {
+			const auto index = threadIdx.x;
+			const auto m = index % SMEM_M;
+			auto n = index / SMEM_M;
+			auto smem_index = m + n * (SMEM_M + SKEW);
+			auto dmem_index = (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
+
+			for (unsigned offset = 0; offset < SMEM_M * SMEM_N; offset += BLOCK_SIZE) {
+				if ((start_m + m) < size_m && (start_n + n) < size_n) {
+					atomicAdd(&dmem_ptr[dmem_index], mul(smem_ptr[smem_index], alpha));
+				}
+				n += (BLOCK_SIZE / SMEM_M);
+
+				smem_index += (SMEM_M + SKEW) * (BLOCK_SIZE / SMEM_M);
+				dmem_index += ld * (BLOCK_SIZE / SMEM_M);
+				__syncwarp();
 			}
 		}
 	}

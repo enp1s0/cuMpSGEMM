@@ -49,11 +49,11 @@ __device__ cuComplex inline mad<cuComplex>(const cuComplex a, const cuComplex al
 }
 
 template<class T>
-__device__ bool inline is_zero(const T& v) {
+__host__ __device__ bool inline is_zero(const T& v) {
 	return v == 0;
 }
 template <>
-__device__ bool inline is_zero(const cuComplex& v) {
+__host__ __device__ bool inline is_zero(const cuComplex& v) {
 	return v.x == 0 && v.y == 0;
 }
 } // namespace device

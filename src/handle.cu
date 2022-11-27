@@ -696,4 +696,4 @@ cublasStatus_t cuMpSGEMM_set_stream(cuMpSGEMM_handle_t handle, const cudaStream_
 	handle->cuda_stream = cuda_stream;
 	return CUBLAS_STATUS_SUCCESS;
 }
-}
+} // extern "C"

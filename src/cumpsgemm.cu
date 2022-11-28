@@ -277,7 +277,7 @@ cublasStatus_t cumpsgemm::gemm(
 		} else {
 			T* r_c_dmem_ptr = c_dmem_ptr;
 			uint64_t r_ldc = ldc;
-			if (cumpsgemm::device::is_zero(*beta)) {
+			if (!cumpsgemm::device::is_zero(*beta)) {
 				r_c_dmem_ptr = reinterpret_cast<T*>(handle->temp_working_memory);
 				r_ldc = m;
 			}
@@ -302,7 +302,7 @@ cublasStatus_t cumpsgemm::gemm(
 					);
 
 			// post process if needed
-			if (cumpsgemm::device::is_zero(*beta)) {
+			if (!cumpsgemm::device::is_zero(*beta)) {
 				post_atomic(
 						c_dmem_ptr,
 						reinterpret_cast<T*>(handle->temp_working_memory),
@@ -371,7 +371,7 @@ cublasStatus_t cumpsgemm::gemm(
 		} else {
 			T* r_c_dmem_ptr = c_dmem_ptr;
 			uint64_t r_ldc = ldc;
-			if (cumpsgemm::device::is_zero(*beta)) {
+			if (!cumpsgemm::device::is_zero(*beta)) {
 				r_c_dmem_ptr = reinterpret_cast<T*>(handle->temp_working_memory);
 				r_ldc = m;
 			}
@@ -409,7 +409,7 @@ cublasStatus_t cumpsgemm::gemm(
 					handle->cuda_stream
 					);
 			// post process if needed
-			if (cumpsgemm::device::is_zero(*beta)) {
+			if (!cumpsgemm::device::is_zero(*beta)) {
 				post_atomic(
 						c_dmem_ptr,
 						reinterpret_cast<T*>(handle->temp_working_memory),

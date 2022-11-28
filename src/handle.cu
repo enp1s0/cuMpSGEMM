@@ -798,6 +798,7 @@ cublasStatus_t cuMpSGEMM_create(cuMpSGEMM_handle_t* const handle) {
 
 	init_exp_stats_counter_buffer((*handle));
 	init_dynamic_launch_flag_buffer((*handle));
+	init_temp_working_memory((*handle));
 
 	return CUBLAS_STATUS_SUCCESS;
 }

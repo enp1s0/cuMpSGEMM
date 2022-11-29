@@ -270,7 +270,7 @@ __device__ void dmem_atomic_store_core (
 
 			auto v = *reinterpret_cast<const VEC_T*>(smem_local_ptr);
 			for (unsigned i = 0; i < v_bit_len / size_of<T>::value; i++) {
-				atomicAdd(dmem_local_ptr + i, mul(reinterpret_cast<T*>(&v)[i], alpha));
+				cumpsgemm::device::atomic_add(dmem_local_ptr + i, mul(reinterpret_cast<T*>(&v)[i], alpha));
 			}
 		}
 	}
@@ -358,11 +358,11 @@ struct dmem_atomic_storer {
 			) {
 		if (start_m + SMEM_M <= size_m && start_n + SMEM_N <= size_n) {
 			if (ld % (16 / size_of<T>::value) == 0) {
-				detail::dmem_atomic_store_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, ulong2, false>(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha);
+				detail::dmem_atomic_store_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, ulong2>(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha);
 			} else if ((ld % (8 / size_of<T>::value) == 0)) {
-				detail::dmem_atomic_store_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, ulong1, false>(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha);
+				detail::dmem_atomic_store_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, ulong1>(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha);
 			} else {
-				detail::dmem_atomic_store_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, uint1 , false>(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha);
+				detail::dmem_atomic_store_core<T, SMEM_M, SMEM_N, SKEW, BLOCK_SIZE, uint1 >(dmem_ptr, ld, start_m, start_n, size_m, size_n, smem_ptr, alpha);
 			}
 		} else {
 			const auto index = threadIdx.x;
@@ -373,7 +373,7 @@ struct dmem_atomic_storer {
 
 			for (unsigned offset = 0; offset < SMEM_M * SMEM_N; offset += BLOCK_SIZE) {
 				if ((start_m + m) < size_m && (start_n + n) < size_n) {
-					atomicAdd(&dmem_ptr[dmem_index], mul(smem_ptr[smem_index], alpha));
+					cumpsgemm::device::atomic_add(&dmem_ptr[dmem_index], mul(smem_ptr[smem_index], alpha));
 				}
 				n += (BLOCK_SIZE / SMEM_M);
 

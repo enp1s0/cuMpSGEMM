@@ -93,6 +93,40 @@ void launch_kernel (
 }
 
 template <class T>
+void launch_atomic_kernel (
+			const cumpsgemm::gemm_module gemm_module,
+			const int* const dynamic_launch_buffer_ptr,
+			const std::size_t m,
+			const std::size_t n,
+			const std::size_t k,
+			const T alpha,
+			const T* const a_ptr, const std::size_t lda,
+			const T* const b_ptr, const std::size_t ldb,
+			const T beta,
+			T* const c_ptr, const std::size_t ldc,
+			cudaStream_t cuda_stream
+		) {
+	const auto kernel_ptr = reinterpret_cast<cumpsgemm::gemm_kernel_func_t<T>>(gemm_module.kernel_func);
+	const dim3 block_size(gemm_module.block_size);
+	const dim3 grid_size(
+			((m + gemm_module.smem_m - 1) / gemm_module.smem_m) * ((n + gemm_module.smem_n - 1) / gemm_module.smem_n) * ((k + gemm_module.k_per_mn - 1) / gemm_module.k_per_mn)
+			);
+
+	kernel_ptr<<<grid_size, block_size, gemm_module.smem_size, cuda_stream>>>(
+			dynamic_launch_buffer_ptr,
+			m, n, k,
+			alpha,
+			a_ptr, lda,
+			b_ptr, ldb,
+			beta,
+			c_ptr, ldc
+			);
+#ifdef CUMPSGEMM_CHECK_KERNEL_ERROR
+	CUTF_CHECK_ERROR(cudaStreamSynchronize(cuda_stream));
+#endif
+}
+
+template <class T>
 void launch_kernel (
 			const cumpsgemm::gemm_module gemm_module,
 			const int* const dynamic_launch_buffer_ptr,
@@ -289,7 +323,7 @@ cublasStatus_t cumpsgemm::gemm(
 				*used_kernel_modeule_id = ~0u;
 			}
 			const auto gemm_module = handle->gemm_atomic_module[code];
-			launch_kernel<T>(
+			launch_atomic_kernel<T>(
 					gemm_module,
 					nullptr,
 					m, n, k,
@@ -343,10 +377,10 @@ cublasStatus_t cumpsgemm::gemm(
 			}
 
 			if (used_kernel_modeule_id != nullptr) {
-				*used_kernel_modeule_id = ~0u;
+				*used_kernel_modeule_id = 100;
 			}
 
-			launch_kernel<T>(
+			launch_atomic_kernel<T>(
 					gemm_module_A,
 					handle->dynamic_launch_handle->flag_buffer + handle->dynamic_launch_handle->enabled_id,
 					m, n, k,
@@ -357,7 +391,7 @@ cublasStatus_t cumpsgemm::gemm(
 					c_dmem_ptr, ldc,
 					handle->cuda_stream
 					);
-			launch_kernel<T>(
+			launch_atomic_kernel<T>(
 					gemm_module_B,
 					handle->dynamic_launch_handle->flag_buffer + handle->dynamic_launch_handle->enabled_id,
 					m, n, k,

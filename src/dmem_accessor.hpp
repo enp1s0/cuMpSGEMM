@@ -260,9 +260,8 @@ __device__ void dmem_atomic_store_core (
 
 		auto v = *reinterpret_cast<const VEC_T*>(smem_local_ptr);
 		for (unsigned i = 0; i < v_bit_len / size_of<T>::value; i++) {
-			reinterpret_cast<T*>(&v)[i] = mul(reinterpret_cast<T*>(&v)[i], alpha);
+			cumpsgemm::device::atomic_add(dmem_local_ptr + i, mul(reinterpret_cast<T*>(&v)[i], alpha));
 		}
-		*reinterpret_cast<VEC_T*>(dmem_local_ptr) = v;
 
 		for (unsigned offset = 1; offset < SMEM_M * SMEM_N / (BLOCK_SIZE * (v_bit_len / size_of<T>::value)); offset++) {
 			smem_local_ptr += (SMEM_M + SKEW) * (v_bit_len / size_of<T>::value) * BLOCK_SIZE / SMEM_M;

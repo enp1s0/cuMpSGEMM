@@ -394,7 +394,7 @@ cublasStatus_t cumpsgemm::gemm(
 					a_dmem_ptr, lda,
 					b_dmem_ptr, ldb,
 					*beta,
-					c_dmem_ptr, ldc,
+					r_c_dmem_ptr, r_ldc,
 					handle->cuda_stream
 					);
 			launch_kernel<T>(
@@ -405,7 +405,7 @@ cublasStatus_t cumpsgemm::gemm(
 					a_dmem_ptr, lda,
 					b_dmem_ptr, ldb,
 					*beta,
-					c_dmem_ptr, ldc,
+					r_c_dmem_ptr, r_ldc,
 					handle->cuda_stream
 					);
 			// post process if needed

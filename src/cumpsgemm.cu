@@ -206,6 +206,7 @@ cublasStatus_t cumpsgemm::gemm(
 			*used_kernel_modeule_id = ~0u;
 		}
 
+		if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.start_timer_sync("gemm_kernel_A");}
 		launch_kernel<T>(
 				gemm_module_A,
 				handle->dynamic_launch_handle->flag_buffer + handle->dynamic_launch_handle->enabled_id,
@@ -217,6 +218,9 @@ cublasStatus_t cumpsgemm::gemm(
 				c_dmem_ptr, ldc,
 				handle->cuda_stream
 				);
+		if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.stop_timer_sync("gemm_kernel_A");}
+
+		if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.start_timer_sync("gemm_kernel_B");}
 		launch_kernel<T>(
 				gemm_module_B,
 				handle->dynamic_launch_handle->flag_buffer + handle->dynamic_launch_handle->enabled_id,
@@ -228,7 +232,7 @@ cublasStatus_t cumpsgemm::gemm(
 				c_dmem_ptr, ldc,
 				handle->cuda_stream
 				);
-
+		if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.stop_timer_sync("gemm_kernel_B");}
 	}
 
 	return CUBLAS_STATUS_SUCCESS;

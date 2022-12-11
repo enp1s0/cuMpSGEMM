@@ -324,13 +324,16 @@ void launch_compute_mode_set_kernel (
 				);
 
 		// 0
+		if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.start_timer_sync("exp_stats_init");}
 		init_exp_stats_buffer<<<1, 1, 0, handle->cuda_stream>>>(
 				handle->exp_stats_handle->dev_max_abs_buffer         + buffer_id,
 				handle->exp_stats_handle->dev_total_count_buffer     + buffer_id,
 				handle->exp_stats_handle->dev_underflow_count_buffer + buffer_id
 				);
+		if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.stop_timer_sync("exp_stats_init");}
 
 		// 1
+		if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.start_timer_sync("exp_stats_1");}
 		exp_stats_ext_stage_1_kernel<BLOCK_SIZE, VEC_LEN, LOOP_T, T><<<grid_size, BLOCK_SIZE, 0, handle->cuda_stream>>>(
 				handle->exp_stats_handle->dev_max_abs_buffer         + buffer_id,
 				handle->exp_stats_handle->dev_total_count_buffer     + buffer_id,
@@ -341,16 +344,20 @@ void launch_compute_mode_set_kernel (
 				ptr, ld,
 				batch_size, stride
 				);
+		if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.stop_timer_sync("exp_stats_1");}
 
 		// 2
+		if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.start_timer_sync("exp_stats_set_1");}
 		update_dynamic_mode_1_kernel<<<1, 1, 0, handle->cuda_stream>>>(
 				handle->exp_stats_handle->dev_compute_mode_buffer    + buffer_id,
 				handle->exp_stats_handle->dev_total_count_buffer     + buffer_id,
 				handle->exp_stats_handle->dev_underflow_count_buffer + buffer_id,
 				handle->exp_stats_handle->underflow_tolerance_rate
 				);
+		if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.stop_timer_sync("exp_stats_set_1");}
 
 		// 3
+		if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.start_timer_sync("exp_stats_2");}
 		exp_stats_ext_stage_2_kernel<BLOCK_SIZE, VEC_LEN, LOOP_T, T><<<grid_size, BLOCK_SIZE, 0, handle->cuda_stream>>>(
 				handle->exp_stats_handle->dev_compute_mode_buffer    + buffer_id,
 				handle->exp_stats_handle->dev_total_count_buffer     + buffer_id,
@@ -362,14 +369,17 @@ void launch_compute_mode_set_kernel (
 				ptr, ld,
 				batch_size, stride
 				);
+		if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.stop_timer_sync("exp_stats_2");}
 
 		// 4
+		if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.start_timer_sync("exp_stats_set_2");}
 		update_dynamic_mode_2_kernel<<<1, 1, 0, handle->cuda_stream>>>(
 				handle->exp_stats_handle->dev_compute_mode_buffer    + buffer_id,
 				handle->exp_stats_handle->dev_total_count_buffer     + buffer_id,
 				handle->exp_stats_handle->dev_underflow_count_buffer + buffer_id,
 				handle->exp_stats_handle->underflow_tolerance_rate
 				);
+		if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.stop_timer_sync("exp_stats_set_2");}
 }
 
 __global__ void configure_buffer_kernel(

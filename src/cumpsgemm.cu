@@ -811,3 +811,24 @@ void cumpsgemm::set_dynamic_launch_buffer_by_exp_stats(
 			B_exp_stats_buffer_id
 			);
 }
+
+void cumpsgemm::enable_exp_stats_profiling(cuMpSGEMM_handle* const handle) {
+	handle->exp_stats_handle->profiling_enabled = true;
+	handle->exp_stats_handle->profiler.set_cuda_stream(handle->cuda_stream);
+}
+
+void cumpsgemm::disable_exp_stats_profiling(cuMpSGEMM_handle* const handle) {
+	handle->exp_stats_handle->profiling_enabled = false;
+}
+
+void cumpsgemm::reset_exp_stats_profiling(cuMpSGEMM_handle* const handle) {
+	handle->exp_stats_handle->profiler.clear();
+}
+
+void cumpsgemm::print_exp_stats_profiling(cuMpSGEMM_handle* const handle, unsigned csv) {
+	if (csv) {
+		handle->exp_stats_handle->profiler.print_result_csv(stdout);
+	} else {
+		handle->exp_stats_handle->profiler.print_result(stdout);
+	}
+}

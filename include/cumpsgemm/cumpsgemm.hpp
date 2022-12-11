@@ -180,5 +180,10 @@ void set_dynamic_launch_buffer_by_exp_stats(
 		const unsigned A_exp_stats_buffer_id,
 		const unsigned B_exp_stats_buffer_id
 		);
+
+void enable_exp_stats_profiling(cuMpSGEMM_handle* const handle);
+void disable_exp_stats_profiling(cuMpSGEMM_handle* const handle);
+void reset_exp_stats_profiling(cuMpSGEMM_handle* const handle);
+void print_exp_stats_profiling(cuMpSGEMM_handle* const handle, unsigned csv = false);
 } // namespace cumpsgemm
 #endif

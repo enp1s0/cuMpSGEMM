@@ -974,9 +974,9 @@ void cumpsgemm::hijack_control::set_exp_stats_params(
 		const float underflow_threshold,
 		const float underflow_tolerance_rate
 		) {
-	cuMpSGEMM_log("AUTO config: ignore_threshold="         + std::to_string(ignore_threshold)         + "@" + std::string(__func__));
-	cuMpSGEMM_log("AUTO config: underflow_threshold="      + std::to_string(underflow_threshold)      + "@" + std::string(__func__));
-	cuMpSGEMM_log("AUTO config: underflow_tolerance_rate=" + std::to_string(underflow_tolerance_rate) + "@" + std::string(__func__));
+	cuMpSGEMM_log("AUTO config: ignore_threshold="         + std::to_string(ignore_threshold)         + " @" + std::string(__func__));
+	cuMpSGEMM_log("AUTO config: underflow_threshold="      + std::to_string(underflow_threshold)      + " @" + std::string(__func__));
+	cuMpSGEMM_log("AUTO config: underflow_tolerance_rate=" + std::to_string(underflow_tolerance_rate) + " @" + std::string(__func__));
 
 	cumpsgemm::set_exp_stats_params(get_internal_global_handle(), ignore_threshold, underflow_threshold, underflow_tolerance_rate);
 }

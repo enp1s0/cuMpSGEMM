@@ -136,12 +136,13 @@ cuMpSGEMM_handle_t cuMpSGEMM_get_internal_global_handle() {
 		const auto underflow_tolerance_rate = init_float_by_env("CUMPSGEMM_AUTO_UNDERFLOW_TOLERANCE_RATE", 0);
 		const auto restore_AB_scaling       = init_int_by_env  ("CUMPSGEMM_AUTO_RESTORE_AB_SCALING"      , 1);
 
-		cuMpSGEMM_log("AUTO config: ignore_threshold=" + std::to_string(ignore_threshold));
-		cuMpSGEMM_log("AUTO config: underflow_threshold=" + std::to_string(underflow_threshold));
-		cuMpSGEMM_log("AUTO config: underflow_tolerance_rate=" + std::to_string(underflow_tolerance_rate));
-		cuMpSGEMM_log("AUTO config: restore_AB_scaling=" + std::to_string(restore_AB_scaling));
+		cuMpSGEMM_log("AUTO config: ignore_threshold="         + std::to_string(ignore_threshold)         + " @Init");
+		cuMpSGEMM_log("AUTO config: underflow_threshold="      + std::to_string(underflow_threshold)      + " @Init");
+		cuMpSGEMM_log("AUTO config: underflow_tolerance_rate=" + std::to_string(underflow_tolerance_rate) + " @Init");
+		cuMpSGEMM_log("AUTO config: restore_AB_scaling="       + std::to_string(restore_AB_scaling)       + " @Init");
 
 		cumpsgemm::set_exp_stats_params(cuMpSGEMM_get_internal_global_handle(), ignore_threshold, underflow_threshold, underflow_tolerance_rate);
+		restore_AB = restore_AB_scaling;
 	}
 
 	return internal_global_cuMpSGEMM_handle;
@@ -973,6 +974,10 @@ void cumpsgemm::hijack_control::set_exp_stats_params(
 		const float underflow_threshold,
 		const float underflow_tolerance_rate
 		) {
+	cuMpSGEMM_log("AUTO config: ignore_threshold="         + std::to_string(ignore_threshold)         + "@" + std::string(__func__));
+	cuMpSGEMM_log("AUTO config: underflow_threshold="      + std::to_string(underflow_threshold)      + "@" + std::string(__func__));
+	cuMpSGEMM_log("AUTO config: underflow_tolerance_rate=" + std::to_string(underflow_tolerance_rate) + "@" + std::string(__func__));
+
 	cumpsgemm::set_exp_stats_params(get_internal_global_handle(), ignore_threshold, underflow_threshold, underflow_tolerance_rate);
 }
 
@@ -1004,10 +1009,12 @@ void cumpsgemm::hijack_control::disable_custom_gemm_Mx2x2() {
 
 void cumpsgemm::hijack_control::enable_restoring_AB_after_scaling() {
 	restore_AB = true;
+	cuMpSGEMM_log("AUTO config: restore_AB_scaling=True @" + std::string(__func__));
 }
 
 void cumpsgemm::hijack_control::disable_restoring_AB_after_scaling() {
 	restore_AB = false;
+	cuMpSGEMM_log("AUTO config: restore_AB_scaling=False @" + std::string(__func__));
 }
 
 bool cumpsgemm::hijack_control::is_library_loaded() {

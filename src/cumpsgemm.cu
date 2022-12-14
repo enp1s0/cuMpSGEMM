@@ -164,6 +164,7 @@ cublasStatus_t cumpsgemm::gemm(
 			*used_kernel_modeule_id = module_id;
 		}
 
+		if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.start_timer_sync("gemm_kernel");}
 		launch_kernel<T>(
 				gemm_module,
 				nullptr,
@@ -175,6 +176,7 @@ cublasStatus_t cumpsgemm::gemm(
 				c_dmem_ptr, ldc,
 				handle->cuda_stream
 				);
+		if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.stop_timer_sync("gemm_kernel");}
 	} else {
 		const auto code_A = gen_module_code<T>(op_A, op_B, handle->dynamic_launch_handle->mode_A);
 		const auto code_B = gen_module_code<T>(op_A, op_B, handle->dynamic_launch_handle->mode_B);

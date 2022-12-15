@@ -413,9 +413,7 @@ void cumpsgemm::exp_stats::exp_stats_ext(
 		launch_func = launch_compute_mode_set_kernel<T, 1024, 4, std::size_t>;
 	}
 
-	if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.start_timer_sync("scaling");}
 	launch_func(handle, m, n, ptr, ld, batch_size, stride, buffer_id);
-	if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.stop_timer_sync("scaling");}
 }
 
 template void cumpsgemm::exp_stats::exp_stats_ext<float    >(cuMpSGEMM_handle*, const unsigned, const unsigned, const float*     const, const unsigned, const unsigned, const unsigned);

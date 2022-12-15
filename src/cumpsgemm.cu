@@ -295,6 +295,7 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 			*used_kernel_modeule_id = module_id;
 		}
 
+		if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.start_timer_sync("batched_gemm_kernel");}
 		launch_kernel<T>(
 				gemm_module,
 				nullptr,
@@ -307,6 +308,7 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 				batch_count,
 				handle->cuda_stream
 				);
+		if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.stop_timer_sync("batched_gemm_kernel");}
 	} else {
 		const auto code_A = gen_module_code<T>(op_A, op_B, handle->dynamic_launch_handle->mode_A);
 		const auto code_B = gen_module_code<T>(op_A, op_B, handle->dynamic_launch_handle->mode_B);
@@ -338,6 +340,7 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 			*used_kernel_modeule_id = ~0u;
 		}
 
+		if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.start_timer_sync("batched_gemm_kernel_A");}
 		launch_kernel<T>(
 				gemm_module_A,
 				handle->dynamic_launch_handle->flag_buffer + handle->dynamic_launch_handle->enabled_id,
@@ -350,6 +353,9 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 				batch_count,
 				handle->cuda_stream
 				);
+		if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.stop_timer_sync("batched_gemm_kernel_A");}
+
+		if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.start_timer_sync("batched_gemm_kernel_B");}
 		launch_kernel<T>(
 				gemm_module_B,
 				handle->dynamic_launch_handle->flag_buffer + handle->dynamic_launch_handle->enabled_id,
@@ -362,6 +368,7 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 				batch_count,
 				handle->cuda_stream
 				);
+		if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.stop_timer_sync("batched_gemm_kernel_B");}
 	}
 
 	return CUBLAS_STATUS_SUCCESS;

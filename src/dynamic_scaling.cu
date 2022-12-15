@@ -159,7 +159,6 @@ __global__ void reset_scaling_kernel(
 			coef
 			);
 }
-} // unnamed namespace
 
 template <class T>
 void scale_AB(
@@ -181,6 +180,7 @@ void scale_AB(
 			(stride == 0) ? 1 : batch_size
 			);
 
+	if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.start_timer_sync("scaling_AB");}
 	if (static_cast<std::size_t>(m) * n < (1lu << 32)) {
 		using LOOP_T = unsigned;
 		scaling_kernel<block_size, VEC_LEN, T, LOOP_T><<<grid_size, block_size, 0, handle->cuda_stream>>>(
@@ -202,7 +202,52 @@ void scale_AB(
 				scaling_matrix
 				);
 	}
+	if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.stop_timer_sync("scaling_AB");}
 }
+
+template <class T>
+void reset_scale_AB(
+		cuMpSGEMM_handle* handle,
+		const unsigned m,
+		const unsigned n,
+		T* const ptr, const unsigned ld,
+		const unsigned stride,
+		const unsigned batch_size,
+		const unsigned exp_stats_buffer_id,
+		const unsigned dynamic_launch_buffer_id,
+		const scaling_matrix_t scaling_matrix
+		) {
+	constexpr unsigned VEC_LEN = 2;
+
+	constexpr auto block_size = 256;
+	const dim3 grid_size(
+			((1lu * m * n + block_size - 1) / block_size + VEC_LEN - 1) / VEC_LEN,
+			(stride == 0) ? 1 : batch_size
+			);
+
+	if (static_cast<std::size_t>(m) * n < (1lu << 32)) {
+		using LOOP_T = unsigned;
+		reset_scaling_kernel<block_size, VEC_LEN, T, LOOP_T><<<grid_size, block_size, 0, handle->cuda_stream>>>(
+				handle->dynamic_launch_handle->flag_buffer + dynamic_launch_buffer_id,
+				m, n,
+				ptr, ld,
+				batch_size, stride,
+				handle->exp_stats_handle->dev_max_abs_buffer + exp_stats_buffer_id,
+				scaling_matrix
+				);
+	} else {
+		using LOOP_T = std::size_t;
+		reset_scaling_kernel<block_size, VEC_LEN, T, LOOP_T><<<grid_size, block_size, 0, handle->cuda_stream>>>(
+				handle->dynamic_launch_handle->flag_buffer + dynamic_launch_buffer_id,
+				m, n,
+				ptr, ld,
+				batch_size, stride,
+				handle->exp_stats_handle->dev_max_abs_buffer + exp_stats_buffer_id,
+				scaling_matrix
+				);
+	}
+}
+} // unnamed namespace
 
 template <class T>
 void cumpsgemm::dynamic_scaling::scale_A(
@@ -289,6 +334,7 @@ void cumpsgemm::dynamic_scaling::scale_C(
 			(stride == 0) ? 1 : batch_size
 			);
 
+	if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.start_timer_sync("scaling_C");}
 	if (static_cast<std::size_t>(m) * n < (1lu << 32)) {
 		using LOOP_T = unsigned;
 		scaling_kernel<block_size, VEC_LEN, T, LOOP_T><<<grid_size, block_size, 0, handle->cuda_stream>>>(
@@ -310,6 +356,7 @@ void cumpsgemm::dynamic_scaling::scale_C(
 				handle->exp_stats_handle->dev_max_abs_buffer + exp_stats_buffer_B_id
 				);
 	}
+	if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.stop_timer_sync("scaling_C");}
 }
 template void cumpsgemm::dynamic_scaling::scale_C<float>(
 		cuMpSGEMM_handle*,
@@ -331,49 +378,6 @@ template void cumpsgemm::dynamic_scaling::scale_C<cuComplex>(
 		const unsigned,
 		const unsigned,
 		const unsigned);
-
-template <class T>
-void reset_scale_AB(
-		cuMpSGEMM_handle* handle,
-		const unsigned m,
-		const unsigned n,
-		T* const ptr, const unsigned ld,
-		const unsigned stride,
-		const unsigned batch_size,
-		const unsigned exp_stats_buffer_id,
-		const unsigned dynamic_launch_buffer_id,
-		const scaling_matrix_t scaling_matrix
-		) {
-	constexpr unsigned VEC_LEN = 2;
-
-	constexpr auto block_size = 256;
-	const dim3 grid_size(
-			((1lu * m * n + block_size - 1) / block_size + VEC_LEN - 1) / VEC_LEN,
-			(stride == 0) ? 1 : batch_size
-			);
-
-	if (static_cast<std::size_t>(m) * n < (1lu << 32)) {
-		using LOOP_T = unsigned;
-		reset_scaling_kernel<block_size, VEC_LEN, T, LOOP_T><<<grid_size, block_size, 0, handle->cuda_stream>>>(
-				handle->dynamic_launch_handle->flag_buffer + dynamic_launch_buffer_id,
-				m, n,
-				ptr, ld,
-				batch_size, stride,
-				handle->exp_stats_handle->dev_max_abs_buffer + exp_stats_buffer_id,
-				scaling_matrix
-				);
-	} else {
-		using LOOP_T = std::size_t;
-		reset_scaling_kernel<block_size, VEC_LEN, T, LOOP_T><<<grid_size, block_size, 0, handle->cuda_stream>>>(
-				handle->dynamic_launch_handle->flag_buffer + dynamic_launch_buffer_id,
-				m, n,
-				ptr, ld,
-				batch_size, stride,
-				handle->exp_stats_handle->dev_max_abs_buffer + exp_stats_buffer_id,
-				scaling_matrix
-				);
-	}
-}
 
 template <class T>
 void cumpsgemm::dynamic_scaling::reset_scale_A(

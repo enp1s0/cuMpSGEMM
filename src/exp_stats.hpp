@@ -1,4 +1,5 @@
 #pragma once
+#include <cutf/debug/time_breakdown.hpp>
 #include "handle.hpp"
 
 namespace cumpsgemm {
@@ -21,6 +22,10 @@ struct exp_stats_handle {
 	std::uint32_t buffer_length;
 	std::uint32_t current_buffer_id;
 	bool counter_init_disabled;
+
+	// For profiling
+	cutf::debug::time_breakdown::profiler profiler;
+	int profiling_enabled = false;
 };
 // exp_stats API
 void resize_counter(

@@ -10,6 +10,8 @@
 #include <cutf/debug/time_breakdown.hpp>
 #include <cumpsgemm/cumpsgemm.hpp>
 
+//#define ENABLE_AUTO_MODE_PROFILING
+
 constexpr unsigned test_count = 32;
 
 enum gemm_type {
@@ -420,6 +422,12 @@ int sgemm_test_core(
 			);
 	const auto check = residual < error_threshold(compute_mode, k);
 
+#ifdef ENABLE_AUTO_MODE_PROFILING
+	cumpsgemm::enable_exp_stats_profiling(cuMpSGEMM_handle);
+	cumpsgemm::reset_exp_stats_profiling(cuMpSGEMM_handle);
+	cumpsgemm::set_exp_stats_params(cuMpSGEMM_handle, 1e-30, 1, 0);
+#endif
+
 	// Throughput
 	CUTF_CHECK_ERROR(cudaDeviceSynchronize());
 	const auto start_clock = std::chrono::system_clock::now();
@@ -430,6 +438,10 @@ int sgemm_test_core(
 	const auto end_clock = std::chrono::system_clock::now();
 	const auto elapsed_time = std::chrono::duration_cast<std::chrono::microseconds>(end_clock - start_clock).count() * 1e-6;
 	const auto throughput = 2lu * m * n * k * (std::is_same<float, T>::value ? 1 : 4) / (elapsed_time / test_count);
+
+#ifdef ENABLE_AUTO_MODE_PROFILING
+	cumpsgemm::print_exp_stats_profiling(cuMpSGEMM_handle);
+#endif
 
 	std::printf("%s,%s,%s,%s,%u,%u,%u,%e,%e,%s,%u\n",
 			(std::is_same<float, T>::value ? "sgemm" : "cgemm"),
@@ -535,6 +547,12 @@ int sgemm_strided_batch_test_core(
 	residual /= batch_count;
 	const auto check = residual < error_threshold(compute_mode, m);
 
+#ifdef ENABLE_AUTO_MODE_PROFILING
+	cumpsgemm::enable_exp_stats_profiling(cuMpSGEMM_handle);
+	cumpsgemm::reset_exp_stats_profiling(cuMpSGEMM_handle);
+	cumpsgemm::set_exp_stats_params(cuMpSGEMM_handle, 1e-30, 1, 0);
+#endif
+
 	// Throughput
 	CUTF_CHECK_ERROR(cudaDeviceSynchronize());
 	const auto start_clock = std::chrono::system_clock::now();
@@ -542,9 +560,14 @@ int sgemm_strided_batch_test_core(
 		gemm_func();
 	}
 	CUTF_CHECK_ERROR(cudaDeviceSynchronize());
+
 	const auto end_clock = std::chrono::system_clock::now();
 	const auto elapsed_time = std::chrono::duration_cast<std::chrono::microseconds>(end_clock - start_clock).count() * 1e-6;
 	const auto throughput = 2lu * m * n * k * batch_count * (std::is_same<float, T>::value ? 1 : 4) / (elapsed_time / test_count);
+
+#ifdef ENABLE_AUTO_MODE_PROFILING
+	cumpsgemm::print_exp_stats_profiling(cuMpSGEMM_handle);
+#endif
 
 	std::printf("%s,%s,%s,%s,%u,%u,%u,%lld,%e,%e,%s,%u\n",
 			(std::is_same<float, T>::value ? "sgemm" : "cgemm"),
@@ -734,7 +757,8 @@ void gemm_strided_batch_test(const std::size_t min_N, const std::size_t max_N, c
 								b_ptr, N, stride,
 								c_ptr, N, stride,
 								batch_count,
-								mode
+								mode,
+								scaling
 								);
 						num_tests++;
 						if (res == 0) {
@@ -757,7 +781,8 @@ void gemm_strided_batch_test(const std::size_t min_N, const std::size_t max_N, c
 								reinterpret_cast<cuComplex*>(b_ptr), N, stride,
 								reinterpret_cast<cuComplex*>(c_ptr), N, stride,
 								batch_count,
-								mode
+								mode,
+								scaling
 								);
 						num_tests++;
 						if (res == 0) {

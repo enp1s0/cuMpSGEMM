@@ -136,12 +136,13 @@ cuMpSGEMM_handle_t cuMpSGEMM_get_internal_global_handle() {
 		const auto underflow_tolerance_rate = init_float_by_env("CUMPSGEMM_AUTO_UNDERFLOW_TOLERANCE_RATE", 0);
 		const auto restore_AB_scaling       = init_int_by_env  ("CUMPSGEMM_AUTO_RESTORE_AB_SCALING"      , 1);
 
-		cuMpSGEMM_log("AUTO config: ignore_threshold=" + std::to_string(ignore_threshold));
-		cuMpSGEMM_log("AUTO config: underflow_threshold=" + std::to_string(underflow_threshold));
-		cuMpSGEMM_log("AUTO config: underflow_tolerance_rate=" + std::to_string(underflow_tolerance_rate));
-		cuMpSGEMM_log("AUTO config: restore_AB_scaling=" + std::to_string(restore_AB_scaling));
+		cuMpSGEMM_log("AUTO config: ignore_threshold="         + std::to_string(ignore_threshold)         + " @Init");
+		cuMpSGEMM_log("AUTO config: underflow_threshold="      + std::to_string(underflow_threshold)      + " @Init");
+		cuMpSGEMM_log("AUTO config: underflow_tolerance_rate=" + std::to_string(underflow_tolerance_rate) + " @Init");
+		cuMpSGEMM_log("AUTO config: restore_AB_scaling="       + std::to_string(restore_AB_scaling)       + " @Init");
 
 		cumpsgemm::set_exp_stats_params(cuMpSGEMM_get_internal_global_handle(), ignore_threshold, underflow_threshold, underflow_tolerance_rate);
+		restore_AB = restore_AB_scaling;
 	}
 
 	return internal_global_cuMpSGEMM_handle;
@@ -293,6 +294,7 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 			snprintf(profile_result.function_name, profile_result.function_name_length - 1, "%s-%s%s-m%lu-n%lu-k%lu", func_name.c_str(), cumpsgemm::CULiP::get_cublasOperation_t_string(op_A), cumpsgemm::CULiP::get_cublasOperation_t_string(op_B), m, n, k);
 			cumpsgemm::CULiP::launch_function(cuda_stream, &cumpsgemm::CULiP::record_timestamp, (void*)&profile_result.start_timestamp);
 		}
+		cuMpSGEMM_log(" +---> gemm_Mx2x2");
 
 		mtk::cugemm::gemm_Mx2x2(
 				op_A, op_B,
@@ -327,6 +329,7 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 			snprintf(profile_result.function_name, profile_result.function_name_length - 1, "%s-%s%s-m%lu-n%lu-k%lu", func_name.c_str(), cumpsgemm::CULiP::get_cublasOperation_t_string(op_A), cumpsgemm::CULiP::get_cublasOperation_t_string(op_B), m, n, k);
 			cumpsgemm::CULiP::launch_function(cuda_stream, &cumpsgemm::CULiP::record_timestamp, (void*)&profile_result.start_timestamp);
 		}
+		cuMpSGEMM_log(" +---> gemm_2xNx2");
 
 		mtk::cugemm::gemm_2xNx2(
 				op_A, op_B,
@@ -549,6 +552,7 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 					func_name.c_str(), cumpsgemm::CULiP::get_cublasOperation_t_string(op_A), cumpsgemm::CULiP::get_cublasOperation_t_string(op_B), m, n, k, batch_count);
 			cumpsgemm::CULiP::launch_function(cuda_stream, &cumpsgemm::CULiP::record_timestamp, (void*)&profile_result.start_timestamp);
 		}
+		cuMpSGEMM_log(" +---> gemm_Mx2x2");
 
 		mtk::cugemm::gemm_strided_batch_Mx2x2(
 				op_A, op_B,
@@ -585,6 +589,7 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 					func_name.c_str(), cumpsgemm::CULiP::get_cublasOperation_t_string(op_A), cumpsgemm::CULiP::get_cublasOperation_t_string(op_B), m, n, k, batch_count);
 			cumpsgemm::CULiP::launch_function(cuda_stream, &cumpsgemm::CULiP::record_timestamp, (void*)&profile_result.start_timestamp);
 		}
+		cuMpSGEMM_log(" +---> gemm_2xNx2");
 
 		mtk::cugemm::gemm_strided_batch_2xNx2(
 				op_A, op_B,
@@ -669,6 +674,20 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 			// Kernel dicision
 			dynamic_launch_id = cumpsgemm::dynamic_launch::get_next_dynamic_launch_flag_buffer_id(cuMpSGEMM_get_internal_global_handle());
 			cumpsgemm::dynamic_scaling::set_dynamic_launch_buffer_by_exp_stats(cuMpSGEMM_get_internal_global_handle(), dynamic_launch_id, A_exp_stats_id, B_exp_stats_id);
+
+			cuMpSGEMM_run_if_env_defined(
+					info_env_name,
+					[&]() {
+					int flag;
+					cutf::memory::copy(&flag, cuMpSGEMM_get_internal_global_handle()->dynamic_launch_handle->flag_buffer + dynamic_launch_id, 1);
+					const auto gemm_mode = cumpsgemm::dynamic_launch::utils::get_gemm_flag(flag);
+					const auto scale_A = cumpsgemm::dynamic_launch::utils::get_scale_A_flag(flag);
+					const auto scale_B = cumpsgemm::dynamic_launch::utils::get_scale_B_flag(flag);
+					cuMpSGEMM_log(std::string("AUTO[ignore<") + std::to_string(cuMpSGEMM_get_internal_global_handle()->exp_stats_handle->ignore_threshold) + ", uf<"
+							+ std::to_string(cuMpSGEMM_get_internal_global_handle()->exp_stats_handle->underflow_threshold) + ", tolerance="
+							+ std::to_string(cuMpSGEMM_get_internal_global_handle()->exp_stats_handle->underflow_tolerance_rate)
+							+ "]: GEMM_MODE=" + cuMpSGEMM_get_compute_mode_string((cuMpSGEMM_compute_mode_t)gemm_mode) + ", scale_A=" + std::to_string(scale_A) + ", scale_B=" + std::to_string(scale_B));
+					});
 
 			// Scaling
 			cumpsgemm::dynamic_scaling::scale_A(cuMpSGEMM_get_internal_global_handle(), (op_A == CUBLAS_OP_N ? m : k), (op_A == CUBLAS_OP_N ? k : m), const_cast<T*>(a_dmem_ptr), lda, stridea, batch_count, A_exp_stats_id, dynamic_launch_id);
@@ -973,6 +992,10 @@ void cumpsgemm::hijack_control::set_exp_stats_params(
 		const float underflow_threshold,
 		const float underflow_tolerance_rate
 		) {
+	cuMpSGEMM_log("AUTO config: ignore_threshold="         + std::to_string(ignore_threshold)         + " @" + std::string(__func__));
+	cuMpSGEMM_log("AUTO config: underflow_threshold="      + std::to_string(underflow_threshold)      + " @" + std::string(__func__));
+	cuMpSGEMM_log("AUTO config: underflow_tolerance_rate=" + std::to_string(underflow_tolerance_rate) + " @" + std::string(__func__));
+
 	cumpsgemm::set_exp_stats_params(get_internal_global_handle(), ignore_threshold, underflow_threshold, underflow_tolerance_rate);
 }
 
@@ -1004,10 +1027,12 @@ void cumpsgemm::hijack_control::disable_custom_gemm_Mx2x2() {
 
 void cumpsgemm::hijack_control::enable_restoring_AB_after_scaling() {
 	restore_AB = true;
+	cuMpSGEMM_log("AUTO config: restore_AB_scaling=True @" + std::string(__func__));
 }
 
 void cumpsgemm::hijack_control::disable_restoring_AB_after_scaling() {
 	restore_AB = false;
+	cuMpSGEMM_log("AUTO config: restore_AB_scaling=False @" + std::string(__func__));
 }
 
 bool cumpsgemm::hijack_control::is_library_loaded() {

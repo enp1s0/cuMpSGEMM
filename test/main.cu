@@ -1266,6 +1266,67 @@ void gemm_exp_stats_test(
 	cumpsgemm::destroy(cuMpSGEMM_handle);
 }
 
+void exp_stats_bw_test(
+		const unsigned min_log_N,
+		const unsigned max_log_N,
+		const gemm_type gemm,
+		const std::size_t batch_size = 1
+		) {
+	constexpr uint64_t seed = 0;
+	const std::size_t max_num_elements = (1lu << (2 * max_log_N)) * (gemm == gemm_type::c ? 2 : 1) * batch_size;
+	float* a_ptr     = cutf::memory::malloc<float>(max_num_elements);
+	float* a_org_ptr = cutf::memory::malloc<float>(max_num_elements);
+
+	auto curand_gen = cutf::curand::get_curand_unique_ptr(CURAND_RNG_PSEUDO_PHILOX4_32_10);
+	CUTF_CHECK_ERROR(curandSetPseudoRandomGeneratorSeed(*curand_gen.get(), seed));
+	CUTF_CHECK_ERROR(cutf::curand::generate_normal(*curand_gen.get(), a_ptr, max_num_elements, 0.f, 1.f / 65536));
+
+	std::printf("## %s\n", __func__);
+	auto cublas_handle_uptr = cutf::cublas::get_cublas_unique_ptr();
+	cumpsgemm::handle_t cuMpSGEMM_handle;
+	cumpsgemm::create(cuMpSGEMM_handle);
+	cumpsgemm::set_exp_stats_params(cuMpSGEMM_handle, 0, 1, 0);
+	cumpsgemm::enable_exp_stats_profiling(cuMpSGEMM_handle);
+
+	std::printf("gemm,N,exp_stats_1_bw_in_gbps,exp_stats_2_bw_in_gbps,scale_bw_in_gbps\n");
+	for (unsigned log_N = min_log_N; log_N <= max_log_N; log_N++) {
+		cumpsgemm::reset_exp_stats_profiling(cuMpSGEMM_handle);
+		const auto N = 1lu << log_N;
+		const auto num_elements = N * N * (gemm == gemm_type::c ? 2 : 1) * batch_size;
+
+		cutf::memory::copy(a_ptr, a_org_ptr, num_elements);
+
+		for (unsigned i = 0; i < 1; i++) {
+			if (gemm == gemm_type::s) {
+				cumpsgemm::exp_stats_ext(cuMpSGEMM_handle, N, N, a_ptr, N, batch_size, N * N);
+				const auto exp_stats_id = cumpsgemm::get_current_exp_stats_buffer_id(cuMpSGEMM_handle);
+				cumpsgemm::scale_A(cuMpSGEMM_handle, exp_stats_id, 1, N, N, a_ptr, N, batch_size, N * N);
+			} else {
+				cumpsgemm::exp_stats_ext(cuMpSGEMM_handle, N, N, reinterpret_cast<cuComplex*>(a_ptr), N, batch_size, N * N);
+				const auto exp_stats_id = cumpsgemm::get_current_exp_stats_buffer_id(cuMpSGEMM_handle);
+				cumpsgemm::scale_A(cuMpSGEMM_handle, exp_stats_id, 1, N, N, reinterpret_cast<cuComplex*>(a_ptr), N, batch_size, N * N);
+			}
+		}
+
+		cumpsgemm::print_exp_stats_profiling(cuMpSGEMM_handle);
+		const auto stats = cumpsgemm::debug::get_exp_stats_profiling_result(cuMpSGEMM_handle);
+
+		const auto exp_stats_1_bw = 1 * num_elements * sizeof(float) * stats.at("exp_stats_1").n / stats.at("exp_stats_1").time_sum;
+		const auto exp_stats_2_bw = 1 * num_elements * sizeof(float) * stats.at("exp_stats_2").n / stats.at("exp_stats_1").time_sum;
+		const auto scale_bw       = 2 * num_elements * sizeof(float) * stats.at("scaling_AB").n  / stats.at("scaling_AB").time_sum;
+
+		std::printf(
+				"%s,%lu,%e,%e,%e\n",
+				(gemm == gemm_type::c ? "C" : "S"),
+				N,
+				exp_stats_1_bw * 1e-9,
+				exp_stats_2_bw * 1e-9,
+				scale_bw * 1e-9
+				);
+		std::fflush(stdout);
+	}
+}
+
 void print_usage(const char* program_name) {
 	std::fprintf(stderr,
 			"Usage : %s sgemm [exp2|seq] [min_N] [max_N] [interval] [compute mode list...]\n"
@@ -1277,9 +1338,11 @@ void print_usage(const char* program_name) {
 			"      : %s cgemm_exp_stats [N] [ignore_threshold] [underflow_threshold]\n"
 			"      : %s sgemm_strided_batch_exp_stats [N] [batch_size] [ignore_threshold] [underflow_threshold]\n"
 			"      : %s cgemm_strided_batch_exp_stats [N] [batch_size] [ignore_threshold] [underflow_threshold]\n"
+			"      : %s sgemm_exp_stats_bw [min_log_N] [max_log_N] [batch_size]\n"
+			"      : %s cgemm_exp_stats_bw [min_log_N] [max_log_N] [batch_size]\n"
 			"- compute mode : FP16TCEC, TF32TCEC, FP16TC, TF32TC, FP16TCEC_scaling, CUBLAS\n"
 			,
-			program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name
+			program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name
 			);
 	std::fflush(stderr);
 }
@@ -1343,6 +1406,13 @@ int main(int argc, char** argv) {
 			return 1;
 		}
 		gemm_exp_stats_test(std::stoi(argv[2]), std::stof(argv[4]), std::stof(argv[5]), (command == "sgemm_strided_batch_exp_stats" ? gemm_type::s : gemm_type::c), std::stoi(argv[3]));
+		return 0;
+	} else if (command == "sgemm_exp_stats_bw" || command == "cgemm_exp_stats_bw") {
+		if (argc < 1 + 1 + 3) {
+			print_usage(argv[0]);
+			return 1;
+		}
+		exp_stats_bw_test(std::stoi(argv[2]), std::stoi(argv[3]), (command == "sgemm_exp_stats_bw" ? gemm_type::s : gemm_type::c), std::stoi(argv[4]));
 		return 0;
 	}
 

@@ -841,3 +841,14 @@ void cumpsgemm::print_exp_stats_profiling(cuMpSGEMM_handle* const handle, unsign
 		handle->exp_stats_handle->profiler.print_result(stdout);
 	}
 }
+
+std::unordered_map<std::string, cumpsgemm::debug::stats_t> cumpsgemm::debug::get_exp_stats_profiling_result(cuMpSGEMM_handle* const handle) {
+	const auto cutf_stats = handle->exp_stats_handle->profiler.get_statistics_list();
+
+	std::unordered_map<std::string, cumpsgemm::debug::stats_t> result;
+	for (const auto s : cutf_stats) {
+		result.insert(std::make_pair(s.name, cumpsgemm::debug::stats_t{.time_sum = s.sum * 1e-9, .n = s.n}));
+	}
+
+	return result;
+}

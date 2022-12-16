@@ -501,11 +501,11 @@ int sgemm_strided_batch_test_core(
 			if (scaling) {
 				cumpsgemm::exp_stats_ext(cuMpSGEMM_handle, (op_A == CUBLAS_OP_N ? m : k), (op_A == CUBLAS_OP_N ? k : m), a_ptr, lda, batch_count, stride_a);
 				exp_stats_id_A = cumpsgemm::get_current_exp_stats_buffer_id(cuMpSGEMM_handle);
-				cumpsgemm::scale_A(cuMpSGEMM_handle, exp_stats_id_A, 0, (op_A == CUBLAS_OP_N ? m : k), (op_A == CUBLAS_OP_N ? k : m), a_ptr, lda, batch_count, stride_a);
+				cumpsgemm::scale_A(cuMpSGEMM_handle, exp_stats_id_A, 1, (op_A == CUBLAS_OP_N ? m : k), (op_A == CUBLAS_OP_N ? k : m), a_ptr, lda, batch_count, stride_a);
 
 				cumpsgemm::exp_stats_ext(cuMpSGEMM_handle, (op_B == CUBLAS_OP_N ? k : n), (op_B == CUBLAS_OP_N ? n : k), b_ptr, ldb, batch_count, stride_b);
 				exp_stats_id_B = cumpsgemm::get_current_exp_stats_buffer_id(cuMpSGEMM_handle);
-				cumpsgemm::scale_B(cuMpSGEMM_handle, exp_stats_id_B, 0, (op_B == CUBLAS_OP_N ? k : n), (op_B == CUBLAS_OP_N ? n : k), b_ptr, ldb, batch_count, stride_b);
+				cumpsgemm::scale_B(cuMpSGEMM_handle, exp_stats_id_B, 1, (op_B == CUBLAS_OP_N ? k : n), (op_B == CUBLAS_OP_N ? n : k), b_ptr, ldb, batch_count, stride_b);
 			}
 			cumpsgemm::gemm_stridedBatch(
 					cuMpSGEMM_handle,
@@ -524,8 +524,8 @@ int sgemm_strided_batch_test_core(
 				cumpsgemm::scale_C(cuMpSGEMM_handle, exp_stats_id_A, exp_stats_id_B, 0, m, n, c_ptr, ldc, batch_count, stride_c);
 			}
 			if (reset_scaling) {
-				cumpsgemm::reset_scale_A(cuMpSGEMM_handle, exp_stats_id_A, 0, (op_A == CUBLAS_OP_N ? m : k), (op_A == CUBLAS_OP_N ? k : m), a_ptr, lda, batch_count, stride_a);
-				cumpsgemm::reset_scale_B(cuMpSGEMM_handle, exp_stats_id_B, 0, (op_B == CUBLAS_OP_N ? k : n), (op_B == CUBLAS_OP_N ? n : k), b_ptr, ldb, batch_count, stride_b);
+				cumpsgemm::reset_scale_A(cuMpSGEMM_handle, exp_stats_id_A, 1, (op_A == CUBLAS_OP_N ? m : k), (op_A == CUBLAS_OP_N ? k : m), a_ptr, lda, batch_count, stride_a);
+				cumpsgemm::reset_scale_B(cuMpSGEMM_handle, exp_stats_id_B, 1, (op_B == CUBLAS_OP_N ? k : n), (op_B == CUBLAS_OP_N ? n : k), b_ptr, ldb, batch_count, stride_b);
 			}
 		}
 	};

@@ -401,15 +401,15 @@ int sgemm_test_core(
 					);
 			if (scaling) {
 				cumpsgemm::scale_C(cuMpSGEMM_handle, exp_stats_id_A, exp_stats_id_B, 1, m, n, c_ptr, ldc);
-			}
-			if (reset_scaling) {
-				cumpsgemm::reset_scale_A(cuMpSGEMM_handle, exp_stats_id_A, 1, (op_A == CUBLAS_OP_N ? m : k), (op_A == CUBLAS_OP_N ? k : m), a_ptr, lda);
-				cumpsgemm::reset_scale_B(cuMpSGEMM_handle, exp_stats_id_B, 1, (op_B == CUBLAS_OP_N ? k : n), (op_B == CUBLAS_OP_N ? n : k), b_ptr, ldb);
+				if (reset_scaling) {
+					cumpsgemm::reset_scale_A(cuMpSGEMM_handle, exp_stats_id_A, 1, (op_A == CUBLAS_OP_N ? m : k), (op_A == CUBLAS_OP_N ? k : m), a_ptr, lda);
+					cumpsgemm::reset_scale_B(cuMpSGEMM_handle, exp_stats_id_B, 1, (op_B == CUBLAS_OP_N ? k : n), (op_B == CUBLAS_OP_N ? n : k), b_ptr, ldb);
+				}
 			}
 		}
 	};
 
-	gemm_func(scaling);
+	gemm_func(true);
 
 	CUTF_CHECK_ERROR(cudaDeviceSynchronize());
 
@@ -521,16 +521,16 @@ int sgemm_strided_batch_test_core(
 					&module_stage
 					);
 			if (scaling) {
-				cumpsgemm::scale_C(cuMpSGEMM_handle, exp_stats_id_A, exp_stats_id_B, 0, m, n, c_ptr, ldc, batch_count, stride_c);
-			}
-			if (reset_scaling) {
-				cumpsgemm::reset_scale_A(cuMpSGEMM_handle, exp_stats_id_A, 1, (op_A == CUBLAS_OP_N ? m : k), (op_A == CUBLAS_OP_N ? k : m), a_ptr, lda, batch_count, stride_a);
-				cumpsgemm::reset_scale_B(cuMpSGEMM_handle, exp_stats_id_B, 1, (op_B == CUBLAS_OP_N ? k : n), (op_B == CUBLAS_OP_N ? n : k), b_ptr, ldb, batch_count, stride_b);
+				cumpsgemm::scale_C(cuMpSGEMM_handle, exp_stats_id_A, exp_stats_id_B, 1, m, n, c_ptr, ldc, batch_count, stride_c);
+				if (reset_scaling) {
+					cumpsgemm::reset_scale_A(cuMpSGEMM_handle, exp_stats_id_A, 1, (op_A == CUBLAS_OP_N ? m : k), (op_A == CUBLAS_OP_N ? k : m), a_ptr, lda, batch_count, stride_a);
+					cumpsgemm::reset_scale_B(cuMpSGEMM_handle, exp_stats_id_B, 1, (op_B == CUBLAS_OP_N ? k : n), (op_B == CUBLAS_OP_N ? n : k), b_ptr, ldb, batch_count, stride_b);
+				}
 			}
 		}
 	};
 
-	gemm_func(scaling);
+	gemm_func(true);
 
 	CUTF_CHECK_ERROR(cudaDeviceSynchronize());
 

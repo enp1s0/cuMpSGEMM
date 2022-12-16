@@ -1296,7 +1296,7 @@ void exp_stats_bw_test(
 
 		cutf::memory::copy(a_ptr, a_org_ptr, num_elements);
 
-		for (unsigned i = 0; i < 1; i++) {
+		for (unsigned i = 0; i < 100; i++) {
 			if (gemm == gemm_type::s) {
 				cumpsgemm::exp_stats_ext(cuMpSGEMM_handle, N, N, a_ptr, N, batch_size, N * N);
 				const auto exp_stats_id = cumpsgemm::get_current_exp_stats_buffer_id(cuMpSGEMM_handle);
@@ -1308,7 +1308,9 @@ void exp_stats_bw_test(
 			}
 		}
 
+#ifdef ENABLE_AUTO_MODE_PROFILING
 		cumpsgemm::print_exp_stats_profiling(cuMpSGEMM_handle);
+#endif
 		const auto stats = cumpsgemm::debug::get_exp_stats_profiling_result(cuMpSGEMM_handle);
 
 		const auto exp_stats_1_bw = 1 * num_elements * sizeof(float) * stats.at("exp_stats_1").n / stats.at("exp_stats_1").time_sum;

@@ -1,6 +1,7 @@
 #ifndef __CUMPSGEMM_HPP__
 #define __CUMPSGEMM_HPP__
 #include <vector>
+#include <unordered_map>
 #include "cumpsgemm.h"
 
 namespace cumpsgemm {
@@ -185,5 +186,13 @@ void enable_exp_stats_profiling(cuMpSGEMM_handle* const handle);
 void disable_exp_stats_profiling(cuMpSGEMM_handle* const handle);
 void reset_exp_stats_profiling(cuMpSGEMM_handle* const handle);
 void print_exp_stats_profiling(cuMpSGEMM_handle* const handle, unsigned csv = false);
+
+namespace debug {
+struct stats_t {
+	double time_sum;
+	std::uint64_t n;
+};
+std::unordered_map<std::string, stats_t> get_exp_stats_profiling_result(cuMpSGEMM_handle* const handle);
+} // namespace internal
 } // namespace cumpsgemm
 #endif

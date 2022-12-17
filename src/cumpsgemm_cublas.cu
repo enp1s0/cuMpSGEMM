@@ -1,4 +1,6 @@
 #include <string>
+#include <sstream>
+#include <iomanip>
 #include <cublas.h>
 #include <unistd.h>
 #include <dlfcn.h>
@@ -14,7 +16,13 @@
 #include "culip.hpp"
 
 namespace {
+std::string get_XeY_format_string(const double a) {
+	std::stringstream ss;
 
+	ss << std::scientific << a;
+
+	return ss.str();
+}
 cuMpSGEMM_handle_t internal_global_cuMpSGEMM_handle = nullptr;
 std::string internal_global_last_called_function_str = "";
 bool global_internal_gemm_Mx2x2_enabled = false;
@@ -136,10 +144,10 @@ cuMpSGEMM_handle_t cuMpSGEMM_get_internal_global_handle() {
 		const auto underflow_tolerance_rate = init_float_by_env("CUMPSGEMM_AUTO_UNDERFLOW_TOLERANCE_RATE", 0);
 		const auto restore_AB_scaling       = init_int_by_env  ("CUMPSGEMM_AUTO_RESTORE_AB_SCALING"      , 1);
 
-		cuMpSGEMM_log("AUTO config: ignore_threshold="         + std::to_string(ignore_threshold)         + " @Init");
-		cuMpSGEMM_log("AUTO config: underflow_threshold="      + std::to_string(underflow_threshold)      + " @Init");
-		cuMpSGEMM_log("AUTO config: underflow_tolerance_rate=" + std::to_string(underflow_tolerance_rate) + " @Init");
-		cuMpSGEMM_log("AUTO config: restore_AB_scaling="       + std::to_string(restore_AB_scaling)       + " @Init");
+		cuMpSGEMM_log("AUTO config: ignore_threshold="         + get_XeY_format_string(ignore_threshold)         + " @Init");
+		cuMpSGEMM_log("AUTO config: underflow_threshold="      + get_XeY_format_string(underflow_threshold)      + " @Init");
+		cuMpSGEMM_log("AUTO config: underflow_tolerance_rate=" + get_XeY_format_string(underflow_tolerance_rate) + " @Init");
+		cuMpSGEMM_log("AUTO config: restore_AB_scaling="       + std::to_string(restore_AB_scaling)            + " @Init");
 
 		cumpsgemm::set_exp_stats_params(cuMpSGEMM_get_internal_global_handle(), ignore_threshold, underflow_threshold, underflow_tolerance_rate);
 		restore_AB = restore_AB_scaling;
@@ -992,9 +1000,9 @@ void cumpsgemm::hijack_control::set_exp_stats_params(
 		const float underflow_threshold,
 		const float underflow_tolerance_rate
 		) {
-	cuMpSGEMM_log("AUTO config: ignore_threshold="         + std::to_string(ignore_threshold)         + " @" + std::string(__func__));
-	cuMpSGEMM_log("AUTO config: underflow_threshold="      + std::to_string(underflow_threshold)      + " @" + std::string(__func__));
-	cuMpSGEMM_log("AUTO config: underflow_tolerance_rate=" + std::to_string(underflow_tolerance_rate) + " @" + std::string(__func__));
+	cuMpSGEMM_log("AUTO config: ignore_threshold="         + get_XeY_format_string(ignore_threshold)         + " @" + std::string(__func__));
+	cuMpSGEMM_log("AUTO config: underflow_threshold="      + get_XeY_format_string(underflow_threshold)      + " @" + std::string(__func__));
+	cuMpSGEMM_log("AUTO config: underflow_tolerance_rate=" + get_XeY_format_string(underflow_tolerance_rate) + " @" + std::string(__func__));
 
 	cumpsgemm::set_exp_stats_params(get_internal_global_handle(), ignore_threshold, underflow_threshold, underflow_tolerance_rate);
 }

@@ -708,6 +708,9 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 			// Scaling
 			cumpsgemm::dynamic_scaling::scale_A(cuMpSGEMM_get_internal_global_handle(), (op_A == CUBLAS_OP_N ? m : k), (op_A == CUBLAS_OP_N ? k : m), const_cast<T*>(a_dmem_ptr), lda, stridea, batch_count, A_exp_stats_id, dynamic_launch_id);
 			cumpsgemm::dynamic_scaling::scale_B(cuMpSGEMM_get_internal_global_handle(), (op_B == CUBLAS_OP_N ? k : n), (op_B == CUBLAS_OP_N ? n : k), const_cast<T*>(b_dmem_ptr), ldb, strideb, batch_count, B_exp_stats_id, dynamic_launch_id);
+
+			// Enable dynamic launch
+			cumpsgemm::dynamic_launch::set_dynamic_launch_flag_buffer_id(cuMpSGEMM_get_internal_global_handle(), dynamic_launch_id);
 		}
 
 		res = cumpsgemm::gemm_stridedBatch<T>(

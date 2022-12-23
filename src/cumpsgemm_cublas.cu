@@ -444,9 +444,9 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 					const auto scale_B = cumpsgemm::dynamic_launch::utils::get_scale_B_flag(flag);
 					const auto loss_rate_A = cumpsgemm::get_exp_stats(cuMpSGEMM_get_internal_global_handle(), A_exp_stats_id);
 					const auto loss_rate_B = cumpsgemm::get_exp_stats(cuMpSGEMM_get_internal_global_handle(), B_exp_stats_id);
-					cuMpSGEMM_log(std::string("AUTO[ignore<") + std::to_string(cuMpSGEMM_get_internal_global_handle()->exp_stats_handle->ignore_threshold) + ", uf<"
-							+ std::to_string(cuMpSGEMM_get_internal_global_handle()->exp_stats_handle->underflow_threshold) + ", tolerance="
-							+ std::to_string(cuMpSGEMM_get_internal_global_handle()->exp_stats_handle->underflow_tolerance_rate)
+					cuMpSGEMM_log(std::string("AUTO[ignore<") + get_XeY_format_string(cuMpSGEMM_get_internal_global_handle()->exp_stats_handle->ignore_threshold) + ", uf<"
+							+ get_XeY_format_string(cuMpSGEMM_get_internal_global_handle()->exp_stats_handle->underflow_threshold) + ", tolerance="
+							+ get_XeY_format_string(cuMpSGEMM_get_internal_global_handle()->exp_stats_handle->underflow_tolerance_rate)
 							+ "]: GEMM_MODE=" + cuMpSGEMM_get_compute_mode_string((cuMpSGEMM_compute_mode_t)gemm_mode)
 							+ ", loss_A=" + std::to_string(loss_rate_A.first) + "/" + std::to_string(loss_rate_A.second) + "(" + std::to_string(static_cast<double>(loss_rate_A.first) / loss_rate_A.second) + "), scale_A=" + std::to_string(scale_A)
 							+ ", loss_B=" + std::to_string(loss_rate_B.first) + "/" + std::to_string(loss_rate_B.second) + "(" + std::to_string(static_cast<double>(loss_rate_B.first) / loss_rate_B.second) + "), scale_B=" + std::to_string(scale_B));
@@ -697,9 +697,9 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 					const auto scale_B = cumpsgemm::dynamic_launch::utils::get_scale_B_flag(flag);
 					const auto loss_rate_A = cumpsgemm::get_exp_stats(cuMpSGEMM_get_internal_global_handle(), A_exp_stats_id);
 					const auto loss_rate_B = cumpsgemm::get_exp_stats(cuMpSGEMM_get_internal_global_handle(), B_exp_stats_id);
-					cuMpSGEMM_log(std::string("AUTO[ignore<") + std::to_string(cuMpSGEMM_get_internal_global_handle()->exp_stats_handle->ignore_threshold) + ", uf<"
-							+ std::to_string(cuMpSGEMM_get_internal_global_handle()->exp_stats_handle->underflow_threshold) + ", tolerance="
-							+ std::to_string(cuMpSGEMM_get_internal_global_handle()->exp_stats_handle->underflow_tolerance_rate)
+					cuMpSGEMM_log(std::string("AUTO[ignore<") + get_XeY_format_string(cuMpSGEMM_get_internal_global_handle()->exp_stats_handle->ignore_threshold) + ", uf<"
+							+ get_XeY_format_string(cuMpSGEMM_get_internal_global_handle()->exp_stats_handle->underflow_threshold) + ", tolerance="
+							+ get_XeY_format_string(cuMpSGEMM_get_internal_global_handle()->exp_stats_handle->underflow_tolerance_rate)
 							+ "]: GEMM_MODE=" + cuMpSGEMM_get_compute_mode_string((cuMpSGEMM_compute_mode_t)gemm_mode)
 							+ ", loss_A=" + std::to_string(loss_rate_A.first) + "/" + std::to_string(loss_rate_A.second) + "(" + std::to_string(static_cast<double>(loss_rate_A.first) / loss_rate_A.second) + "), scale_A=" + std::to_string(scale_A)
 							+ ", loss_B=" + std::to_string(loss_rate_B.first) + "/" + std::to_string(loss_rate_B.second) + "(" + std::to_string(static_cast<double>(loss_rate_B.first) / loss_rate_B.second) + "), scale_B=" + std::to_string(scale_B));

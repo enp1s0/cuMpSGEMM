@@ -181,16 +181,20 @@ __global__ void exp_stats_ext_stage_1_kernel(
 
 __global__ void update_dynamic_mode_1_kernel(
 		int* const dynamic_mode,
+		const float* const max_exp_buffer,
 		cumpsgemm::counter_t* const total_count_buffer,
 		cumpsgemm::counter_t* const underflow_count_buffer,
 		const float underflow_tolerance_rate
 		) {
-	if (*underflow_count_buffer <= (*total_count_buffer) * underflow_tolerance_rate) {
-		*dynamic_mode = CUMPSGEMM_FP16TCEC;
-	} else {
+	if (
+			(*underflow_count_buffer > (*total_count_buffer) * underflow_tolerance_rate) ||
+			((*max_exp_buffer) > 0 && (*total_count_buffer) == 0)
+			) {
 		*dynamic_mode = CUMPSGEMM_UNDEFINED;
 		*total_count_buffer = 0;
 		*underflow_count_buffer = 0;
+	} else {
+		*dynamic_mode = CUMPSGEMM_FP16TCEC;
 	}
 }
 
@@ -350,6 +354,7 @@ void launch_compute_mode_set_kernel (
 		if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.start_timer_sync("exp_stats_set_1");}
 		update_dynamic_mode_1_kernel<<<1, 1, 0, handle->cuda_stream>>>(
 				handle->exp_stats_handle->dev_compute_mode_buffer    + buffer_id,
+				handle->exp_stats_handle->dev_max_abs_buffer         + buffer_id,
 				handle->exp_stats_handle->dev_total_count_buffer     + buffer_id,
 				handle->exp_stats_handle->dev_underflow_count_buffer + buffer_id,
 				handle->exp_stats_handle->underflow_tolerance_rate

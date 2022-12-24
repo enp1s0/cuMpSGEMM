@@ -24,14 +24,14 @@ enum implementation_type {
 	TF32TC   = CUMPSGEMM_TF32TC,
 	FP16TCEC = CUMPSGEMM_FP16TCEC,
 	FP16TC   = CUMPSGEMM_FP16TC,
-	FP16TCEC_scaling = CUMPSGEMM_FP16TCEC_SCALING,
+	FP16TCEC_SCALING = CUMPSGEMM_FP16TCEC_SCALING,
 };
 
 cuMpSGEMM_compute_mode_t get_compute_mode(
 		const implementation_type imp
 		) {
 	switch (imp) {
-	case FP16TCEC_scaling:
+	case FP16TCEC_SCALING:
 		return CUMPSGEMM_FP16TCEC;
 	default:
 		return (cuMpSGEMM_compute_mode_t)imp;
@@ -42,7 +42,7 @@ bool is_scaling_enabled(
 		const implementation_type imp
 		) {
 	switch (imp) {
-	case FP16TCEC_scaling:
+	case FP16TCEC_SCALING:
 		return true;
 	default:
 		return false;
@@ -54,7 +54,7 @@ std::string get_implementation_type_name_str(
 		) {
 	switch (imp) {
 	case CUBLAS:           return "CUBLAS";
-	case FP16TCEC_scaling: return "FP16TCEC_scaling";
+	case FP16TCEC_SCALING: return "FP16TCEC_SCALING";
 	case FP16TCEC:         return "FP16TCEC";
 	case FP16TC:           return "FP16TC";
 	case TF32TCEC:         return "TF32TCEC";
@@ -1342,7 +1342,7 @@ void print_usage(const char* program_name) {
 			"      : %s cgemm_strided_batch_exp_stats [N] [batch_size] [ignore_threshold] [underflow_threshold]\n"
 			"      : %s sgemm_exp_stats_bw [min_log_N] [max_log_N] [batch_size]\n"
 			"      : %s cgemm_exp_stats_bw [min_log_N] [max_log_N] [batch_size]\n"
-			"- compute mode : FP16TCEC, TF32TCEC, FP16TC, TF32TC, FP16TCEC_scaling, CUBLAS\n"
+			"- compute mode : FP16TCEC, TF32TCEC, FP16TC, TF32TC, FP16TCEC_SCALING, CUBLAS\n"
 			,
 			program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name
 			);
@@ -1361,7 +1361,7 @@ std::vector<implementation_type> gen_implementation_list(
 		} else if (imp_name_str == "FP16TC") {           imp_list.push_back(FP16TC);
 		} else if (imp_name_str == "TF32TCEC") {         imp_list.push_back(TF32TCEC);
 		} else if (imp_name_str == "TF32TC") {           imp_list.push_back(TF32TC);
-		} else if (imp_name_str == "FP16TCEC_scaling") { imp_list.push_back(FP16TCEC_scaling);
+		} else if (imp_name_str == "FP16TCEC_SCALING") { imp_list.push_back(FP16TCEC_SCALING);
 		} else {
 			std::printf("Unknown compute mode : %s\n", imp_name_str.c_str());
 		}

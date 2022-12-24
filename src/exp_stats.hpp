@@ -63,6 +63,16 @@ void exp_stats_ext(
 		const unsigned batch_size,
 		const unsigned stride
 		);
+template <class T>
+void exp_max_ext(
+		cuMpSGEMM_handle* handle,
+		const unsigned m,
+		const unsigned n,
+		const T* const ptr,
+		const unsigned ld,
+		const unsigned batch_size,
+		const unsigned stride
+		);
 cuMpSGEMM_compute_mode_t get_compute_mode_level(cuMpSGEMM_handle* handle, const unsigned buffer_id);
 } // namespace exp_stats
 } // namespace cumpsgemm

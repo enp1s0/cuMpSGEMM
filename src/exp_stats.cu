@@ -387,6 +387,126 @@ void launch_compute_mode_set_kernel (
 		if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.stop_timer_sync("exp_stats_set_2");}
 }
 
+// For FP16TCEC_SCALING
+__global__ void init_exp_max(
+		float* const max_exp_buffer
+		) {
+	*max_exp_buffer = 0;
+}
+
+template <unsigned BLOCK_SIZE, unsigned VEC_LEN, class LOOP_T, class T>
+__global__ void exp_max_kernel(
+		float* const max_exp_buffer,
+		const unsigned m,
+		const unsigned n,
+		const T* const ptr,
+		const unsigned ld,
+		const unsigned batch_size,
+		const unsigned stride
+		) {
+	const auto ib = blockIdx.y;
+	const auto local_mat_ptr = ptr + ib * stride;
+
+	float local_max_abs_value = 0;
+
+	for (LOOP_T lid = (threadIdx.x + blockIdx.x * blockDim.x) * VEC_LEN; lid < m * n; lid += BLOCK_SIZE * gridDim.x * VEC_LEN) {
+		T vec[VEC_LEN];
+		if (lid + VEC_LEN < m * n) {
+			for (uint32_t i = 0; i < VEC_LEN; i++) {
+				const auto gid = lid + i;
+				const auto im = gid % m;
+				const auto in = gid / m;
+
+				const auto memory_index = im + ld * in;
+				vec[i] = local_mat_ptr[memory_index];
+			}
+		} else {
+			for (uint32_t i = 0; i < VEC_LEN; i++) {
+				const auto gid = lid + i;
+				T v;
+				if (gid < m * n) {
+					const auto im = gid % m;
+					const auto in = gid / m;
+
+					const auto memory_index = im + ld * in;
+					v = local_mat_ptr[memory_index];
+				} else {
+					v = make_zero<T>();
+				}
+				vec[i] = v;
+			}
+		}
+		for (uint32_t i = 0; i < VEC_LEN; i++) {
+			local_max_abs_value = cutf::math::max(local_max_abs_value, abs_max_float(vec[i]));
+		}
+	}
+
+	for (std::uint32_t offset = warp_size >> 1; offset >= 1; offset >>= 1) {
+		local_max_abs_value = cutf::math::max(
+				__shfl_xor_sync(~0u, local_max_abs_value, offset),
+				local_max_abs_value
+				);
+	}
+
+	__shared__ float smem_max_abs_value  [BLOCK_SIZE];
+
+	if ((threadIdx.x & 0x1f) == 0) {
+		smem_max_abs_value  [threadIdx.x >> 5] = local_max_abs_value;
+	}
+	__syncthreads();
+
+	if (threadIdx.x >= BLOCK_SIZE / warp_size) return;
+
+	local_max_abs_value   = smem_max_abs_value  [threadIdx.x];
+
+	for (std::uint32_t offset = (BLOCK_SIZE / warp_size) >> 1; offset >= 1; offset >>= 1) {
+		local_max_abs_value = cutf::math::max(
+				__shfl_xor_sync(~0u, local_max_abs_value, offset),
+				local_max_abs_value
+				);
+	}
+
+	if (threadIdx.x == 0) {
+		const std::uint32_t max_abs = cutf::experimental::fp::reinterpret_as_uint(local_max_abs_value) & 0x7f800000u;
+		atomicMax(reinterpret_cast<std::uint32_t*>(max_exp_buffer), max_abs);
+	}
+}
+
+template <class T, unsigned BLOCK_SIZE, unsigned VEC_LEN, class LOOP_T>
+void launch_max_exp_kernel (
+		cuMpSGEMM_handle* handle,
+		const unsigned m,
+		const unsigned n,
+		const T* const ptr,
+		const unsigned ld,
+		const unsigned batch_size,
+		const unsigned stride,
+		const unsigned buffer_id
+		) {
+		const dim3 grid_size(
+				std::min<std::uint64_t>(((1lu * m * n + BLOCK_SIZE - 1) / BLOCK_SIZE + VEC_LEN - 1) / VEC_LEN, handle->num_sms * 4),
+				(stride == 0) ? 1 : batch_size
+				);
+
+		// 0
+		if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.start_timer_sync("exp_max_init");}
+		init_exp_max<<<1, 1, 0, handle->cuda_stream>>>(
+				handle->exp_stats_handle->dev_max_abs_buffer         + buffer_id
+				);
+		if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.stop_timer_sync("exp_max_init");}
+
+		// 1
+		if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.start_timer_sync("exp_max");}
+		exp_max_kernel<BLOCK_SIZE, VEC_LEN, LOOP_T, T><<<grid_size, BLOCK_SIZE, 0, handle->cuda_stream>>>(
+				handle->exp_stats_handle->dev_max_abs_buffer         + buffer_id,
+				m, n,
+				ptr, ld,
+				batch_size, stride
+				);
+		if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.stop_timer_sync("exp_max");}
+}
+
+// For init
 __global__ void configure_buffer_kernel(
 		int* const compute_mode_buffer
 		) {
@@ -423,6 +543,35 @@ void cumpsgemm::exp_stats::exp_stats_ext(
 
 template void cumpsgemm::exp_stats::exp_stats_ext<float    >(cuMpSGEMM_handle*, const unsigned, const unsigned, const float*     const, const unsigned, const unsigned, const unsigned);
 template void cumpsgemm::exp_stats::exp_stats_ext<cuComplex>(cuMpSGEMM_handle*, const unsigned, const unsigned, const cuComplex* const, const unsigned, const unsigned, const unsigned);
+
+template <class T>
+void cumpsgemm::exp_stats::exp_max_ext(
+		cuMpSGEMM_handle* handle,
+		const unsigned m,
+		const unsigned n,
+		const T* const ptr,
+		const unsigned ld,
+		const unsigned batch_size,
+		const unsigned stride
+		) {
+	const auto buffer_id = cumpsgemm::exp_stats::get_next_exp_stats_buffer_id(handle);
+	using launch_func_t = void (*)(cuMpSGEMM_handle*, const unsigned, const unsigned, const T* const, const unsigned, const unsigned, const unsigned, const unsigned);
+	launch_func_t launch_func;
+	if (static_cast<std::size_t>(m) * n < (1lu << 15)) {
+		launch_func = launch_max_exp_kernel<T, 64, 4, unsigned>;
+	} else if (static_cast<std::size_t>(m) * n < (1lu << 22)) {
+		launch_func = launch_max_exp_kernel<T, 128, 4, unsigned>;
+	} else if (static_cast<std::size_t>(m) * n < (1lu << 32)) {
+		launch_func = launch_max_exp_kernel<T, 1024, 4, unsigned>;
+	} else {
+		launch_func = launch_max_exp_kernel<T, 1024, 4, std::size_t>;
+	}
+
+	launch_func(handle, m, n, ptr, ld, batch_size, stride, buffer_id);
+}
+
+template void cumpsgemm::exp_stats::exp_max_ext<float    >(cuMpSGEMM_handle*, const unsigned, const unsigned, const float*     const, const unsigned, const unsigned, const unsigned);
+template void cumpsgemm::exp_stats::exp_max_ext<cuComplex>(cuMpSGEMM_handle*, const unsigned, const unsigned, const cuComplex* const, const unsigned, const unsigned, const unsigned);
 
 void cumpsgemm::exp_stats::reset_exp_stats_buffer_id(
 		cuMpSGEMM_handle* handle

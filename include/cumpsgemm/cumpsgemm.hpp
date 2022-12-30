@@ -56,6 +56,17 @@ unsigned exp_stats_ext(
 		const unsigned stride = 0
 		);
 
+template <class T>
+unsigned exp_max_ext(
+		cuMpSGEMM_handle_t handle,
+		const unsigned m,
+		const unsigned n,
+		const T* const ptr,
+		const unsigned ld,
+		const unsigned batch_size = 1,
+		const unsigned stride = 0
+		);
+
 std::pair<std::size_t, std::size_t> get_exp_stats(
 		cuMpSGEMM_handle_t handle,
 		const unsigned buffer_id

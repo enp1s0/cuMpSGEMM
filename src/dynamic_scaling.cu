@@ -94,6 +94,9 @@ __global__ void scaling_kernel(
 		if (scaling_matrix == matrix_A && !cumpsgemm::dynamic_launch::utils::get_scale_A_flag(*dynamic_mode)) return;
 		if (scaling_matrix == matrix_B && !cumpsgemm::dynamic_launch::utils::get_scale_B_flag(*dynamic_mode)) return;
 	}
+	if (*max_abs_value_ptr == 0) {
+		return;
+	}
 	const auto coef = half_exp_max / *max_abs_value_ptr;
 
 	scaling_core<BLOCK_SIZE, VEC_LEN, LOOP_T, T>(
@@ -117,6 +120,9 @@ __global__ void scaling_kernel(
 		const float* const max_abs_value_B_ptr
 		) {
 	auto coef = 1.f;
+	if (*max_abs_value_A_ptr == 0 || *max_abs_value_B_ptr == 0) {
+		return;
+	}
 	if (dynamic_mode != nullptr) {
 		const auto mode = *dynamic_mode;
 		if ((!cumpsgemm::dynamic_launch::utils::get_scale_A_flag(mode)) && (!cumpsgemm::dynamic_launch::utils::get_scale_B_flag(mode))) return;
@@ -149,6 +155,9 @@ __global__ void reset_scaling_kernel(
 	if (dynamic_mode != nullptr) {
 		if (scaling_matrix == matrix_A && !cumpsgemm::dynamic_launch::utils::get_scale_A_flag(*dynamic_mode)) return;
 		if (scaling_matrix == matrix_B && !cumpsgemm::dynamic_launch::utils::get_scale_B_flag(*dynamic_mode)) return;
+	}
+	if (*max_abs_value_ptr == 0) {
+		return;
 	}
 	const auto coef = *max_abs_value_ptr / half_exp_max;
 

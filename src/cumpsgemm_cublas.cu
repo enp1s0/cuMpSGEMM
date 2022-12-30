@@ -458,6 +458,18 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 
 			// Enable dynamic launch
 			cumpsgemm::dynamic_launch::set_dynamic_launch_flag_buffer_id(cuMpSGEMM_get_internal_global_handle(), dynamic_launch_id);
+		} else if (compute_mode == CUMPSGEMM_FP16TCEC_SCALING) {
+			// Force execution mode
+			dynamic_launch_id = 1;
+
+			cumpsgemm::exp_stats::exp_max_ext(cuMpSGEMM_get_internal_global_handle(), (op_A == CUBLAS_OP_N ? m : k), (op_A == CUBLAS_OP_N ? k : m), a_dmem_ptr, lda, 1, 0);
+			A_exp_stats_id = cumpsgemm::exp_stats::get_current_exp_stats_buffer_id(cuMpSGEMM_get_internal_global_handle());
+			cumpsgemm::exp_stats::exp_max_ext(cuMpSGEMM_get_internal_global_handle(), (op_B == CUBLAS_OP_N ? k : n), (op_B == CUBLAS_OP_N ? n : k), b_dmem_ptr, ldb, 1, 0);
+			B_exp_stats_id = cumpsgemm::exp_stats::get_current_exp_stats_buffer_id(cuMpSGEMM_get_internal_global_handle());
+
+			// Scaling
+			cumpsgemm::dynamic_scaling::scale_A(cuMpSGEMM_get_internal_global_handle(), (op_A == CUBLAS_OP_N ? m : k), (op_A == CUBLAS_OP_N ? k : m), const_cast<T*>(a_dmem_ptr), lda, 0, 1, A_exp_stats_id, dynamic_launch_id);
+			cumpsgemm::dynamic_scaling::scale_B(cuMpSGEMM_get_internal_global_handle(), (op_B == CUBLAS_OP_N ? k : n), (op_B == CUBLAS_OP_N ? n : k), const_cast<T*>(b_dmem_ptr), ldb, 0, 1, B_exp_stats_id, dynamic_launch_id);
 		}
 
 		res = cumpsgemm::gemm<T>(
@@ -469,10 +481,10 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 				b_dmem_ptr, ldb,
 				beta,
 				c_dmem_ptr, ldc,
-				compute_mode
+				compute_mode == CUMPSGEMM_FP16TCEC_SCALING ? CUMPSGEMM_FP16TCEC : compute_mode
 				);
 
-		if (compute_mode == CUMPSGEMM_AUTO) {
+		if (compute_mode == CUMPSGEMM_AUTO || compute_mode == CUMPSGEMM_FP16TCEC_SCALING) {
 			cumpsgemm::dynamic_scaling::scale_C(cuMpSGEMM_get_internal_global_handle(), m, n, c_dmem_ptr, ldc, 0, 1, A_exp_stats_id, B_exp_stats_id, dynamic_launch_id);
 
 			// restore A and B
@@ -711,6 +723,19 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 
 			// Enable dynamic launch
 			cumpsgemm::dynamic_launch::set_dynamic_launch_flag_buffer_id(cuMpSGEMM_get_internal_global_handle(), dynamic_launch_id);
+		} else if (compute_mode == CUMPSGEMM_FP16TCEC_SCALING) {
+			// Force execution mode
+			dynamic_launch_id = 1;
+
+			// Exp stats
+			cumpsgemm::exp_stats::exp_max_ext(cuMpSGEMM_get_internal_global_handle(), (op_A == CUBLAS_OP_N ? m : k), (op_A == CUBLAS_OP_N ? k : m), a_dmem_ptr, lda, batch_count, stridea);
+			A_exp_stats_id = cumpsgemm::exp_stats::get_current_exp_stats_buffer_id(cuMpSGEMM_get_internal_global_handle());
+			cumpsgemm::exp_stats::exp_max_ext(cuMpSGEMM_get_internal_global_handle(), (op_B == CUBLAS_OP_N ? k : n), (op_B == CUBLAS_OP_N ? n : k), b_dmem_ptr, ldb, batch_count, strideb);
+			B_exp_stats_id = cumpsgemm::exp_stats::get_current_exp_stats_buffer_id(cuMpSGEMM_get_internal_global_handle());
+
+			// Scaling
+			cumpsgemm::dynamic_scaling::scale_A(cuMpSGEMM_get_internal_global_handle(), (op_A == CUBLAS_OP_N ? m : k), (op_A == CUBLAS_OP_N ? k : m), const_cast<T*>(a_dmem_ptr), lda, stridea, batch_count, A_exp_stats_id, dynamic_launch_id);
+			cumpsgemm::dynamic_scaling::scale_B(cuMpSGEMM_get_internal_global_handle(), (op_B == CUBLAS_OP_N ? k : n), (op_B == CUBLAS_OP_N ? n : k), const_cast<T*>(b_dmem_ptr), ldb, strideb, batch_count, B_exp_stats_id, dynamic_launch_id);
 		}
 
 		res = cumpsgemm::gemm_stridedBatch<T>(
@@ -723,10 +748,10 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 				beta,
 				c_dmem_ptr, ldc, stridec,
 				batch_count,
-				compute_mode
+				compute_mode == CUMPSGEMM_FP16TCEC_SCALING ? CUMPSGEMM_FP16TCEC : compute_mode
 				);
 
-		if (compute_mode == CUMPSGEMM_AUTO) {
+		if (compute_mode == CUMPSGEMM_AUTO || compute_mode == CUMPSGEMM_FP16TCEC_SCALING) {
 			cumpsgemm::dynamic_scaling::scale_C(cuMpSGEMM_get_internal_global_handle(), m, n, c_dmem_ptr, ldc, stridec, batch_count, A_exp_stats_id, B_exp_stats_id, dynamic_launch_id);
 
 			// restore A and B

@@ -32,6 +32,8 @@ extern "C" cuMpSGEMM_compute_mode_t cuMpSGEMM_get_compute_mode (
 			return CUMPSGEMM_DRY_RUN;
 		if (env_val_str == "AUTO")
 			return CUMPSGEMM_AUTO;
+		if (env_val_str == "FP16TCEC_SCALING")
+			return CUMPSGEMM_FP16TCEC_SCALING;
 	}
 
 	return CUMPSGEMM_CUBLAS;

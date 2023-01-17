@@ -11,6 +11,7 @@
 #include <cumpsgemm/cumpsgemm.hpp>
 #include "device_tcec_wrapper.hpp"
 #include "handle.hpp"
+#include "instance.hpp"
 #include "dmem_accessor.hpp"
 #include "dynamic_launch_utils.hpp"
 

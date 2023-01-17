@@ -151,8 +151,8 @@ cublasStatus_t cumpsgemm::gemm(
 		const auto kernel_module_candidate_list = handle->gemm_module[code];
 
 		unsigned module_id;
-		auto gemm_module = kernel_module_candidate_list[handle->num_kernel_candidates - 1];
-		for (module_id = 0; module_id < handle->num_kernel_candidates - 1; module_id++) {
+		auto gemm_module = kernel_module_candidate_list[cumpsgemm::num_kernel_candidates - 1];
+		for (module_id = 0; module_id < cumpsgemm::num_kernel_candidates - 1; module_id++) {
 			const auto module = kernel_module_candidate_list[module_id];
 			if (m * n / (module.smem_m * module.smem_n) > handle->num_sms * 2 /*A magic number :) */) {
 				gemm_module = module;
@@ -185,10 +185,10 @@ cublasStatus_t cumpsgemm::gemm(
 		const auto kernel_module_candidate_list_B = handle->gemm_module[code_B];
 
 		unsigned module_id;
-		auto gemm_module_A = kernel_module_candidate_list_A[handle->num_kernel_candidates - 1];
-		auto gemm_module_B = kernel_module_candidate_list_B[handle->num_kernel_candidates - 1];
+		auto gemm_module_A = kernel_module_candidate_list_A[cumpsgemm::num_kernel_candidates - 1];
+		auto gemm_module_B = kernel_module_candidate_list_B[cumpsgemm::num_kernel_candidates - 1];
 
-		for (module_id = 0; module_id < handle->num_kernel_candidates - 1; module_id++) {
+		for (module_id = 0; module_id < cumpsgemm::num_kernel_candidates - 1; module_id++) {
 			const auto module = kernel_module_candidate_list_A[module_id];
 			if (m * n / (module.smem_m * module.smem_n) > handle->num_sms * 2 /*A magic number :) */) {
 				gemm_module_A = module;
@@ -196,7 +196,7 @@ cublasStatus_t cumpsgemm::gemm(
 			}
 		}
 
-		for (module_id = 0; module_id < handle->num_kernel_candidates - 1; module_id++) {
+		for (module_id = 0; module_id < cumpsgemm::num_kernel_candidates - 1; module_id++) {
 			const auto module = kernel_module_candidate_list_B[module_id];
 			if (m * n / (module.smem_m * module.smem_n) > handle->num_sms * 2 /*A magic number :) */) {
 				gemm_module_B = module;
@@ -282,8 +282,8 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 		const auto kernel_module_candidate_list = handle->gemm_stridedBatch_module[code];
 
 		unsigned module_id;
-		auto gemm_module = kernel_module_candidate_list[handle->num_kernel_candidates - 1];
-		for (module_id = 0; module_id < handle->num_kernel_candidates - 1; module_id++) {
+		auto gemm_module = kernel_module_candidate_list[cumpsgemm::num_kernel_candidates - 1];
+		for (module_id = 0; module_id < cumpsgemm::num_kernel_candidates - 1; module_id++) {
 			const auto module = kernel_module_candidate_list[module_id];
 			if (m * n / (module.smem_m * module.smem_n) * batch_count > handle->num_sms * 32 /*A magic number :) */) {
 				gemm_module = module;
@@ -317,10 +317,10 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 		const auto kernel_module_candidate_list_B = handle->gemm_stridedBatch_module[code_B];
 
 		unsigned module_id;
-		auto gemm_module_A = kernel_module_candidate_list_A[handle->num_kernel_candidates - 1];
-		auto gemm_module_B = kernel_module_candidate_list_B[handle->num_kernel_candidates - 1];
+		auto gemm_module_A = kernel_module_candidate_list_A[cumpsgemm::num_kernel_candidates - 1];
+		auto gemm_module_B = kernel_module_candidate_list_B[cumpsgemm::num_kernel_candidates - 1];
 
-		for (module_id = 0; module_id < handle->num_kernel_candidates - 1; module_id++) {
+		for (module_id = 0; module_id < cumpsgemm::num_kernel_candidates - 1; module_id++) {
 			const auto module = kernel_module_candidate_list_A[module_id];
 			if (m * n / (module.smem_m * module.smem_n) * batch_count > handle->num_sms * 32 /*A magic number :) */) {
 				gemm_module_A = module;
@@ -328,7 +328,7 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 			}
 		}
 
-		for (module_id = 0; module_id < handle->num_kernel_candidates - 1; module_id++) {
+		for (module_id = 0; module_id < cumpsgemm::num_kernel_candidates - 1; module_id++) {
 			const auto module = kernel_module_candidate_list_B[module_id];
 			if (m * n / (module.smem_m * module.smem_n) * batch_count > handle->num_sms * 32 /*A magic number :) */) {
 				gemm_module_B = module;

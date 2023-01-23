@@ -31,6 +31,8 @@ set(
 	${SRCDIR}/dynamic_launch.cu
 	${SRCDIR}/dynamic_scaling.cu
 	${SRCDIR}/culip.cu
+	${SRCDIR}/instance_sm80.cu
+	${SRCDIR}/instance_sm86.cu
 	${SUBMODULEDIR}/cuGEMM-Mx2x2/src/main.cu
 	${HEADERS}
 	)

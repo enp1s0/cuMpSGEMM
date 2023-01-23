@@ -1,7 +1,6 @@
 #include <string>
 #include <sstream>
 #include <iomanip>
-#include <cublas.h>
 #include <unistd.h>
 #include <dlfcn.h>
 #include <cumpsgemm/cumpsgemm.hpp>
@@ -14,6 +13,10 @@
 #include "dynamic_launch_utils.hpp"
 #include "dynamic_scaling.hpp"
 #include "culip.hpp"
+
+#ifndef CUBLASAPI
+#define CUBLASAPI
+#endif
 
 namespace {
 std::string get_XeY_format_string(const double a) {
@@ -116,10 +119,26 @@ std::string get_cublas_op_str(const cublasOperation_t op) {
 	}
 }
 
+const std::string gemm_Mx2x2_env_name = "CUMPSGEMM_CUSTOM_GEMM_MX2X2";
+bool is_gemm_Mx2x2_enabled() {
+	if (global_internal_gemm_Mx2x2_enabled) {
+		return true;
+	}
+
+	const auto env = getenv(gemm_Mx2x2_env_name.c_str());
+	if (env == nullptr || std::string(env) == "0") {
+		return false;
+	}
+
+	return true;
+}
+
 cuMpSGEMM_handle_t cuMpSGEMM_get_internal_global_handle() {
 	if (internal_global_cuMpSGEMM_handle == nullptr) {
 		cuMpSGEMM_log("Initialize cuMpSGEMM handle...");
-		cuMpSGEMM_create(&internal_global_cuMpSGEMM_handle);
+		if (cuMpSGEMM_create(&internal_global_cuMpSGEMM_handle) != CUBLAS_STATUS_SUCCESS) {
+			cuMpSGEMM_error("Initialization failed.");
+		}
 
 
 		const auto init_float_by_env = [&](const std::string env_str, const float default_value) {
@@ -148,26 +167,13 @@ cuMpSGEMM_handle_t cuMpSGEMM_get_internal_global_handle() {
 		cuMpSGEMM_log("AUTO config: underflow_threshold="      + get_XeY_format_string(underflow_threshold)      + " @Init");
 		cuMpSGEMM_log("AUTO config: underflow_tolerance_rate=" + get_XeY_format_string(underflow_tolerance_rate) + " @Init");
 		cuMpSGEMM_log("AUTO config: restore_AB_scaling="       + std::to_string(restore_AB_scaling)            + " @Init");
+		cuMpSGEMM_log("CUSTOM_GEMM_MX2X2: " + std::string(is_gemm_Mx2x2_enabled() ? "enabled" : "disabled") + " @Init");
 
 		cumpsgemm::set_exp_stats_params(cuMpSGEMM_get_internal_global_handle(), ignore_threshold, underflow_threshold, underflow_tolerance_rate);
 		restore_AB = restore_AB_scaling;
 	}
 
 	return internal_global_cuMpSGEMM_handle;
-}
-
-const std::string gemm_Mx2x2_env_name = "CUMPSGEMM_CUSTOM_GEMM_MX2X2";
-bool is_gemm_Mx2x2_enabled() {
-	if (global_internal_gemm_Mx2x2_enabled) {
-		return true;
-	}
-
-	const auto env = getenv(gemm_Mx2x2_env_name.c_str());
-	if (env == nullptr || std::string(env) == "0") {
-		return false;
-	}
-
-	return true;
 }
 
 const std::string rule_lib_name = "libcumpsgemm_rule.so";
@@ -774,7 +780,7 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 
 // cuBLAS functions
 extern "C" {
-cublasStatus_t cublasSgemm (
+CUBLASAPI cublasStatus_t cublasSgemm_v2(
 		cublasHandle_t cublas_handle,
 		cublasOperation_t op_A,
 		cublasOperation_t op_B,
@@ -787,6 +793,9 @@ cublasStatus_t cublasSgemm (
 		const float* beta,
 		float* c_dmem_ptr, int ldc
 		) {
+#ifdef __CUDA_ARCH__
+	return CUBLAS_STATUS_NOT_SUPPORTED;
+#else
 	cudaStream_t cuda_stream;
 	cublasGetStream(cublas_handle, &cuda_stream);
 
@@ -801,9 +810,10 @@ cublasStatus_t cublasSgemm (
 			beta,
 			c_dmem_ptr, ldc
 			);
+#endif
 }
 
-cublasStatus_t cublasCgemm (
+CUBLASAPI cublasStatus_t cublasCgemm_v2(
 		cublasHandle_t cublas_handle,
 		cublasOperation_t op_A,
 		cublasOperation_t op_B,
@@ -816,6 +826,9 @@ cublasStatus_t cublasCgemm (
 		const cuComplex* beta,
 		cuComplex* c_dmem_ptr, int ldc
 		) {
+#ifdef __CUDA_ARCH__
+	return CUBLAS_STATUS_NOT_SUPPORTED;
+#else
 	return cuMpSGEMM_hijack_core<cuComplex>(
 			__func__,
 			cublas_handle,
@@ -827,9 +840,10 @@ cublasStatus_t cublasCgemm (
 			beta,
 			c_dmem_ptr, ldc
 			);
+#endif
 }
 
-cublasStatus_t cublasSgemmStridedBatched (
+CUBLASAPI cublasStatus_t cublasSgemmStridedBatched(
 		cublasHandle_t cublas_handle,
 		cublasOperation_t op_A,
 		cublasOperation_t op_B,
@@ -843,6 +857,9 @@ cublasStatus_t cublasSgemmStridedBatched (
 		float* c_dmem_ptr, int ldc, long long int stridec,
 		const int batch_count
 		) {
+#ifdef __CUDA_ARCH__
+	return CUBLAS_STATUS_NOT_SUPPORTED;
+#else
 	return cuMpSGEMM_stridedBatched_hijack_core<float>(
 			__func__,
 			cublas_handle,
@@ -855,9 +872,10 @@ cublasStatus_t cublasSgemmStridedBatched (
 			c_dmem_ptr, ldc, stridec,
 			batch_count
 			);
+#endif
 }
 
-cublasStatus_t cublasCgemmStridedBatched (
+CUBLASAPI cublasStatus_t cublasCgemmStridedBatched(
 		cublasHandle_t cublas_handle,
 		cublasOperation_t op_A,
 		cublasOperation_t op_B,
@@ -871,6 +889,9 @@ cublasStatus_t cublasCgemmStridedBatched (
 		cuComplex* c_dmem_ptr, int ldc, const long long int stridec,
 		const int batch_count
 		) {
+#ifdef __CUDA_ARCH__
+	return CUBLAS_STATUS_NOT_SUPPORTED;
+#else
 	cudaStream_t cuda_stream;
 	cublasGetStream(cublas_handle, &cuda_stream);
 
@@ -886,9 +907,10 @@ cublasStatus_t cublasCgemmStridedBatched (
 			c_dmem_ptr, ldc, stridec,
 			batch_count
 			);
+#endif
 }
 
-cublasStatus_t cublasGemmEx(cublasHandle_t handle, cublasOperation_t transa,
+CUBLASAPI cublasStatus_t cublasGemmEx(cublasHandle_t handle, cublasOperation_t transa,
                             cublasOperation_t transb, int m, int n, int k,
                             const void *alpha, const void *A,
                             cudaDataType_t Atype, int lda, const void *B,
@@ -896,6 +918,9 @@ cublasStatus_t cublasGemmEx(cublasHandle_t handle, cublasOperation_t transa,
 														void *C, cudaDataType_t Ctype, int ldc,
 														cublasComputeType_t computeType,
 														cublasGemmAlgo_t algo) {
+#ifdef __CUDA_ARCH__
+	return CUBLAS_STATUS_NOT_SUPPORTED;
+#else
 	if (Atype == CUDA_R_32F && Btype == CUDA_R_32F && Ctype == CUDA_R_32F) {
 		return cublasSgemm(
 				handle,
@@ -949,9 +974,10 @@ cublasStatus_t cublasGemmEx(cublasHandle_t handle, cublasOperation_t transa,
 	}
 
 	return res;
+#endif
 }
 
-cublasStatus_t cublasGemmStridedBatchedEx(cublasHandle_t handle, cublasOperation_t transa,
+CUBLASAPI cublasStatus_t cublasGemmStridedBatchedEx(cublasHandle_t handle, cublasOperation_t transa,
                             cublasOperation_t transb, int m, int n, int k,
                             const void *alpha, const void *A,
                             cudaDataType_t Atype, int lda, long long int strideA, const void *B,
@@ -960,6 +986,9 @@ cublasStatus_t cublasGemmStridedBatchedEx(cublasHandle_t handle, cublasOperation
 														int batch_count,
 														cublasComputeType_t computeType,
 														cublasGemmAlgo_t algo) {
+#ifdef __CUDA_ARCH__
+	return CUBLAS_STATUS_NOT_SUPPORTED;
+#else
 	if (Atype == CUDA_R_32F && Btype == CUDA_R_32F && Ctype == CUDA_R_32F) {
 		return cublasSgemmStridedBatched(
 				handle,
@@ -1015,6 +1044,7 @@ cublasStatus_t cublasGemmStridedBatchedEx(cublasHandle_t handle, cublasOperation
 	}
 
 	return res;
+#endif
 }
 } // extern "C"
 

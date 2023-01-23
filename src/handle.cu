@@ -21,6 +21,8 @@ cublasStatus_t cuMpSGEMM_create(cuMpSGEMM_handle_t* const handle) {
 
 	if (cc_major == 8 && cc_minor == 0) {
 		cumpsgemm::configure_instance_sm80((*handle)->gemm_module, (*handle)->gemm_stridedBatch_module);
+	} else {
+		cumpsgemm::configure_instance_sm86((*handle)->gemm_module, (*handle)->gemm_stridedBatch_module);
 	}
 
 	init_exp_stats_counter_buffer((*handle));

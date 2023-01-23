@@ -78,6 +78,10 @@ void configure_instance_sm80(
 		cumpsgemm::gemm_module gemm_module[cumpsgemm::kernel_module_code::max_code][cumpsgemm::num_kernel_candidates],
 		cumpsgemm::gemm_module gemm_stridedBatch_module[cumpsgemm::kernel_module_code::max_code][cumpsgemm::num_kernel_candidates]
 		);
+void configure_instance_sm86(
+		cumpsgemm::gemm_module gemm_module[cumpsgemm::kernel_module_code::max_code][cumpsgemm::num_kernel_candidates],
+		cumpsgemm::gemm_module gemm_stridedBatch_module[cumpsgemm::kernel_module_code::max_code][cumpsgemm::num_kernel_candidates]
+		);
 } // namespace cumpsgemm
 
 #define SET_GEMM_KERNEL_MODULE(module_list, io_t, tc_t, ec, op_a, op_b, smem_m, smem_n, smem_k, frag_m, frag_n, frag_k, block_size, num_unrollings, num_stages, pipelined, gemm_type, stage) \

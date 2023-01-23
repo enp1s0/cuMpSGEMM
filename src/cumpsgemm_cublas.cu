@@ -115,10 +115,26 @@ std::string get_cublas_op_str(const cublasOperation_t op) {
 	}
 }
 
+const std::string gemm_Mx2x2_env_name = "CUMPSGEMM_CUSTOM_GEMM_MX2X2";
+bool is_gemm_Mx2x2_enabled() {
+	if (global_internal_gemm_Mx2x2_enabled) {
+		return true;
+	}
+
+	const auto env = getenv(gemm_Mx2x2_env_name.c_str());
+	if (env == nullptr || std::string(env) == "0") {
+		return false;
+	}
+
+	return true;
+}
+
 cuMpSGEMM_handle_t cuMpSGEMM_get_internal_global_handle() {
 	if (internal_global_cuMpSGEMM_handle == nullptr) {
 		cuMpSGEMM_log("Initialize cuMpSGEMM handle...");
-		cuMpSGEMM_create(&internal_global_cuMpSGEMM_handle);
+		if (cuMpSGEMM_create(&internal_global_cuMpSGEMM_handle) != CUBLAS_STATUS_SUCCESS) {
+			cuMpSGEMM_error("Initialization failed.");
+		}
 
 
 		const auto init_float_by_env = [&](const std::string env_str, const float default_value) {
@@ -147,26 +163,13 @@ cuMpSGEMM_handle_t cuMpSGEMM_get_internal_global_handle() {
 		cuMpSGEMM_log("AUTO config: underflow_threshold="      + get_XeY_format_string(underflow_threshold)      + " @Init");
 		cuMpSGEMM_log("AUTO config: underflow_tolerance_rate=" + get_XeY_format_string(underflow_tolerance_rate) + " @Init");
 		cuMpSGEMM_log("AUTO config: restore_AB_scaling="       + std::to_string(restore_AB_scaling)            + " @Init");
+		cuMpSGEMM_log("CUSTOM_GEMM_MX2X2: " + std::string(is_gemm_Mx2x2_enabled() ? "enabled" : "disabled") + " @Init");
 
 		cumpsgemm::set_exp_stats_params(cuMpSGEMM_get_internal_global_handle(), ignore_threshold, underflow_threshold, underflow_tolerance_rate);
 		restore_AB = restore_AB_scaling;
 	}
 
 	return internal_global_cuMpSGEMM_handle;
-}
-
-const std::string gemm_Mx2x2_env_name = "CUMPSGEMM_CUSTOM_GEMM_MX2X2";
-bool is_gemm_Mx2x2_enabled() {
-	if (global_internal_gemm_Mx2x2_enabled) {
-		return true;
-	}
-
-	const auto env = getenv(gemm_Mx2x2_env_name.c_str());
-	if (env == nullptr || std::string(env) == "0") {
-		return false;
-	}
-
-	return true;
 }
 
 const std::string rule_lib_name = "libcumpsgemm_rule.so";

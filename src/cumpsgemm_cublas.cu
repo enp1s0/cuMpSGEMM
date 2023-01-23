@@ -1,7 +1,6 @@
 #include <string>
 #include <sstream>
 #include <iomanip>
-#include <cublas.h>
 #include <unistd.h>
 #include <dlfcn.h>
 #include <cumpsgemm/cumpsgemm.hpp>

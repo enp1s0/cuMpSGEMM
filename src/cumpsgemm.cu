@@ -1,7 +1,6 @@
 #include <iostream>
 #include <cassert>
 #include <type_traits>
-#include <cublas.h>
 #include <cutf/cuda.hpp>
 #include <cumpsgemm/cumpsgemm.hpp>
 

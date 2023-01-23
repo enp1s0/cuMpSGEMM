@@ -14,6 +14,10 @@
 #include "dynamic_scaling.hpp"
 #include "culip.hpp"
 
+#ifndef CUBLASAPI
+#define CUBLASAPI
+#endif
+
 namespace {
 std::string get_XeY_format_string(const double a) {
 	std::stringstream ss;
@@ -776,7 +780,7 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 
 // cuBLAS functions
 extern "C" {
-cublasStatus_t cublasSgemm (
+CUBLASAPI cublasStatus_t cublasSgemm_v2(
 		cublasHandle_t cublas_handle,
 		cublasOperation_t op_A,
 		cublasOperation_t op_B,
@@ -789,6 +793,9 @@ cublasStatus_t cublasSgemm (
 		const float* beta,
 		float* c_dmem_ptr, int ldc
 		) {
+#ifdef __CUDA_ARCH__
+	return CUBLAS_STATUS_NOT_SUPPORTED;
+#else
 	cudaStream_t cuda_stream;
 	cublasGetStream(cublas_handle, &cuda_stream);
 
@@ -803,9 +810,10 @@ cublasStatus_t cublasSgemm (
 			beta,
 			c_dmem_ptr, ldc
 			);
+#endif
 }
 
-cublasStatus_t cublasCgemm (
+CUBLASAPI cublasStatus_t cublasCgemm_v2(
 		cublasHandle_t cublas_handle,
 		cublasOperation_t op_A,
 		cublasOperation_t op_B,
@@ -818,6 +826,9 @@ cublasStatus_t cublasCgemm (
 		const cuComplex* beta,
 		cuComplex* c_dmem_ptr, int ldc
 		) {
+#ifdef __CUDA_ARCH__
+	return CUBLAS_STATUS_NOT_SUPPORTED;
+#else
 	return cuMpSGEMM_hijack_core<cuComplex>(
 			__func__,
 			cublas_handle,
@@ -829,9 +840,10 @@ cublasStatus_t cublasCgemm (
 			beta,
 			c_dmem_ptr, ldc
 			);
+#endif
 }
 
-cublasStatus_t cublasSgemmStridedBatched (
+CUBLASAPI cublasStatus_t cublasSgemmStridedBatched(
 		cublasHandle_t cublas_handle,
 		cublasOperation_t op_A,
 		cublasOperation_t op_B,
@@ -845,6 +857,9 @@ cublasStatus_t cublasSgemmStridedBatched (
 		float* c_dmem_ptr, int ldc, long long int stridec,
 		const int batch_count
 		) {
+#ifdef __CUDA_ARCH__
+	return CUBLAS_STATUS_NOT_SUPPORTED;
+#else
 	return cuMpSGEMM_stridedBatched_hijack_core<float>(
 			__func__,
 			cublas_handle,
@@ -857,9 +872,10 @@ cublasStatus_t cublasSgemmStridedBatched (
 			c_dmem_ptr, ldc, stridec,
 			batch_count
 			);
+#endif
 }
 
-cublasStatus_t cublasCgemmStridedBatched (
+CUBLASAPI cublasStatus_t cublasCgemmStridedBatched(
 		cublasHandle_t cublas_handle,
 		cublasOperation_t op_A,
 		cublasOperation_t op_B,
@@ -873,6 +889,9 @@ cublasStatus_t cublasCgemmStridedBatched (
 		cuComplex* c_dmem_ptr, int ldc, const long long int stridec,
 		const int batch_count
 		) {
+#ifdef __CUDA_ARCH__
+	return CUBLAS_STATUS_NOT_SUPPORTED;
+#else
 	cudaStream_t cuda_stream;
 	cublasGetStream(cublas_handle, &cuda_stream);
 
@@ -888,9 +907,10 @@ cublasStatus_t cublasCgemmStridedBatched (
 			c_dmem_ptr, ldc, stridec,
 			batch_count
 			);
+#endif
 }
 
-cublasStatus_t cublasGemmEx(cublasHandle_t handle, cublasOperation_t transa,
+CUBLASAPI cublasStatus_t cublasGemmEx(cublasHandle_t handle, cublasOperation_t transa,
                             cublasOperation_t transb, int m, int n, int k,
                             const void *alpha, const void *A,
                             cudaDataType_t Atype, int lda, const void *B,
@@ -898,6 +918,9 @@ cublasStatus_t cublasGemmEx(cublasHandle_t handle, cublasOperation_t transa,
 														void *C, cudaDataType_t Ctype, int ldc,
 														cublasComputeType_t computeType,
 														cublasGemmAlgo_t algo) {
+#ifdef __CUDA_ARCH__
+	return CUBLAS_STATUS_NOT_SUPPORTED;
+#else
 	if (Atype == CUDA_R_32F && Btype == CUDA_R_32F && Ctype == CUDA_R_32F) {
 		return cublasSgemm(
 				handle,
@@ -951,9 +974,10 @@ cublasStatus_t cublasGemmEx(cublasHandle_t handle, cublasOperation_t transa,
 	}
 
 	return res;
+#endif
 }
 
-cublasStatus_t cublasGemmStridedBatchedEx(cublasHandle_t handle, cublasOperation_t transa,
+CUBLASAPI cublasStatus_t cublasGemmStridedBatchedEx(cublasHandle_t handle, cublasOperation_t transa,
                             cublasOperation_t transb, int m, int n, int k,
                             const void *alpha, const void *A,
                             cudaDataType_t Atype, int lda, long long int strideA, const void *B,
@@ -962,6 +986,9 @@ cublasStatus_t cublasGemmStridedBatchedEx(cublasHandle_t handle, cublasOperation
 														int batch_count,
 														cublasComputeType_t computeType,
 														cublasGemmAlgo_t algo) {
+#ifdef __CUDA_ARCH__
+	return CUBLAS_STATUS_NOT_SUPPORTED;
+#else
 	if (Atype == CUDA_R_32F && Btype == CUDA_R_32F && Ctype == CUDA_R_32F) {
 		return cublasSgemmStridedBatched(
 				handle,
@@ -1017,6 +1044,7 @@ cublasStatus_t cublasGemmStridedBatchedEx(cublasHandle_t handle, cublasOperation
 	}
 
 	return res;
+#endif
 }
 } // extern "C"
 

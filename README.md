@@ -41,7 +41,7 @@ This throughput of this library is only optimized for A100 GPU.
 ### 1. Hijack cuBLAS library
 Before executing a target application, set an environmental variable as follows.
 ```bash
-export LD_PRELOAD=/path/to/cumpsgemm/hijack/lib/libcumpsgemm.so:$LD_PRELOAD
+export LD_PRELOAD=/path/to/cumpsgemm/build/libcumpsgemm.so:$LD_PRELOAD
 ```
 
 ### 2. Control SGEMM computing mode

@@ -75,6 +75,15 @@ target_link_libraries(cumpsgemm_rule PRIVATE
 	)
 
 ##########################################################################
+# Installing
+##########################################################################
+install(TARGETS cumpsgemm
+	LIBRARY DESTINATION lib
+	PUBLIC_HEADER DESTINATION include/cumpsgemm
+	)
+
+
+##########################################################################
 # Tests
 ##########################################################################
 set(TESTSRCDIR test)

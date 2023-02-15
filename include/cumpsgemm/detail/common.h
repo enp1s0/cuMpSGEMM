@@ -16,5 +16,6 @@ enum cuMpSGEMM_compute_mode_t {
 	CUMPSGEMM_AUTO             = 9,
 	CUMPSGEMM_UNDEFINED        = 10,
 	CUMPSGEMM_FP16TCEC_SCALING = 11,
+	CUMPSGEMM_FP32_SIMT        = 12,
 };
 #endif

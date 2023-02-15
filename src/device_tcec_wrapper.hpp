@@ -21,9 +21,21 @@ struct tc_fragment {
 	frag_t frag;
 };
 
+template <class T, class Use, unsigned M, unsigned N, unsigned K, class Layout>
+struct tc_fragment<T, Use, M, N, K, Layout, mtk::wmma::tcec::op_simt, mtk::wmma::tcec::op_without_error_correction> {
+	using frag_t = mtk::wmma::tcec::fragment<Use, M, N, K, float, typename detail::use_layout_conv<Use>::type, typename mtk::wmma::tcec::Policy<mtk::wmma::tcec::op_simt, mtk::wmma::tcec::op_without_error_correction, 16, 16, 16>>;
+	frag_t frag;
+};
+
 template <class Use, unsigned M, unsigned N, unsigned K, class Layout, class TC_T, class EC>
 struct tc_fragment<cuComplex, Use, M, N, K, Layout, TC_T, EC> {
 	using frag_t = mtk::wmma::tcec::fragment_complex<Use, M, N, K, TC_T, typename detail::use_layout_conv<Use>::type, typename mtk::wmma::tcec::default_policy<TC_T, EC, mtk::wmma::tcec::op_mma>::type>;
+	frag_t frag;
+};
+
+template <class Use, unsigned M, unsigned N, unsigned K, class Layout>
+struct tc_fragment<cuComplex, Use, M, N, K, Layout, mtk::wmma::tcec::op_simt, mtk::wmma::tcec::op_without_error_correction> {
+	using frag_t = mtk::wmma::tcec::fragment_complex<Use, M, N, K, float, typename detail::use_layout_conv<Use>::type, typename mtk::wmma::tcec::Policy<mtk::wmma::tcec::op_simt, mtk::wmma::tcec::op_without_error_correction, 16, 16, 16>>;
 	frag_t frag;
 };
 

@@ -24,6 +24,7 @@ cublasStatus_t cuMpSGEMM_create(cuMpSGEMM_handle_t* const handle) {
 	} else {
 		cumpsgemm::configure_instance_sm86((*handle)->gemm_module, (*handle)->gemm_stridedBatch_module);
 	}
+	cumpsgemm::configure_instance_simt((*handle)->gemm_module, (*handle)->gemm_stridedBatch_module);
 
 	init_exp_stats_counter_buffer((*handle));
 	init_dynamic_launch_flag_buffer((*handle));

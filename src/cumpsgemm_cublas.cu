@@ -208,6 +208,8 @@ extern "C" const char* cuMpSGEMM_get_compute_mode_string (
 		return "UNDEFINED";
 	case CUMPSGEMM_FP16TCEC_SCALING:
 		return "FP16TCEC_SCALING";
+	case CUMPSGEMM_FP32_SIMT:
+		return "FP32_SIMT";
 	default:
 		break;
 	}

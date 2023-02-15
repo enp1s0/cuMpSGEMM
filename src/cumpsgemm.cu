@@ -22,10 +22,11 @@ cumpsgemm::kernel_module_code::code_t gen_module_code(
 		) {
 	cumpsgemm::kernel_module_code::code_t code = 0;
 	switch (compute_mode) {
-	case CUMPSGEMM_FP16TC:   code |= cumpsgemm::kernel_module_code::half | cumpsgemm::kernel_module_code::without_ec;break;
-	case CUMPSGEMM_FP16TCEC: code |= cumpsgemm::kernel_module_code::half | cumpsgemm::kernel_module_code::with_ec   ;break;
-	case CUMPSGEMM_TF32TC:   code |= cumpsgemm::kernel_module_code::tf32 | cumpsgemm::kernel_module_code::without_ec;break;
-	case CUMPSGEMM_TF32TCEC: code |= cumpsgemm::kernel_module_code::tf32 | cumpsgemm::kernel_module_code::with_ec   ;break;
+	case CUMPSGEMM_FP16TC:    code |= cumpsgemm::kernel_module_code::half | cumpsgemm::kernel_module_code::without_ec;break;
+	case CUMPSGEMM_FP16TCEC:  code |= cumpsgemm::kernel_module_code::half | cumpsgemm::kernel_module_code::with_ec   ;break;
+	case CUMPSGEMM_TF32TC:    code |= cumpsgemm::kernel_module_code::tf32 | cumpsgemm::kernel_module_code::without_ec;break;
+	case CUMPSGEMM_TF32TCEC:  code |= cumpsgemm::kernel_module_code::tf32 | cumpsgemm::kernel_module_code::with_ec   ;break;
+	case CUMPSGEMM_FP32_SIMT: code |= cumpsgemm::kernel_module_code::simt | cumpsgemm::kernel_module_code::without_ec;break;
 	default:break;
 	}
 	auto op_A_ = op_A;

@@ -52,20 +52,21 @@ static constexpr unsigned num_kernel_candidates = 3;
 
 namespace kernel_module_code {
 using code_t = std::uint32_t;
-constexpr code_t op_a_col_major   = 0b0'0'0'00'01;
-constexpr code_t op_a_row_major   = 0b0'0'0'00'10;
-constexpr code_t op_a_conjugate   = 0b0'0'0'00'11;
-constexpr code_t op_b_col_major   = 0b0'0'0'01'00;
-constexpr code_t op_b_row_major   = 0b0'0'0'10'00;
-constexpr code_t op_b_conjugate   = 0b0'0'0'11'00;
-constexpr code_t half             = 0b0'0'0'00'00;
-constexpr code_t tf32             = 0b0'0'1'00'00;
-constexpr code_t with_ec          = 0b0'0'0'00'00;
-constexpr code_t without_ec       = 0b0'1'0'00'00;
-constexpr code_t s                = 0b0'0'0'00'00;
-constexpr code_t c                = 0b1'0'0'00'00;
+constexpr code_t op_a_col_major   = 0b0'0'00'00'01;
+constexpr code_t op_a_row_major   = 0b0'0'00'00'10;
+constexpr code_t op_a_conjugate   = 0b0'0'00'00'11;
+constexpr code_t op_b_col_major   = 0b0'0'00'01'00;
+constexpr code_t op_b_row_major   = 0b0'0'00'10'00;
+constexpr code_t op_b_conjugate   = 0b0'0'00'11'00;
+constexpr code_t half             = 0b0'0'00'00'00;
+constexpr code_t tf32             = 0b0'0'01'00'00;
+constexpr code_t simt             = 0b0'0'10'00'00;
+constexpr code_t with_ec          = 0b0'0'00'00'00;
+constexpr code_t without_ec       = 0b0'1'00'00'00;
+constexpr code_t s                = 0b0'0'00'00'00;
+constexpr code_t c                = 0b1'0'00'00'00;
 // ------- OR accumulation ------
-constexpr code_t max_code = 0b1'11'11'11 + 1;
+constexpr code_t max_code = 0b1'1'11'11'11 + 1;
 } // namespace kernel_module_code
 namespace exp_stats {
 struct exp_stats_handle;
@@ -79,6 +80,10 @@ void configure_instance_sm80(
 		cumpsgemm::gemm_module gemm_stridedBatch_module[cumpsgemm::kernel_module_code::max_code][cumpsgemm::num_kernel_candidates]
 		);
 void configure_instance_sm86(
+		cumpsgemm::gemm_module gemm_module[cumpsgemm::kernel_module_code::max_code][cumpsgemm::num_kernel_candidates],
+		cumpsgemm::gemm_module gemm_stridedBatch_module[cumpsgemm::kernel_module_code::max_code][cumpsgemm::num_kernel_candidates]
+		);
+void configure_instance_simt(
 		cumpsgemm::gemm_module gemm_module[cumpsgemm::kernel_module_code::max_code][cumpsgemm::num_kernel_candidates],
 		cumpsgemm::gemm_module gemm_stridedBatch_module[cumpsgemm::kernel_module_code::max_code][cumpsgemm::num_kernel_candidates]
 		);

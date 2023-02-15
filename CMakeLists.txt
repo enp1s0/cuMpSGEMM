@@ -33,6 +33,7 @@ set(
 	${SRCDIR}/culip.cu
 	${SRCDIR}/instance_sm80.cu
 	${SRCDIR}/instance_sm86.cu
+	${SRCDIR}/instance_simt.cu
 	${SUBMODULEDIR}/cuGEMM-Mx2x2/src/main.cu
 	${HEADERS}
 	)
@@ -72,6 +73,15 @@ target_include_directories(cumpsgemm_rule PUBLIC ${INCDIR})
 target_link_libraries(cumpsgemm_rule PRIVATE
 	cuda
 	)
+
+##########################################################################
+# Installing
+##########################################################################
+install(TARGETS cumpsgemm
+	LIBRARY DESTINATION lib
+	PUBLIC_HEADER DESTINATION include/cumpsgemm
+	)
+
 
 ##########################################################################
 # Tests

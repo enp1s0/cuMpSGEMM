@@ -63,6 +63,7 @@ export CUMPSGEMM_COMPUTE_MODE=FP16TCEC
 |`CUBLAS_TF32`         | TF32                           | No               |
 |`AUTO`                | AUTO                           | Yes              |
 |`FP16TCEC_SCALING`    | FP16                           | Yes              |
+|`FP32_SIMT`           | (FP32 SIMT Core)               | No               |
 |`DRY_RUN`             | Nothing is computed            | No               |
 
 #### Custom rule

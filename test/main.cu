@@ -25,6 +25,7 @@ enum implementation_type {
 	FP16TCEC = CUMPSGEMM_FP16TCEC,
 	FP16TC   = CUMPSGEMM_FP16TC,
 	FP16TCEC_SCALING = CUMPSGEMM_FP16TCEC_SCALING,
+	FP32_SIMT = CUMPSGEMM_FP32_SIMT,
 };
 
 cuMpSGEMM_compute_mode_t get_compute_mode(
@@ -59,6 +60,7 @@ std::string get_implementation_type_name_str(
 	case FP16TC:           return "FP16TC";
 	case TF32TCEC:         return "TF32TCEC";
 	case TF32TC:           return "TF32TC";
+	case FP32_SIMT:        return "FP32_SIMT";
 	default:               return "Unknown(" + std::to_string(imp) + ")";
 	}
 }
@@ -856,6 +858,8 @@ void test_logged_shape(
 			compute_mode = CUMPSGEMM_TF32TC;
 		} else if (mode == "TF32TCEC") {
 			compute_mode = CUMPSGEMM_TF32TCEC;
+		} else if (mode == "FP32_SIMT") {
+			compute_mode = CUMPSGEMM_FP32_SIMT;
 		} else {
 			throw std::runtime_error("Unknown compute mode : " + mode);
 		}
@@ -1342,7 +1346,7 @@ void print_usage(const char* program_name) {
 			"      : %s cgemm_strided_batch_exp_stats [N] [batch_size] [ignore_threshold] [underflow_threshold]\n"
 			"      : %s sgemm_exp_stats_bw [min_log_N] [max_log_N] [batch_size]\n"
 			"      : %s cgemm_exp_stats_bw [min_log_N] [max_log_N] [batch_size]\n"
-			"- compute mode : FP16TCEC, TF32TCEC, FP16TC, TF32TC, FP16TCEC_SCALING, CUBLAS\n"
+			"- compute mode : FP16TCEC, TF32TCEC, FP16TC, TF32TC, FP16TCEC_SCALING, FP32_SIMT, CUBLAS\n"
 			,
 			program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name
 			);
@@ -1362,6 +1366,7 @@ std::vector<implementation_type> gen_implementation_list(
 		} else if (imp_name_str == "TF32TCEC") {         imp_list.push_back(TF32TCEC);
 		} else if (imp_name_str == "TF32TC") {           imp_list.push_back(TF32TC);
 		} else if (imp_name_str == "FP16TCEC_SCALING") { imp_list.push_back(FP16TCEC_SCALING);
+		} else if (imp_name_str == "FP32_SIMT") {        imp_list.push_back(FP32_SIMT);
 		} else {
 			std::printf("Unknown compute mode : %s\n", imp_name_str.c_str());
 		}

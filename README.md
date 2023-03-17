@@ -1,11 +1,6 @@
 # cuMpSGEMM - CUDA Mutable-precision SGEMM
 
-An SGEMM precision tolerance checking library hijacking cuBLAS SGEMM function call.
-
-**Note**
-
-This library is only for checking SGEMM precision tolerance.
-The computing throughput is low since we don't optimize the kernel function.
+A library for executing SGEMM emulation on Tensor Cores intercepting the cuBLAS function calls for A100 GPU.
 
 ## Supported functions
 - `cublasSgemm`

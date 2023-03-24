@@ -12,6 +12,10 @@ extern "C" cuMpSGEMM_compute_mode_t cuMpSGEMM_get_compute_mode (
 	const char* env_name = "CUMPSGEMM_COMPUTE_MODE";
 	const char* env_val = getenv(env_name);
 
+	if (m <= 1024 || n <= 1024 || k <= 1024) {
+		return CUMPSGEMM_CUBLAS_SIMT;
+	}
+
 	if (env_val != nullptr) {
 		const std::string env_val_str = env_val;
 		if (env_val_str == "FP16TCEC")

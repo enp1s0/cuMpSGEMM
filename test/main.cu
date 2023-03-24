@@ -84,12 +84,30 @@ __device__ double mad(
 	return static_cast<double>(a) * static_cast<double>(b) + c;
 }
 
+__device__ double mad(
+		const double a,
+		const float b,
+		const double c
+		) {
+	return static_cast<double>(a) * static_cast<double>(b) + c;
+}
+
 __device__ double2 mad(
 		const float2 a,
 		const float2 b,
 		const double2 c
 		) {
 	const auto dbl_a = cuComplexFloatToDouble(a);
+	const auto dbl_b = cuComplexFloatToDouble(b);
+	return cuCadd(cuCmul(dbl_a, dbl_b), c);
+}
+
+__device__ double2 mad(
+		const double2 a,
+		const float2 b,
+		const double2 c
+		) {
+	const auto dbl_a = a;
 	const auto dbl_b = cuComplexFloatToDouble(b);
 	return cuCadd(cuCmul(dbl_a, dbl_b), c);
 }
@@ -153,6 +171,11 @@ __host__ __device__ T zero() {return 0;}
 template <> __host__ __device__ cuComplex zero() {return make_cuComplex(0, 0);}
 template <> __host__ __device__ cuDoubleComplex zero() {return make_cuDoubleComplex(0, 0);}
 
+template <class T>
+__host__ __device__ bool is_zero(const T a) {return a == 0;}
+template <> __host__ __device__ bool is_zero<cuComplex>(const cuComplex a) {return a.x == 0 && a.y == 0;}
+template <> __host__ __device__ bool is_zero<cuDoubleComplex>(const cuDoubleComplex a) {return a.x == 0 && a.y == 0;}
+
 
 template <class T>
 __global__ void calc_matmul_residual_kernel(
@@ -163,9 +186,12 @@ __global__ void calc_matmul_residual_kernel(
 		const unsigned m,
 		const unsigned n,
 		const unsigned k,
+		const T alpha,
 		const T* const a_ptr, const unsigned lda,
 		const T* const b_ptr, const unsigned ldb,
-		const T* const c_ptr, const unsigned ldc
+		const T beta,
+		const T* const c_ptr, const unsigned ldc,
+		const T* const r_ptr, const unsigned ldr
 		) {
 	const auto tid = blockDim.x * blockIdx.x + threadIdx.x;
 	if (tid >= m * n) return;
@@ -197,8 +223,14 @@ __global__ void calc_matmul_residual_kernel(
 		const auto aa = load_with_op(a_ptr + a_index, op_A);
 		const auto bb = load_with_op(b_ptr + b_index, op_B);
 	}
+
+	if (is_zero(beta) || c_ptr == nullptr) {
+		c = mad(c, alpha, zero<typename doubled_t<T>::type>());
+	} else {
+		c = mad(c, alpha, mad(beta, c_ptr[c_m + c_n * ldc], zero<typename doubled_t<T>::type>()));
+	}
 	const auto base_norm2 = norm2(c);
-	const auto diff_norm2 = diff2(c, c_ptr[c_m + c_n * ldc]);
+	const auto diff_norm2 = diff2(c, r_ptr[c_m + c_n * ldc]);
 
 	atomicAdd(base_norm2_ptr, base_norm2);
 	atomicAdd(diff_norm2_ptr, diff_norm2);
@@ -211,9 +243,12 @@ double calc_matmul_residual(
 		const unsigned m,
 		const unsigned n,
 		const unsigned k,
+		const T alpha,
 		const T* const a_ptr, const unsigned lda,
 		const T* const b_ptr, const unsigned ldb,
-		const T* const c_ptr, const unsigned ldc
+		const T beta,
+		const T* const c_ptr, const unsigned ldc,
+		const T* const r_ptr, const unsigned ldr
 		) {
 	auto base_norm2_ptr = cutf::memory::malloc_managed<double>(1);
 	auto diff_norm2_ptr = cutf::memory::malloc_managed<double>(1);
@@ -230,9 +265,12 @@ double calc_matmul_residual(
 			base_norm2_ptr, diff_norm2_ptr,
 			op_A, op_B,
 			m, n, k,
+			alpha,
 			a_ptr, lda,
 			b_ptr, ldb,
-			c_ptr, ldc
+			beta,
+			c_ptr, ldc,
+			r_ptr, ldr
 			);
 	cudaDeviceSynchronize();
 
@@ -242,6 +280,37 @@ double calc_matmul_residual(
 	cutf::memory::free(diff_norm2_ptr);
 
 	return residual;
+}
+
+template <class T>
+__global__ void copy_matrix_kernel(
+		T* dst_ptr, const std::size_t ldd,
+		const T* src_ptr, const std::size_t lds,
+		const std::size_t m, const std::size_t n
+		) {
+	const auto tid = threadIdx.x + blockIdx.x * blockDim.x;
+	if (tid >= m * n) {
+		return;
+	}
+
+	const auto mi = tid % m;
+	const auto ni = tid / m;
+
+	dst_ptr[mi + mi * ldd] = src_ptr[mi + ni * lds];
+}
+
+template <class T>
+void copy_matrix(
+		T* dst_ptr, const std::size_t ldd,
+		const T* src_ptr, const std::size_t lds,
+		const std::size_t m, const std::size_t n
+		) {
+	constexpr std::size_t block_size = 256;
+	copy_matrix_kernel<<<(m * n + block_size - 1) / block_size, block_size>>>(
+			dst_ptr, ldd,
+			src_ptr, lds,
+			m, n
+			);
 }
 
 void cublas_gemm(
@@ -360,6 +429,7 @@ int sgemm_test_core(
 		T* const a_ptr, const unsigned lda,
 		T* const b_ptr, const unsigned ldb,
 		T* const c_ptr, const unsigned ldc,
+		T* const r_ptr, const unsigned ldr,
 		const cuMpSGEMM_compute_mode_t compute_mode,
 		const bool scaling = false
 		) {
@@ -411,6 +481,9 @@ int sgemm_test_core(
 		}
 	};
 
+	// C to R
+	copy_matrix(r_ptr, ldr, c_ptr, ldc, m, n);
+
 	gemm_func(true);
 
 	CUTF_CHECK_ERROR(cudaDeviceSynchronize());
@@ -418,8 +491,11 @@ int sgemm_test_core(
 	const auto residual = calc_matmul_residual(
 					op_A, op_B,
 					m, n, k,
+					alpha,
 					a_ptr, lda,
 					b_ptr, ldb,
+					beta,
+					r_ptr, ldr,
 					c_ptr, ldc
 			);
 	const auto check = residual < error_threshold(compute_mode, k);
@@ -541,8 +617,11 @@ int sgemm_strided_batch_test_core(
 	 	residual += calc_matmul_residual(
 					op_A, op_B,
 					m, n, k,
+					one<T>(),
 					a_ptr + stride_a * b, lda,
 					b_ptr + stride_b * b, ldb,
+					zero<T>(),
+					reinterpret_cast<T*>(0), 0,
 					c_ptr + stride_c * b, ldc
 			);
 	}
@@ -598,6 +677,7 @@ void gemm_test(const std::size_t min_N, const std::size_t max_N, const std::size
 	float* a_ptr = cutf::memory::malloc<float>(max_num_elements);
 	float* b_ptr = cutf::memory::malloc<float>(max_num_elements);
 	float* c_ptr = cutf::memory::malloc<float>(max_num_elements);
+	float* r_ptr = cutf::memory::malloc<float>(max_num_elements);
 
 	auto curand_gen = cutf::curand::get_curand_unique_ptr(CURAND_RNG_PSEUDO_PHILOX4_32_10);
 	CUTF_CHECK_ERROR(curandSetPseudoRandomGeneratorSeed(*curand_gen.get(), seed));
@@ -649,6 +729,7 @@ void gemm_test(const std::size_t min_N, const std::size_t max_N, const std::size
 								a_ptr, N,
 								b_ptr, N,
 								c_ptr, N,
+								r_ptr, N,
 								mode,
 								scaling
 								);
@@ -672,6 +753,7 @@ void gemm_test(const std::size_t min_N, const std::size_t max_N, const std::size
 								reinterpret_cast<cuComplex*>(a_ptr), N,
 								reinterpret_cast<cuComplex*>(b_ptr), N,
 								reinterpret_cast<cuComplex*>(c_ptr), N,
+								reinterpret_cast<cuComplex*>(r_ptr), N,
 								mode,
 								scaling
 								);
@@ -904,6 +986,7 @@ void test_logged_shape(
 						m, n, k,
 						a_ptr, (op_A == CUBLAS_OP_N ? m : k),
 						b_ptr, (op_B == CUBLAS_OP_N ? k : n),
+						reinterpret_cast<float*>(0), 0,
 						c_ptr, m,
 						compute_mode
 						);
@@ -916,6 +999,7 @@ void test_logged_shape(
 						m, n, k,
 						reinterpret_cast<cuComplex*>(a_ptr), (op_A == CUBLAS_OP_N ? m : k),
 						reinterpret_cast<cuComplex*>(b_ptr), (op_B == CUBLAS_OP_N ? k : n),
+						reinterpret_cast<cuComplex*>(0), 0,
 						reinterpret_cast<cuComplex*>(c_ptr), m,
 						compute_mode
 						);
@@ -1205,19 +1289,28 @@ void gemm_exp_stats_test(
 
 		for (unsigned b = 0; b < batch_size; b++) {
 			if (gemm == gemm_type::s) {
+				const float alpha = 1.0f, beta = 0.0f;
 				residual += calc_matmul_residual(
 						CUBLAS_OP_N, CUBLAS_OP_N,
 						N, N, N,
+						alpha,
 						a_org_ptr + b * N * N, N,
 						b_org_ptr + b * N * N, N,
+						beta,
+						reinterpret_cast<float*>(0), N,
 						c_ptr + b * N * N, N
 						);
 			} else {
+				const cuComplex alpha = make_float2(1, 0);
+				const cuComplex beta = make_float2(0, 0);
 				residual += calc_matmul_residual(
 						CUBLAS_OP_N, CUBLAS_OP_N,
 						N, N, N,
+						alpha,
 						reinterpret_cast<cuComplex*>(a_org_ptr) + b * N * N, N,
 						reinterpret_cast<cuComplex*>(b_org_ptr) + b * N * N, N,
+						beta,
+						reinterpret_cast<cuComplex*>(0), N,
 						reinterpret_cast<cuComplex*>(c_ptr) + b * N * N, N
 						);
 			}

@@ -1055,6 +1055,9 @@ cuMpSGEMM_handle* cumpsgemm::hijack_control::get_internal_global_handle() {
 }
 
 void cumpsgemm::hijack_control::set_compute_mode(const cuMpSGEMM_compute_mode_t mode) {
+	if (mode == CUMPSGEMM_FP32_SIMT) {
+		throw std::runtime_error("CUMPSGEMM_FP32_SIMT mode is currently not supported.");
+	}
 	internal_global_compute_mode = mode;
 	hijack_mode = static_mode;
 }

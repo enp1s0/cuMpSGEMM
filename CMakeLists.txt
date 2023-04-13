@@ -33,7 +33,7 @@ set(
 	${SRCDIR}/culip.cu
 	${SRCDIR}/instance_sm80.cu
 	${SRCDIR}/instance_sm86.cu
-	${SRCDIR}/instance_simt.cu
+	#${SRCDIR}/instance_simt.cu
 	${SUBMODULEDIR}/cuGEMM-Mx2x2/src/main.cu
 	${HEADERS}
 	)

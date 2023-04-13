@@ -38,8 +38,8 @@ extern "C" cuMpSGEMM_compute_mode_t cuMpSGEMM_get_compute_mode (
 			return CUMPSGEMM_AUTO;
 		if (env_val_str == "FP16TCEC_SCALING")
 			return CUMPSGEMM_FP16TCEC_SCALING;
-		if (env_val_str == "FP32_SIMT")
-			return CUMPSGEMM_FP32_SIMT;
+		//if (env_val_str == "FP32_SIMT")
+		//	return CUMPSGEMM_FP32_SIMT;
 	}
 
 	return CUMPSGEMM_CUBLAS;

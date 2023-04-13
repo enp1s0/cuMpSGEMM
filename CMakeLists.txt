@@ -4,6 +4,8 @@ project(cuMpSGEMM LANGUAGES CXX CUDA)
 find_package(CUDA 11.0 REQUIRED)
 find_package(CUDAToolkit REQUIRED)
 
+set(BUILD_TEST OFF)
+
 # CUDA/CXX
 foreach(lang CXX CUDA)
     set(CMAKE_${lang}_STANDARD          17)
@@ -86,12 +88,14 @@ install(TARGETS cumpsgemm
 ##########################################################################
 # Tests
 ##########################################################################
-set(TESTSRCDIR test)
-add_executable(cumpsgemm_test ${TESTSRCDIR}/main.cu ${HEADERS})
-target_include_directories(cumpsgemm_test PRIVATE ${INCDIR} ${SUBMODULEDIR}/cutf/include ${SUBMODULEDIR}/wmma_extension/include)
-target_link_libraries(cumpsgemm_test PRIVATE
-	CUDA::cublas
-	cumpsgemm_static
-	cuda
-	curand
-	)
+if (${BUILD_TEST})
+	set(TESTSRCDIR test)
+	add_executable(cumpsgemm_test ${TESTSRCDIR}/main.cu ${HEADERS})
+	target_include_directories(cumpsgemm_test PRIVATE ${INCDIR} ${SUBMODULEDIR}/cutf/include ${SUBMODULEDIR}/wmma_extension/include ${TESTSRCDIR}/mateval/include)
+	target_link_libraries(cumpsgemm_test PRIVATE
+		CUDA::cublas
+		cumpsgemm_static
+		cuda
+		curand
+		)
+endif()

@@ -322,7 +322,7 @@ cublasStatus_t cumpsgemm::gemm(
 
 			// Main GEMM
 			if (used_kernel_modeule_id != nullptr) {
-				*used_kernel_modeule_id = ~0u;
+				*used_kernel_modeule_id = 100;
 			}
 			const auto gemm_module = handle->gemm_atomic_module[code];
 

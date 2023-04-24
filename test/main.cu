@@ -787,6 +787,7 @@ void gemm_tall_skinny_test(const std::size_t N, const std::size_t min_K, const s
 	float* a_ptr = cutf::memory::malloc<float>(max_num_AB_elements);
 	float* b_ptr = cutf::memory::malloc<float>(max_num_AB_elements);
 	float* c_ptr = cutf::memory::malloc<float>(num_C_elements);
+	float* r_ptr = cutf::memory::malloc<float>(num_C_elements);
 
 	auto curand_gen = cutf::curand::get_curand_unique_ptr(CURAND_RNG_PSEUDO_PHILOX4_32_10);
 	CUTF_CHECK_ERROR(curandSetPseudoRandomGeneratorSeed(*curand_gen.get(), seed));
@@ -838,6 +839,7 @@ void gemm_tall_skinny_test(const std::size_t N, const std::size_t min_K, const s
 								a_ptr, op_A == CUBLAS_OP_N ? N : K,
 								b_ptr, op_B == CUBLAS_OP_N ? K : N,
 								c_ptr, N,
+								r_ptr, N,
 								mode,
 								scaling
 								);
@@ -861,6 +863,7 @@ void gemm_tall_skinny_test(const std::size_t N, const std::size_t min_K, const s
 								reinterpret_cast<cuComplex*>(a_ptr), op_A == CUBLAS_OP_N ? N : K,
 								reinterpret_cast<cuComplex*>(b_ptr), op_B == CUBLAS_OP_N ? K : N,
 								reinterpret_cast<cuComplex*>(c_ptr), N,
+								reinterpret_cast<cuComplex*>(r_ptr), N,
 								mode,
 								scaling
 								);
@@ -1544,17 +1547,13 @@ void print_usage(const char* program_name) {
 			"      : %s cgemm_exp_stats [N] [ignore_threshold] [underflow_threshold]\n"
 			"      : %s sgemm_strided_batch_exp_stats [N] [batch_size] [ignore_threshold] [underflow_threshold]\n"
 			"      : %s cgemm_strided_batch_exp_stats [N] [batch_size] [ignore_threshold] [underflow_threshold]\n"
-<<<<<<< HEAD
 			"      : %s sgemm_exp_stats_bw [min_log_N] [max_log_N] [batch_size]\n"
 			"      : %s cgemm_exp_stats_bw [min_log_N] [max_log_N] [batch_size]\n"
-			"- compute mode : FP16TCEC, TF32TCEC, FP16TC, TF32TC, FP16TCEC_SCALING, CUBLAS\n"
-=======
 			"      : %s sgemm_tall_skinny [exp2|seq] [MN] [min_K] [max_K] [interval] [compute mode list...]\n"
 			"      : %s cgemm_tall_skinny [exp2|seq] [MN] [min_K] [max_K] [interval] [compute mode list...]\n"
-			"- compute mode : FP16TCEC, TF32TCEC, FP16TC, TF32TC, FP16TCEC_scaling, CUBLAS\n"
->>>>>>> 418bf9bfd3d73f94aef5379722cd7b1c9c884b31
+			"- compute mode : FP16TCEC, TF32TCEC, FP16TC, TF32TC, FP16TCEC_SCALING, CUBLAS\n"
 			,
-			program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name
+			program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name
 			);
 	std::fflush(stderr);
 }

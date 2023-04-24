@@ -1,7 +1,6 @@
 #include <iostream>
 #include <cassert>
 #include <type_traits>
-#include <cublas.h>
 #include <cutf/cuda.hpp>
 #include <cutf/memory.hpp>
 #include <cumpsgemm/cumpsgemm.hpp>
@@ -25,10 +24,11 @@ cumpsgemm::kernel_module_code::code_t gen_module_code(
 		) {
 	cumpsgemm::kernel_module_code::code_t code = 0;
 	switch (compute_mode) {
-	case CUMPSGEMM_FP16TC:   code |= cumpsgemm::kernel_module_code::half | cumpsgemm::kernel_module_code::without_ec;break;
-	case CUMPSGEMM_FP16TCEC: code |= cumpsgemm::kernel_module_code::half | cumpsgemm::kernel_module_code::with_ec   ;break;
-	case CUMPSGEMM_TF32TC:   code |= cumpsgemm::kernel_module_code::tf32 | cumpsgemm::kernel_module_code::without_ec;break;
-	case CUMPSGEMM_TF32TCEC: code |= cumpsgemm::kernel_module_code::tf32 | cumpsgemm::kernel_module_code::with_ec   ;break;
+	case CUMPSGEMM_FP16TC:    code |= cumpsgemm::kernel_module_code::half | cumpsgemm::kernel_module_code::without_ec;break;
+	case CUMPSGEMM_FP16TCEC:  code |= cumpsgemm::kernel_module_code::half | cumpsgemm::kernel_module_code::with_ec   ;break;
+	case CUMPSGEMM_TF32TC:    code |= cumpsgemm::kernel_module_code::tf32 | cumpsgemm::kernel_module_code::without_ec;break;
+	case CUMPSGEMM_TF32TCEC:  code |= cumpsgemm::kernel_module_code::tf32 | cumpsgemm::kernel_module_code::with_ec   ;break;
+	case CUMPSGEMM_FP32_SIMT: code |= cumpsgemm::kernel_module_code::simt | cumpsgemm::kernel_module_code::without_ec;break;
 	default:break;
 	}
 	auto op_A_ = op_A;
@@ -284,8 +284,8 @@ cublasStatus_t cumpsgemm::gemm(
 			const auto kernel_module_candidate_list = handle->gemm_module[code];
 
 			unsigned module_id;
-			auto gemm_module = kernel_module_candidate_list[handle->num_kernel_candidates - 1];
-			for (module_id = 0; module_id < handle->num_kernel_candidates - 1; module_id++) {
+			auto gemm_module = kernel_module_candidate_list[cumpsgemm::num_kernel_candidates - 1];
+			for (module_id = 0; module_id < cumpsgemm::num_kernel_candidates - 1; module_id++) {
 				const auto module = kernel_module_candidate_list[module_id];
 				if (m * n / (module.smem_m * module.smem_n) > handle->num_sms * 2 /*A magic number :) */) {
 					gemm_module = module;
@@ -297,6 +297,7 @@ cublasStatus_t cumpsgemm::gemm(
 				*used_kernel_modeule_id = module_id;
 			}
 
+			if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.start_timer_sync("gemm_kernel");}
 			launch_kernel<T>(
 					gemm_module,
 					nullptr,
@@ -308,6 +309,7 @@ cublasStatus_t cumpsgemm::gemm(
 					c_dmem_ptr, ldc,
 					handle->cuda_stream
 					);
+			if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.stop_timer_sync("gemm_kernel");}
 		} else {
 			T* r_c_dmem_ptr = c_dmem_ptr;
 			uint64_t r_ldc = ldc;
@@ -323,6 +325,8 @@ cublasStatus_t cumpsgemm::gemm(
 				*used_kernel_modeule_id = ~0u;
 			}
 			const auto gemm_module = handle->gemm_atomic_module[code];
+
+			if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.start_timer_sync("gemm_kernel");}
 			launch_atomic_kernel<T>(
 					gemm_module,
 					nullptr,
@@ -347,6 +351,7 @@ cublasStatus_t cumpsgemm::gemm(
 						handle->cuda_stream
 						);
 			}
+			if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.stop_timer_sync("gemm_kernel");}
 		}
 	} else {
 		const auto code_A = gen_module_code<T>(op_A, op_B, handle->dynamic_launch_handle->mode_A);
@@ -357,10 +362,10 @@ cublasStatus_t cumpsgemm::gemm(
 			const auto kernel_module_candidate_list_B = handle->gemm_module[code_B];
 
 			unsigned module_id;
-			auto gemm_module_A = kernel_module_candidate_list_A[handle->num_kernel_candidates - 1];
-			auto gemm_module_B = kernel_module_candidate_list_B[handle->num_kernel_candidates - 1];
+			auto gemm_module_A = kernel_module_candidate_list_A[cumpsgemm::num_kernel_candidates - 1];
+			auto gemm_module_B = kernel_module_candidate_list_B[cumpsgemm::num_kernel_candidates - 1];
 
-			for (module_id = 0; module_id < handle->num_kernel_candidates - 1; module_id++) {
+			for (module_id = 0; module_id < cumpsgemm::num_kernel_candidates - 1; module_id++) {
 				const auto module = kernel_module_candidate_list_A[module_id];
 				if (m * n / (module.smem_m * module.smem_n) > handle->num_sms * 2 /*A magic number :) */) {
 					gemm_module_A = module;
@@ -368,7 +373,7 @@ cublasStatus_t cumpsgemm::gemm(
 				}
 			}
 
-			for (module_id = 0; module_id < handle->num_kernel_candidates - 1; module_id++) {
+			for (module_id = 0; module_id < cumpsgemm::num_kernel_candidates - 1; module_id++) {
 				const auto module = kernel_module_candidate_list_B[module_id];
 				if (m * n / (module.smem_m * module.smem_n) > handle->num_sms * 2 /*A magic number :) */) {
 					gemm_module_B = module;
@@ -380,7 +385,8 @@ cublasStatus_t cumpsgemm::gemm(
 				*used_kernel_modeule_id = 100;
 			}
 
-			launch_atomic_kernel<T>(
+			if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.start_timer_sync("gemm_kernel_A");}
+			launch_kernel<T>(
 					gemm_module_A,
 					handle->dynamic_launch_handle->flag_buffer + handle->dynamic_launch_handle->enabled_id,
 					m, n, k,
@@ -391,7 +397,10 @@ cublasStatus_t cumpsgemm::gemm(
 					c_dmem_ptr, ldc,
 					handle->cuda_stream
 					);
-			launch_atomic_kernel<T>(
+			if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.stop_timer_sync("gemm_kernel_A");}
+
+			if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.start_timer_sync("gemm_kernel_B");}
+			launch_kernel<T>(
 					gemm_module_B,
 					handle->dynamic_launch_handle->flag_buffer + handle->dynamic_launch_handle->enabled_id,
 					m, n, k,
@@ -402,6 +411,7 @@ cublasStatus_t cumpsgemm::gemm(
 					c_dmem_ptr, ldc,
 					handle->cuda_stream
 					);
+			if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.stop_timer_sync("gemm_kernel_B");}
 		} else {
 			T* r_c_dmem_ptr = c_dmem_ptr;
 			uint64_t r_ldc = ldc;
@@ -420,6 +430,7 @@ cublasStatus_t cumpsgemm::gemm(
 				*used_kernel_modeule_id = ~0u;
 			}
 
+			if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.start_timer_sync("gemm_kernel_A");}
 			launch_kernel<T>(
 					gemm_module_A,
 					handle->dynamic_launch_handle->flag_buffer + handle->dynamic_launch_handle->enabled_id,
@@ -431,6 +442,8 @@ cublasStatus_t cumpsgemm::gemm(
 					r_c_dmem_ptr, r_ldc,
 					handle->cuda_stream
 					);
+			if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.stop_timer_sync("gemm_kernel_A");}
+			if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.start_timer_sync("gemm_kernel_B");}
 			launch_kernel<T>(
 					gemm_module_B,
 					handle->dynamic_launch_handle->flag_buffer + handle->dynamic_launch_handle->enabled_id,
@@ -442,6 +455,7 @@ cublasStatus_t cumpsgemm::gemm(
 					r_c_dmem_ptr, r_ldc,
 					handle->cuda_stream
 					);
+			if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.stop_timer_sync("gemm_kernel_B");}
 			// post process if needed
 			if (!cumpsgemm::device::is_zero(*beta)) {
 				post_atomic(
@@ -502,8 +516,8 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 		const auto kernel_module_candidate_list = handle->gemm_stridedBatch_module[code];
 
 		unsigned module_id;
-		auto gemm_module = kernel_module_candidate_list[handle->num_kernel_candidates - 1];
-		for (module_id = 0; module_id < handle->num_kernel_candidates - 1; module_id++) {
+		auto gemm_module = kernel_module_candidate_list[cumpsgemm::num_kernel_candidates - 1];
+		for (module_id = 0; module_id < cumpsgemm::num_kernel_candidates - 1; module_id++) {
 			const auto module = kernel_module_candidate_list[module_id];
 			if (m * n / (module.smem_m * module.smem_n) * batch_count > handle->num_sms * 32 /*A magic number :) */) {
 				gemm_module = module;
@@ -515,6 +529,7 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 			*used_kernel_modeule_id = module_id;
 		}
 
+		if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.start_timer_sync("batched_gemm_kernel");}
 		launch_kernel<T>(
 				gemm_module,
 				nullptr,
@@ -527,6 +542,7 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 				batch_count,
 				handle->cuda_stream
 				);
+		if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.stop_timer_sync("batched_gemm_kernel");}
 	} else {
 		const auto code_A = gen_module_code<T>(op_A, op_B, handle->dynamic_launch_handle->mode_A);
 		const auto code_B = gen_module_code<T>(op_A, op_B, handle->dynamic_launch_handle->mode_B);
@@ -535,10 +551,10 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 		const auto kernel_module_candidate_list_B = handle->gemm_stridedBatch_module[code_B];
 
 		unsigned module_id;
-		auto gemm_module_A = kernel_module_candidate_list_A[handle->num_kernel_candidates - 1];
-		auto gemm_module_B = kernel_module_candidate_list_B[handle->num_kernel_candidates - 1];
+		auto gemm_module_A = kernel_module_candidate_list_A[cumpsgemm::num_kernel_candidates - 1];
+		auto gemm_module_B = kernel_module_candidate_list_B[cumpsgemm::num_kernel_candidates - 1];
 
-		for (module_id = 0; module_id < handle->num_kernel_candidates - 1; module_id++) {
+		for (module_id = 0; module_id < cumpsgemm::num_kernel_candidates - 1; module_id++) {
 			const auto module = kernel_module_candidate_list_A[module_id];
 			if (m * n / (module.smem_m * module.smem_n) * batch_count > handle->num_sms * 32 /*A magic number :) */) {
 				gemm_module_A = module;
@@ -546,7 +562,7 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 			}
 		}
 
-		for (module_id = 0; module_id < handle->num_kernel_candidates - 1; module_id++) {
+		for (module_id = 0; module_id < cumpsgemm::num_kernel_candidates - 1; module_id++) {
 			const auto module = kernel_module_candidate_list_B[module_id];
 			if (m * n / (module.smem_m * module.smem_n) * batch_count > handle->num_sms * 32 /*A magic number :) */) {
 				gemm_module_B = module;
@@ -558,6 +574,7 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 			*used_kernel_modeule_id = ~0u;
 		}
 
+		if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.start_timer_sync("batched_gemm_kernel_A");}
 		launch_kernel<T>(
 				gemm_module_A,
 				handle->dynamic_launch_handle->flag_buffer + handle->dynamic_launch_handle->enabled_id,
@@ -570,6 +587,9 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 				batch_count,
 				handle->cuda_stream
 				);
+		if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.stop_timer_sync("batched_gemm_kernel_A");}
+
+		if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.start_timer_sync("batched_gemm_kernel_B");}
 		launch_kernel<T>(
 				gemm_module_B,
 				handle->dynamic_launch_handle->flag_buffer + handle->dynamic_launch_handle->enabled_id,
@@ -582,6 +602,7 @@ cublasStatus_t cumpsgemm::gemm_stridedBatch(
 				batch_count,
 				handle->cuda_stream
 				);
+		if (handle->exp_stats_handle->profiling_enabled) {handle->exp_stats_handle->profiler.stop_timer_sync("batched_gemm_kernel_B");}
 	}
 
 	return CUBLAS_STATUS_SUCCESS;
@@ -759,6 +780,27 @@ unsigned cumpsgemm::exp_stats_ext(
 }
 template unsigned cumpsgemm::exp_stats_ext<float    >(cuMpSGEMM_handle_t, const unsigned, const unsigned, const float    * const, const unsigned, const unsigned, const unsigned);
 template unsigned cumpsgemm::exp_stats_ext<cuComplex>(cuMpSGEMM_handle_t, const unsigned, const unsigned, const cuComplex* const, const unsigned, const unsigned, const unsigned);
+
+template <class T>
+unsigned cumpsgemm::exp_max_ext(
+		cuMpSGEMM_handle_t handle,
+		const unsigned m,
+		const unsigned n,
+		const T* const ptr,
+		const unsigned ld,
+		const unsigned batch_size,
+		const unsigned stride
+		) {
+	cumpsgemm::exp_stats::exp_max_ext(
+			handle,
+			m, n,
+			ptr, ld,
+			batch_size, stride
+			);
+	return cumpsgemm::exp_stats::get_current_exp_stats_buffer_id(handle);
+}
+template unsigned cumpsgemm::exp_max_ext<float    >(cuMpSGEMM_handle_t, const unsigned, const unsigned, const float    * const, const unsigned, const unsigned, const unsigned);
+template unsigned cumpsgemm::exp_max_ext<cuComplex>(cuMpSGEMM_handle_t, const unsigned, const unsigned, const cuComplex* const, const unsigned, const unsigned, const unsigned);
 
 template <class T>
 void cumpsgemm::scale_A(
@@ -1032,4 +1074,36 @@ void cumpsgemm::set_dynamic_launch_buffer_by_exp_stats(
 			A_exp_stats_buffer_id,
 			B_exp_stats_buffer_id
 			);
+}
+
+void cumpsgemm::enable_exp_stats_profiling(cuMpSGEMM_handle* const handle) {
+	handle->exp_stats_handle->profiling_enabled = true;
+	handle->exp_stats_handle->profiler.set_cuda_stream(handle->cuda_stream);
+}
+
+void cumpsgemm::disable_exp_stats_profiling(cuMpSGEMM_handle* const handle) {
+	handle->exp_stats_handle->profiling_enabled = false;
+}
+
+void cumpsgemm::reset_exp_stats_profiling(cuMpSGEMM_handle* const handle) {
+	handle->exp_stats_handle->profiler.clear();
+}
+
+void cumpsgemm::print_exp_stats_profiling(cuMpSGEMM_handle* const handle, unsigned csv) {
+	if (csv) {
+		handle->exp_stats_handle->profiler.print_result_csv(stdout);
+	} else {
+		handle->exp_stats_handle->profiler.print_result(stdout);
+	}
+}
+
+std::unordered_map<std::string, cumpsgemm::debug::stats_t> cumpsgemm::debug::get_exp_stats_profiling_result(cuMpSGEMM_handle* const handle) {
+	const auto cutf_stats = handle->exp_stats_handle->profiler.get_statistics_list();
+
+	std::unordered_map<std::string, cumpsgemm::debug::stats_t> result;
+	for (const auto s : cutf_stats) {
+		result.insert(std::make_pair(s.name, cumpsgemm::debug::stats_t{.time_sum = s.sum * 1e-9, .n = s.n}));
+	}
+
+	return result;
 }

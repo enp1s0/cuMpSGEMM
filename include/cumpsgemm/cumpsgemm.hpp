@@ -1,6 +1,7 @@
 #ifndef __CUMPSGEMM_HPP__
 #define __CUMPSGEMM_HPP__
 #include <vector>
+#include <unordered_map>
 #include "cumpsgemm.h"
 
 namespace cumpsgemm {
@@ -46,6 +47,17 @@ cublasStatus_t gemm_stridedBatch(
 
 template <class T>
 unsigned exp_stats_ext(
+		cuMpSGEMM_handle_t handle,
+		const unsigned m,
+		const unsigned n,
+		const T* const ptr,
+		const unsigned ld,
+		const unsigned batch_size = 1,
+		const unsigned stride = 0
+		);
+
+template <class T>
+unsigned exp_max_ext(
 		cuMpSGEMM_handle_t handle,
 		const unsigned m,
 		const unsigned n,
@@ -180,5 +192,18 @@ void set_dynamic_launch_buffer_by_exp_stats(
 		const unsigned A_exp_stats_buffer_id,
 		const unsigned B_exp_stats_buffer_id
 		);
+
+void enable_exp_stats_profiling(cuMpSGEMM_handle* const handle);
+void disable_exp_stats_profiling(cuMpSGEMM_handle* const handle);
+void reset_exp_stats_profiling(cuMpSGEMM_handle* const handle);
+void print_exp_stats_profiling(cuMpSGEMM_handle* const handle, unsigned csv = false);
+
+namespace debug {
+struct stats_t {
+	double time_sum;
+	std::uint64_t n;
+};
+std::unordered_map<std::string, stats_t> get_exp_stats_profiling_result(cuMpSGEMM_handle* const handle);
+} // namespace internal
 } // namespace cumpsgemm
 #endif

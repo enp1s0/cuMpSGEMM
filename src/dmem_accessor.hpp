@@ -216,10 +216,11 @@ __device__ void dmem_store_core (
 		auto smem_local_ptr = smem_ptr + (m + n * (SMEM_M + SKEW));
 		auto dmem_local_ptr = dmem_ptr + (start_m + m) + static_cast<std::size_t>(start_n + n) * ld;
 
-		auto v = *reinterpret_cast<const VEC_T*>(smem_local_ptr);
+		auto v  = *reinterpret_cast<const VEC_T*>(smem_local_ptr);
+		auto dv = *reinterpret_cast<const VEC_T*>(dmem_local_ptr);
 		for (unsigned i = 0; i < v_bit_len / size_of<T>::value; i++) {
 			if constexpr (BETA) {
-				reinterpret_cast<T*>(&v)[i] = mad(reinterpret_cast<T*>(&v)[i], alpha, beta);
+				reinterpret_cast<T*>(&v)[i] = mad(reinterpret_cast<T*>(&v)[i], alpha, mul(beta, reinterpret_cast<T*>(&dv)[i]));
 			} else {
 				reinterpret_cast<T*>(&v)[i] = mul(reinterpret_cast<T*>(&v)[i], alpha);
 			}
@@ -230,9 +231,14 @@ __device__ void dmem_store_core (
 			smem_local_ptr += (SMEM_M + SKEW) * (v_bit_len / size_of<T>::value) * BLOCK_SIZE / SMEM_M;
 			dmem_local_ptr += static_cast<std::size_t>((v_bit_len / size_of<T>::value) * BLOCK_SIZE / SMEM_M) * ld;
 
-			auto v = *reinterpret_cast<const VEC_T*>(smem_local_ptr);
+			auto v  = *reinterpret_cast<const VEC_T*>(smem_local_ptr);
+			auto dv = *reinterpret_cast<const VEC_T*>(dmem_local_ptr);
 			for (unsigned i = 0; i < v_bit_len / size_of<T>::value; i++) {
-				reinterpret_cast<T*>(&v)[i] = mul(reinterpret_cast<T*>(&v)[i], alpha);
+				if constexpr (BETA) {
+					reinterpret_cast<T*>(&v)[i] = mad(reinterpret_cast<T*>(&v)[i], alpha, mul(beta, reinterpret_cast<T*>(&dv)[i]));
+				} else {
+					reinterpret_cast<T*>(&v)[i] = mul(reinterpret_cast<T*>(&v)[i], alpha);
+				}
 			}
 			*reinterpret_cast<VEC_T*>(dmem_local_ptr) = v;
 		}

@@ -1,5 +1,6 @@
 #include <string>
-#include <cublas.h>
+#include <sstream>
+#include <iomanip>
 #include <unistd.h>
 #include <dlfcn.h>
 #include <cumpsgemm/cumpsgemm.hpp>
@@ -13,8 +14,18 @@
 #include "dynamic_scaling.hpp"
 #include "culip.hpp"
 
-namespace {
+#ifndef CUBLASAPI
+#define CUBLASAPI
+#endif
 
+namespace {
+std::string get_XeY_format_string(const double a) {
+	std::stringstream ss;
+
+	ss << std::scientific << a;
+
+	return ss.str();
+}
 cuMpSGEMM_handle_t internal_global_cuMpSGEMM_handle = nullptr;
 std::string internal_global_last_called_function_str = "";
 bool global_internal_gemm_Mx2x2_enabled = false;
@@ -108,10 +119,26 @@ std::string get_cublas_op_str(const cublasOperation_t op) {
 	}
 }
 
+const std::string gemm_Mx2x2_env_name = "CUMPSGEMM_CUSTOM_GEMM_MX2X2";
+bool is_gemm_Mx2x2_enabled() {
+	if (global_internal_gemm_Mx2x2_enabled) {
+		return true;
+	}
+
+	const auto env = getenv(gemm_Mx2x2_env_name.c_str());
+	if (env == nullptr || std::string(env) == "0") {
+		return false;
+	}
+
+	return true;
+}
+
 cuMpSGEMM_handle_t cuMpSGEMM_get_internal_global_handle() {
 	if (internal_global_cuMpSGEMM_handle == nullptr) {
 		cuMpSGEMM_log("Initialize cuMpSGEMM handle...");
-		cuMpSGEMM_create(&internal_global_cuMpSGEMM_handle);
+		if (cuMpSGEMM_create(&internal_global_cuMpSGEMM_handle) != CUBLAS_STATUS_SUCCESS) {
+			cuMpSGEMM_error("Initialization failed.");
+		}
 
 
 		const auto init_float_by_env = [&](const std::string env_str, const float default_value) {
@@ -136,29 +163,17 @@ cuMpSGEMM_handle_t cuMpSGEMM_get_internal_global_handle() {
 		const auto underflow_tolerance_rate = init_float_by_env("CUMPSGEMM_AUTO_UNDERFLOW_TOLERANCE_RATE", 0);
 		const auto restore_AB_scaling       = init_int_by_env  ("CUMPSGEMM_AUTO_RESTORE_AB_SCALING"      , 1);
 
-		cuMpSGEMM_log("AUTO config: ignore_threshold=" + std::to_string(ignore_threshold));
-		cuMpSGEMM_log("AUTO config: underflow_threshold=" + std::to_string(underflow_threshold));
-		cuMpSGEMM_log("AUTO config: underflow_tolerance_rate=" + std::to_string(underflow_tolerance_rate));
-		cuMpSGEMM_log("AUTO config: restore_AB_scaling=" + std::to_string(restore_AB_scaling));
+		cuMpSGEMM_log("AUTO config: ignore_threshold="         + get_XeY_format_string(ignore_threshold)         + " @Init");
+		cuMpSGEMM_log("AUTO config: underflow_threshold="      + get_XeY_format_string(underflow_threshold)      + " @Init");
+		cuMpSGEMM_log("AUTO config: underflow_tolerance_rate=" + get_XeY_format_string(underflow_tolerance_rate) + " @Init");
+		cuMpSGEMM_log("AUTO config: restore_AB_scaling="       + std::to_string(restore_AB_scaling)            + " @Init");
+		cuMpSGEMM_log("CUSTOM_GEMM_MX2X2: " + std::string(is_gemm_Mx2x2_enabled() ? "enabled" : "disabled") + " @Init");
 
 		cumpsgemm::set_exp_stats_params(cuMpSGEMM_get_internal_global_handle(), ignore_threshold, underflow_threshold, underflow_tolerance_rate);
+		restore_AB = restore_AB_scaling;
 	}
 
 	return internal_global_cuMpSGEMM_handle;
-}
-
-const std::string gemm_Mx2x2_env_name = "CUMPSGEMM_CUSTOM_GEMM_MX2X2";
-bool is_gemm_Mx2x2_enabled() {
-	if (global_internal_gemm_Mx2x2_enabled) {
-		return true;
-	}
-
-	const auto env = getenv(gemm_Mx2x2_env_name.c_str());
-	if (env == nullptr || std::string(env) == "0") {
-		return false;
-	}
-
-	return true;
 }
 
 const std::string rule_lib_name = "libcumpsgemm_rule.so";
@@ -193,6 +208,8 @@ extern "C" const char* cuMpSGEMM_get_compute_mode_string (
 		return "UNDEFINED";
 	case CUMPSGEMM_FP16TCEC_SCALING:
 		return "FP16TCEC_SCALING";
+	case CUMPSGEMM_FP32_SIMT:
+		return "FP32_SIMT";
 	default:
 		break;
 	}
@@ -293,6 +310,7 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 			snprintf(profile_result.function_name, profile_result.function_name_length - 1, "%s-%s%s-m%lu-n%lu-k%lu", func_name.c_str(), cumpsgemm::CULiP::get_cublasOperation_t_string(op_A), cumpsgemm::CULiP::get_cublasOperation_t_string(op_B), m, n, k);
 			cumpsgemm::CULiP::launch_function(cuda_stream, &cumpsgemm::CULiP::record_timestamp, (void*)&profile_result.start_timestamp);
 		}
+		cuMpSGEMM_log(" +---> gemm_Mx2x2");
 
 		mtk::cugemm::gemm_Mx2x2(
 				op_A, op_B,
@@ -327,6 +345,7 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 			snprintf(profile_result.function_name, profile_result.function_name_length - 1, "%s-%s%s-m%lu-n%lu-k%lu", func_name.c_str(), cumpsgemm::CULiP::get_cublasOperation_t_string(op_A), cumpsgemm::CULiP::get_cublasOperation_t_string(op_B), m, n, k);
 			cumpsgemm::CULiP::launch_function(cuda_stream, &cumpsgemm::CULiP::record_timestamp, (void*)&profile_result.start_timestamp);
 		}
+		cuMpSGEMM_log(" +---> gemm_2xNx2");
 
 		mtk::cugemm::gemm_2xNx2(
 				op_A, op_B,
@@ -431,10 +450,14 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 					const auto gemm_mode = cumpsgemm::dynamic_launch::utils::get_gemm_flag(flag);
 					const auto scale_A = cumpsgemm::dynamic_launch::utils::get_scale_A_flag(flag);
 					const auto scale_B = cumpsgemm::dynamic_launch::utils::get_scale_B_flag(flag);
-					cuMpSGEMM_log(std::string("AUTO[ignore<") + std::to_string(cuMpSGEMM_get_internal_global_handle()->exp_stats_handle->ignore_threshold) + ", uf<"
-							+ std::to_string(cuMpSGEMM_get_internal_global_handle()->exp_stats_handle->underflow_threshold) + ", tolerance="
-							+ std::to_string(cuMpSGEMM_get_internal_global_handle()->exp_stats_handle->underflow_tolerance_rate)
-							+ "]: GEMM_MODE=" + cuMpSGEMM_get_compute_mode_string((cuMpSGEMM_compute_mode_t)gemm_mode) + ", scale_A=" + std::to_string(scale_A) + ", scale_B=" + std::to_string(scale_B));
+					const auto loss_rate_A = cumpsgemm::get_exp_stats(cuMpSGEMM_get_internal_global_handle(), A_exp_stats_id);
+					const auto loss_rate_B = cumpsgemm::get_exp_stats(cuMpSGEMM_get_internal_global_handle(), B_exp_stats_id);
+					cuMpSGEMM_log(std::string("AUTO[ignore<") + get_XeY_format_string(cuMpSGEMM_get_internal_global_handle()->exp_stats_handle->ignore_threshold) + ", uf<"
+							+ get_XeY_format_string(cuMpSGEMM_get_internal_global_handle()->exp_stats_handle->underflow_threshold) + ", tolerance="
+							+ get_XeY_format_string(cuMpSGEMM_get_internal_global_handle()->exp_stats_handle->underflow_tolerance_rate)
+							+ "]: GEMM_MODE=" + cuMpSGEMM_get_compute_mode_string((cuMpSGEMM_compute_mode_t)gemm_mode)
+							+ ", loss_A=" + std::to_string(loss_rate_A.first) + "/" + std::to_string(loss_rate_A.second) + "(" + std::to_string(static_cast<double>(loss_rate_A.first) / loss_rate_A.second) + "), scale_A=" + std::to_string(scale_A)
+							+ ", loss_B=" + std::to_string(loss_rate_B.first) + "/" + std::to_string(loss_rate_B.second) + "(" + std::to_string(static_cast<double>(loss_rate_B.first) / loss_rate_B.second) + "), scale_B=" + std::to_string(scale_B));
 					});
 
 			// Scaling
@@ -443,6 +466,18 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 
 			// Enable dynamic launch
 			cumpsgemm::dynamic_launch::set_dynamic_launch_flag_buffer_id(cuMpSGEMM_get_internal_global_handle(), dynamic_launch_id);
+		} else if (compute_mode == CUMPSGEMM_FP16TCEC_SCALING) {
+			// Force execution mode
+			dynamic_launch_id = 1;
+
+			cumpsgemm::exp_stats::exp_max_ext(cuMpSGEMM_get_internal_global_handle(), (op_A == CUBLAS_OP_N ? m : k), (op_A == CUBLAS_OP_N ? k : m), a_dmem_ptr, lda, 1, 0);
+			A_exp_stats_id = cumpsgemm::exp_stats::get_current_exp_stats_buffer_id(cuMpSGEMM_get_internal_global_handle());
+			cumpsgemm::exp_stats::exp_max_ext(cuMpSGEMM_get_internal_global_handle(), (op_B == CUBLAS_OP_N ? k : n), (op_B == CUBLAS_OP_N ? n : k), b_dmem_ptr, ldb, 1, 0);
+			B_exp_stats_id = cumpsgemm::exp_stats::get_current_exp_stats_buffer_id(cuMpSGEMM_get_internal_global_handle());
+
+			// Scaling
+			cumpsgemm::dynamic_scaling::scale_A(cuMpSGEMM_get_internal_global_handle(), (op_A == CUBLAS_OP_N ? m : k), (op_A == CUBLAS_OP_N ? k : m), const_cast<T*>(a_dmem_ptr), lda, 0, 1, A_exp_stats_id, dynamic_launch_id);
+			cumpsgemm::dynamic_scaling::scale_B(cuMpSGEMM_get_internal_global_handle(), (op_B == CUBLAS_OP_N ? k : n), (op_B == CUBLAS_OP_N ? n : k), const_cast<T*>(b_dmem_ptr), ldb, 0, 1, B_exp_stats_id, dynamic_launch_id);
 		}
 
 		res = cumpsgemm::gemm<T>(
@@ -454,10 +489,10 @@ cublasStatus_t cuMpSGEMM_hijack_core(
 				b_dmem_ptr, ldb,
 				beta,
 				c_dmem_ptr, ldc,
-				compute_mode
+				compute_mode == CUMPSGEMM_FP16TCEC_SCALING ? CUMPSGEMM_FP16TCEC : compute_mode
 				);
 
-		if (compute_mode == CUMPSGEMM_AUTO) {
+		if (compute_mode == CUMPSGEMM_AUTO || compute_mode == CUMPSGEMM_FP16TCEC_SCALING) {
 			cumpsgemm::dynamic_scaling::scale_C(cuMpSGEMM_get_internal_global_handle(), m, n, c_dmem_ptr, ldc, 0, 1, A_exp_stats_id, B_exp_stats_id, dynamic_launch_id);
 
 			// restore A and B
@@ -549,6 +584,7 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 					func_name.c_str(), cumpsgemm::CULiP::get_cublasOperation_t_string(op_A), cumpsgemm::CULiP::get_cublasOperation_t_string(op_B), m, n, k, batch_count);
 			cumpsgemm::CULiP::launch_function(cuda_stream, &cumpsgemm::CULiP::record_timestamp, (void*)&profile_result.start_timestamp);
 		}
+		cuMpSGEMM_log(" +---> gemm_Mx2x2");
 
 		mtk::cugemm::gemm_strided_batch_Mx2x2(
 				op_A, op_B,
@@ -585,6 +621,7 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 					func_name.c_str(), cumpsgemm::CULiP::get_cublasOperation_t_string(op_A), cumpsgemm::CULiP::get_cublasOperation_t_string(op_B), m, n, k, batch_count);
 			cumpsgemm::CULiP::launch_function(cuda_stream, &cumpsgemm::CULiP::record_timestamp, (void*)&profile_result.start_timestamp);
 		}
+		cuMpSGEMM_log(" +---> gemm_2xNx2");
 
 		mtk::cugemm::gemm_strided_batch_2xNx2(
 				op_A, op_B,
@@ -670,6 +707,40 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 			dynamic_launch_id = cumpsgemm::dynamic_launch::get_next_dynamic_launch_flag_buffer_id(cuMpSGEMM_get_internal_global_handle());
 			cumpsgemm::dynamic_scaling::set_dynamic_launch_buffer_by_exp_stats(cuMpSGEMM_get_internal_global_handle(), dynamic_launch_id, A_exp_stats_id, B_exp_stats_id);
 
+			cuMpSGEMM_run_if_env_defined(
+					info_env_name,
+					[&]() {
+					int flag;
+					cutf::memory::copy(&flag, cuMpSGEMM_get_internal_global_handle()->dynamic_launch_handle->flag_buffer + dynamic_launch_id, 1);
+					const auto gemm_mode = cumpsgemm::dynamic_launch::utils::get_gemm_flag(flag);
+					const auto scale_A = cumpsgemm::dynamic_launch::utils::get_scale_A_flag(flag);
+					const auto scale_B = cumpsgemm::dynamic_launch::utils::get_scale_B_flag(flag);
+					const auto loss_rate_A = cumpsgemm::get_exp_stats(cuMpSGEMM_get_internal_global_handle(), A_exp_stats_id);
+					const auto loss_rate_B = cumpsgemm::get_exp_stats(cuMpSGEMM_get_internal_global_handle(), B_exp_stats_id);
+					cuMpSGEMM_log(std::string("AUTO[ignore<") + get_XeY_format_string(cuMpSGEMM_get_internal_global_handle()->exp_stats_handle->ignore_threshold) + ", uf<"
+							+ get_XeY_format_string(cuMpSGEMM_get_internal_global_handle()->exp_stats_handle->underflow_threshold) + ", tolerance="
+							+ get_XeY_format_string(cuMpSGEMM_get_internal_global_handle()->exp_stats_handle->underflow_tolerance_rate)
+							+ "]: GEMM_MODE=" + cuMpSGEMM_get_compute_mode_string((cuMpSGEMM_compute_mode_t)gemm_mode)
+							+ ", loss_A=" + std::to_string(loss_rate_A.first) + "/" + std::to_string(loss_rate_A.second) + "(" + std::to_string(static_cast<double>(loss_rate_A.first) / loss_rate_A.second) + "), scale_A=" + std::to_string(scale_A)
+							+ ", loss_B=" + std::to_string(loss_rate_B.first) + "/" + std::to_string(loss_rate_B.second) + "(" + std::to_string(static_cast<double>(loss_rate_B.first) / loss_rate_B.second) + "), scale_B=" + std::to_string(scale_B));
+					});
+
+			// Scaling
+			cumpsgemm::dynamic_scaling::scale_A(cuMpSGEMM_get_internal_global_handle(), (op_A == CUBLAS_OP_N ? m : k), (op_A == CUBLAS_OP_N ? k : m), const_cast<T*>(a_dmem_ptr), lda, stridea, batch_count, A_exp_stats_id, dynamic_launch_id);
+			cumpsgemm::dynamic_scaling::scale_B(cuMpSGEMM_get_internal_global_handle(), (op_B == CUBLAS_OP_N ? k : n), (op_B == CUBLAS_OP_N ? n : k), const_cast<T*>(b_dmem_ptr), ldb, strideb, batch_count, B_exp_stats_id, dynamic_launch_id);
+
+			// Enable dynamic launch
+			cumpsgemm::dynamic_launch::set_dynamic_launch_flag_buffer_id(cuMpSGEMM_get_internal_global_handle(), dynamic_launch_id);
+		} else if (compute_mode == CUMPSGEMM_FP16TCEC_SCALING) {
+			// Force execution mode
+			dynamic_launch_id = 1;
+
+			// Exp stats
+			cumpsgemm::exp_stats::exp_max_ext(cuMpSGEMM_get_internal_global_handle(), (op_A == CUBLAS_OP_N ? m : k), (op_A == CUBLAS_OP_N ? k : m), a_dmem_ptr, lda, batch_count, stridea);
+			A_exp_stats_id = cumpsgemm::exp_stats::get_current_exp_stats_buffer_id(cuMpSGEMM_get_internal_global_handle());
+			cumpsgemm::exp_stats::exp_max_ext(cuMpSGEMM_get_internal_global_handle(), (op_B == CUBLAS_OP_N ? k : n), (op_B == CUBLAS_OP_N ? n : k), b_dmem_ptr, ldb, batch_count, strideb);
+			B_exp_stats_id = cumpsgemm::exp_stats::get_current_exp_stats_buffer_id(cuMpSGEMM_get_internal_global_handle());
+
 			// Scaling
 			cumpsgemm::dynamic_scaling::scale_A(cuMpSGEMM_get_internal_global_handle(), (op_A == CUBLAS_OP_N ? m : k), (op_A == CUBLAS_OP_N ? k : m), const_cast<T*>(a_dmem_ptr), lda, stridea, batch_count, A_exp_stats_id, dynamic_launch_id);
 			cumpsgemm::dynamic_scaling::scale_B(cuMpSGEMM_get_internal_global_handle(), (op_B == CUBLAS_OP_N ? k : n), (op_B == CUBLAS_OP_N ? n : k), const_cast<T*>(b_dmem_ptr), ldb, strideb, batch_count, B_exp_stats_id, dynamic_launch_id);
@@ -685,10 +756,10 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 				beta,
 				c_dmem_ptr, ldc, stridec,
 				batch_count,
-				compute_mode
+				compute_mode == CUMPSGEMM_FP16TCEC_SCALING ? CUMPSGEMM_FP16TCEC : compute_mode
 				);
 
-		if (compute_mode == CUMPSGEMM_AUTO) {
+		if (compute_mode == CUMPSGEMM_AUTO || compute_mode == CUMPSGEMM_FP16TCEC_SCALING) {
 			cumpsgemm::dynamic_scaling::scale_C(cuMpSGEMM_get_internal_global_handle(), m, n, c_dmem_ptr, ldc, stridec, batch_count, A_exp_stats_id, B_exp_stats_id, dynamic_launch_id);
 
 			// restore A and B
@@ -711,7 +782,7 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
 
 // cuBLAS functions
 extern "C" {
-cublasStatus_t cublasSgemm (
+CUBLASAPI cublasStatus_t cublasSgemm_v2(
 		cublasHandle_t cublas_handle,
 		cublasOperation_t op_A,
 		cublasOperation_t op_B,
@@ -724,6 +795,9 @@ cublasStatus_t cublasSgemm (
 		const float* beta,
 		float* c_dmem_ptr, int ldc
 		) {
+#ifdef __CUDA_ARCH__
+	return CUBLAS_STATUS_NOT_SUPPORTED;
+#else
 	cudaStream_t cuda_stream;
 	cublasGetStream(cublas_handle, &cuda_stream);
 
@@ -738,9 +812,10 @@ cublasStatus_t cublasSgemm (
 			beta,
 			c_dmem_ptr, ldc
 			);
+#endif
 }
 
-cublasStatus_t cublasCgemm (
+CUBLASAPI cublasStatus_t cublasCgemm_v2(
 		cublasHandle_t cublas_handle,
 		cublasOperation_t op_A,
 		cublasOperation_t op_B,
@@ -753,6 +828,9 @@ cublasStatus_t cublasCgemm (
 		const cuComplex* beta,
 		cuComplex* c_dmem_ptr, int ldc
 		) {
+#ifdef __CUDA_ARCH__
+	return CUBLAS_STATUS_NOT_SUPPORTED;
+#else
 	return cuMpSGEMM_hijack_core<cuComplex>(
 			__func__,
 			cublas_handle,
@@ -764,9 +842,10 @@ cublasStatus_t cublasCgemm (
 			beta,
 			c_dmem_ptr, ldc
 			);
+#endif
 }
 
-cublasStatus_t cublasSgemmStridedBatched (
+CUBLASAPI cublasStatus_t cublasSgemmStridedBatched(
 		cublasHandle_t cublas_handle,
 		cublasOperation_t op_A,
 		cublasOperation_t op_B,
@@ -780,6 +859,9 @@ cublasStatus_t cublasSgemmStridedBatched (
 		float* c_dmem_ptr, int ldc, long long int stridec,
 		const int batch_count
 		) {
+#ifdef __CUDA_ARCH__
+	return CUBLAS_STATUS_NOT_SUPPORTED;
+#else
 	return cuMpSGEMM_stridedBatched_hijack_core<float>(
 			__func__,
 			cublas_handle,
@@ -792,9 +874,10 @@ cublasStatus_t cublasSgemmStridedBatched (
 			c_dmem_ptr, ldc, stridec,
 			batch_count
 			);
+#endif
 }
 
-cublasStatus_t cublasCgemmStridedBatched (
+CUBLASAPI cublasStatus_t cublasCgemmStridedBatched(
 		cublasHandle_t cublas_handle,
 		cublasOperation_t op_A,
 		cublasOperation_t op_B,
@@ -808,6 +891,9 @@ cublasStatus_t cublasCgemmStridedBatched (
 		cuComplex* c_dmem_ptr, int ldc, const long long int stridec,
 		const int batch_count
 		) {
+#ifdef __CUDA_ARCH__
+	return CUBLAS_STATUS_NOT_SUPPORTED;
+#else
 	cudaStream_t cuda_stream;
 	cublasGetStream(cublas_handle, &cuda_stream);
 
@@ -823,9 +909,10 @@ cublasStatus_t cublasCgemmStridedBatched (
 			c_dmem_ptr, ldc, stridec,
 			batch_count
 			);
+#endif
 }
 
-cublasStatus_t cublasGemmEx(cublasHandle_t handle, cublasOperation_t transa,
+CUBLASAPI cublasStatus_t cublasGemmEx(cublasHandle_t handle, cublasOperation_t transa,
                             cublasOperation_t transb, int m, int n, int k,
                             const void *alpha, const void *A,
                             cudaDataType_t Atype, int lda, const void *B,
@@ -833,6 +920,9 @@ cublasStatus_t cublasGemmEx(cublasHandle_t handle, cublasOperation_t transa,
 														void *C, cudaDataType_t Ctype, int ldc,
 														cublasComputeType_t computeType,
 														cublasGemmAlgo_t algo) {
+#ifdef __CUDA_ARCH__
+	return CUBLAS_STATUS_NOT_SUPPORTED;
+#else
 	if (Atype == CUDA_R_32F && Btype == CUDA_R_32F && Ctype == CUDA_R_32F) {
 		return cublasSgemm(
 				handle,
@@ -886,9 +976,10 @@ cublasStatus_t cublasGemmEx(cublasHandle_t handle, cublasOperation_t transa,
 	}
 
 	return res;
+#endif
 }
 
-cublasStatus_t cublasGemmStridedBatchedEx(cublasHandle_t handle, cublasOperation_t transa,
+CUBLASAPI cublasStatus_t cublasGemmStridedBatchedEx(cublasHandle_t handle, cublasOperation_t transa,
                             cublasOperation_t transb, int m, int n, int k,
                             const void *alpha, const void *A,
                             cudaDataType_t Atype, int lda, long long int strideA, const void *B,
@@ -897,6 +988,9 @@ cublasStatus_t cublasGemmStridedBatchedEx(cublasHandle_t handle, cublasOperation
 														int batch_count,
 														cublasComputeType_t computeType,
 														cublasGemmAlgo_t algo) {
+#ifdef __CUDA_ARCH__
+	return CUBLAS_STATUS_NOT_SUPPORTED;
+#else
 	if (Atype == CUDA_R_32F && Btype == CUDA_R_32F && Ctype == CUDA_R_32F) {
 		return cublasSgemmStridedBatched(
 				handle,
@@ -952,6 +1046,7 @@ cublasStatus_t cublasGemmStridedBatchedEx(cublasHandle_t handle, cublasOperation
 	}
 
 	return res;
+#endif
 }
 } // extern "C"
 
@@ -960,6 +1055,9 @@ cuMpSGEMM_handle* cumpsgemm::hijack_control::get_internal_global_handle() {
 }
 
 void cumpsgemm::hijack_control::set_compute_mode(const cuMpSGEMM_compute_mode_t mode) {
+	if (mode == CUMPSGEMM_FP32_SIMT) {
+		throw std::runtime_error("CUMPSGEMM_FP32_SIMT mode is currently not supported.");
+	}
 	internal_global_compute_mode = mode;
 	hijack_mode = static_mode;
 }
@@ -973,6 +1071,10 @@ void cumpsgemm::hijack_control::set_exp_stats_params(
 		const float underflow_threshold,
 		const float underflow_tolerance_rate
 		) {
+	cuMpSGEMM_log("AUTO config: ignore_threshold="         + get_XeY_format_string(ignore_threshold)         + " @" + std::string(__func__));
+	cuMpSGEMM_log("AUTO config: underflow_threshold="      + get_XeY_format_string(underflow_threshold)      + " @" + std::string(__func__));
+	cuMpSGEMM_log("AUTO config: underflow_tolerance_rate=" + get_XeY_format_string(underflow_tolerance_rate) + " @" + std::string(__func__));
+
 	cumpsgemm::set_exp_stats_params(get_internal_global_handle(), ignore_threshold, underflow_threshold, underflow_tolerance_rate);
 }
 
@@ -1004,10 +1106,12 @@ void cumpsgemm::hijack_control::disable_custom_gemm_Mx2x2() {
 
 void cumpsgemm::hijack_control::enable_restoring_AB_after_scaling() {
 	restore_AB = true;
+	cuMpSGEMM_log("AUTO config: restore_AB_scaling=True @" + std::string(__func__));
 }
 
 void cumpsgemm::hijack_control::disable_restoring_AB_after_scaling() {
 	restore_AB = false;
+	cuMpSGEMM_log("AUTO config: restore_AB_scaling=False @" + std::string(__func__));
 }
 
 bool cumpsgemm::hijack_control::is_library_loaded() {

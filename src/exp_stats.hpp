@@ -1,4 +1,5 @@
 #pragma once
+#include <cutf/debug/time_breakdown.hpp>
 #include "handle.hpp"
 
 namespace cumpsgemm {
@@ -21,6 +22,10 @@ struct exp_stats_handle {
 	std::uint32_t buffer_length;
 	std::uint32_t current_buffer_id;
 	bool counter_init_disabled;
+
+	// For profiling
+	cutf::debug::time_breakdown::profiler profiler;
+	int profiling_enabled = false;
 };
 // exp_stats API
 void resize_counter(
@@ -50,6 +55,16 @@ std::pair<std::size_t, std::size_t> get_exp_stats(
 		);
 template <class T>
 void exp_stats_ext(
+		cuMpSGEMM_handle* handle,
+		const unsigned m,
+		const unsigned n,
+		const T* const ptr,
+		const unsigned ld,
+		const unsigned batch_size,
+		const unsigned stride
+		);
+template <class T>
+void exp_max_ext(
 		cuMpSGEMM_handle* handle,
 		const unsigned m,
 		const unsigned n,

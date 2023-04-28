@@ -513,6 +513,57 @@ template <
 	unsigned SMEM_M,
 	unsigned SMEM_N,
 	unsigned SMEM_K,
+	unsigned K_PER_MN,
+	unsigned FRAG_M,
+	unsigned FRAG_N,
+	unsigned FRAG_K,
+	unsigned BLOCK_SIZE,
+	unsigned NUM_UNROLLINGS,
+	unsigned NUM_STAGES,
+	class A_DMEM_LOADER,
+	class B_DMEM_LOADER,
+	class C_DMEM_STORER,
+	class MMA_SMEM,
+	class TC_T,
+	class EC
+>
+__global__ void gemm_atomic_kernel(
+		const int* const dynamic_mode,
+		const unsigned m,
+		const unsigned n,
+		const unsigned k,
+		const T alpha,
+		const T* const a_dmem_ptr, const unsigned lda,
+		const T* const b_dmem_ptr, const unsigned ldb,
+		const T beta,
+		T* const c_dmem_ptr, const unsigned ldc
+		) {
+	if (dynamic_mode != nullptr) {
+		const auto mode = cumpsgemm::dynamic_launch::utils::get_gemm_flag(*dynamic_mode);
+		if ((std::is_same<TC_T, nvcuda::wmma::precision::tf32>::value && std::is_same<EC, mtk::wmma::tcec::with_ec>::value) && (mode != CUMPSGEMM_TF32TCEC)) return;
+		if ((std::is_same<TC_T, half                         >::value && std::is_same<EC, mtk::wmma::tcec::with_ec>::value) && (mode != CUMPSGEMM_FP16TCEC)) return;
+	}
+	const auto k_offset   = (blockIdx.x / (((m + SMEM_M - 1) / SMEM_M) * ((n + SMEM_N - 1) / SMEM_N))) * K_PER_MN;
+	const auto mn_tid     = blockIdx.x %  (((m + SMEM_M - 1) / SMEM_M) * ((n + SMEM_N - 1) / SMEM_N));
+	const auto blockIdx_x = (mn_tid) % ((m + SMEM_M - 1) / SMEM_M);
+	const auto blockIdx_y = (mn_tid) / ((m + SMEM_M - 1) / SMEM_M);
+
+	gemm_core<T, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, NUM_UNROLLINGS, NUM_STAGES, A_DMEM_LOADER, B_DMEM_LOADER, C_DMEM_STORER, MMA_SMEM, TC_T, EC>{}(
+			m, n, min(k - k_offset, K_PER_MN),
+			alpha,
+			a_dmem_ptr + (std::is_same<typename A_DMEM_LOADER::Layout, cumpsgemm::col_major>::value ? lda * k_offset : k_offset), lda,
+			b_dmem_ptr + (std::is_same<typename B_DMEM_LOADER::Layout, cumpsgemm::col_major>::value ? k_offset : ldb * k_offset), ldb,
+			beta,
+			c_dmem_ptr, ldc,
+			blockIdx_x, blockIdx_y
+			);
+}
+
+template <
+	class T,
+	unsigned SMEM_M,
+	unsigned SMEM_N,
+	unsigned SMEM_K,
 	unsigned FRAG_M,
 	unsigned FRAG_N,
 	unsigned FRAG_K,
@@ -660,6 +711,84 @@ template <
 	unsigned SMEM_M,
 	unsigned SMEM_N,
 	unsigned SMEM_K,
+	unsigned K_PER_MN,
+	unsigned FRAG_M,
+	unsigned FRAG_N,
+	unsigned FRAG_K,
+	unsigned BLOCK_SIZE,
+	unsigned NUM_UNROLLINGS,
+	unsigned NUM_STAGES,
+	class OP_A,
+	class OP_B,
+	class TC_T,
+	class EC
+>
+cumpsgemm::gemm_kernel_func_t<T> get_kernel_atomic_func_ptr() {
+	using A_DMEM_LOADER = cumpsgemm::device::dmem_loader<OP_A, T, SMEM_M, SMEM_K, smem_A_skew, BLOCK_SIZE>;
+	using B_DMEM_LOADER = cumpsgemm::device::dmem_loader<OP_B, T, SMEM_K, SMEM_N, smem_B_skew, BLOCK_SIZE>;
+	using C_DMEM_STORER = cumpsgemm::device::dmem_atomic_storer<T, SMEM_M, SMEM_N, smem_C_skew, BLOCK_SIZE>;
+	constexpr cumpsgemm::gemm_kernel_func_t<T> func_ptr = &(gemm_atomic_kernel<
+		T,
+		SMEM_M, SMEM_N, SMEM_K,
+		K_PER_MN,
+		FRAG_M, FRAG_N, FRAG_K,
+		BLOCK_SIZE,
+		NUM_UNROLLINGS,
+		NUM_STAGES,
+		A_DMEM_LOADER,
+		B_DMEM_LOADER,
+		C_DMEM_STORER,
+		mma_smem<T, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, typename A_DMEM_LOADER::Layout, typename B_DMEM_LOADER::Layout, TC_T, EC>,
+		TC_T,
+		EC
+	>);
+	return func_ptr;
+}
+
+template <
+	class T,
+	unsigned SMEM_M,
+	unsigned SMEM_N,
+	unsigned SMEM_K,
+	unsigned K_PER_MN,
+	unsigned FRAG_M,
+	unsigned FRAG_N,
+	unsigned FRAG_K,
+	unsigned BLOCK_SIZE,
+	unsigned NUM_UNROLLINGS,
+	unsigned NUM_STAGES,
+	class OP_A,
+	class OP_B,
+	class TC_T,
+	class EC
+>
+cumpsgemm::gemm_kernel_func_t<T> get_kernel_pipelined_atomic_func_ptr() {
+	using A_DMEM_LOADER = cumpsgemm::device::dmem_loader<OP_A, T, SMEM_M, SMEM_K, smem_A_skew, BLOCK_SIZE>;
+	using B_DMEM_LOADER = cumpsgemm::device::dmem_loader<OP_B, T, SMEM_K, SMEM_N, smem_B_skew, BLOCK_SIZE>;
+	using C_DMEM_STORER = cumpsgemm::device::dmem_atomic_storer<T, SMEM_M, SMEM_N, smem_C_skew, BLOCK_SIZE>;
+	constexpr cumpsgemm::gemm_kernel_func_t<T> func_ptr = &(gemm_atomic_kernel<
+		T,
+		SMEM_M, SMEM_N, SMEM_K,
+		K_PER_MN,
+		FRAG_M, FRAG_N, FRAG_K,
+		BLOCK_SIZE,
+		NUM_UNROLLINGS,
+		NUM_STAGES,
+		cumpsgemm::device::dmem_loader<OP_A, T, SMEM_M, SMEM_K, smem_A_skew, BLOCK_SIZE>,
+		cumpsgemm::device::dmem_loader<OP_B, T, SMEM_K, SMEM_N, smem_B_skew, BLOCK_SIZE>,
+		cumpsgemm::device::dmem_storer<T, SMEM_M, SMEM_N, smem_C_skew, BLOCK_SIZE>,
+		mma_smem_pipeline<T, SMEM_M, SMEM_N, SMEM_K, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, typename A_DMEM_LOADER::Layout, typename B_DMEM_LOADER::Layout, TC_T, EC>,
+		TC_T,
+		EC
+	>);
+	return func_ptr;
+}
+
+template <
+	class T,
+	unsigned SMEM_M,
+	unsigned SMEM_N,
+	unsigned SMEM_K,
 	unsigned FRAG_M,
 	unsigned FRAG_N,
 	unsigned FRAG_K,
@@ -762,6 +891,48 @@ cumpsgemm::gemm_module generate_gemm_module() {
 	mod.smem_m = SMEM_M;
 	mod.smem_n = SMEM_N;
 	mod.smem_k = SMEM_K;
+	CUTF_CHECK_ERROR_M(cudaFuncSetAttribute(kernel_func, cudaFuncAttributeMaxDynamicSharedMemorySize, mod.smem_size), ("requested shared memory size = " + std::to_string(mod.smem_size) + " [B]").c_str());
+
+	int num_active_blocks;
+	CUTF_CHECK_ERROR(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&num_active_blocks, kernel_func, BLOCK_SIZE, mod.smem_size));
+	mod.num_active_blocks = num_active_blocks;
+
+	return mod;
+}
+
+template <
+	class T,
+	unsigned SMEM_M,
+	unsigned SMEM_N,
+	unsigned SMEM_K,
+	unsigned K_PER_MN,
+	unsigned FRAG_M,
+	unsigned FRAG_N,
+	unsigned FRAG_K,
+	unsigned BLOCK_SIZE,
+	unsigned NUM_UNROLLINGS,
+	unsigned NUM_STAGES,
+	class OP_A,
+	class OP_B,
+	class TC_T,
+	class EC,
+	bool PIPELINED
+>
+cumpsgemm::gemm_module generate_gemm_atomic_module() {
+	cumpsgemm::gemm_kernel_func_t<T> kernel_func;
+	if constexpr (PIPELINED) {
+		kernel_func = get_kernel_pipelined_atomic_func_ptr<T, SMEM_M, SMEM_N, SMEM_K, K_PER_MN, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, NUM_UNROLLINGS, NUM_STAGES, OP_A, OP_B, TC_T, EC>();
+	} else {
+		kernel_func = get_kernel_atomic_func_ptr<T, SMEM_M, SMEM_N, SMEM_K, K_PER_MN, FRAG_M, FRAG_N, FRAG_K, BLOCK_SIZE, NUM_UNROLLINGS, NUM_STAGES, OP_A, OP_B, TC_T, EC>();
+	}
+	cumpsgemm::gemm_module mod;
+	mod.kernel_func = reinterpret_cast<void*>(kernel_func);
+	mod.block_size = BLOCK_SIZE;
+	mod.smem_size = get_total_smem_size<T, SMEM_M, SMEM_N, SMEM_K, OP_A, OP_B, NUM_STAGES>();
+	mod.smem_m = SMEM_M;
+	mod.smem_n = SMEM_N;
+	mod.smem_k = SMEM_K;
+	mod.k_per_mn = K_PER_MN;
 	CUTF_CHECK_ERROR_M(cudaFuncSetAttribute(kernel_func, cudaFuncAttributeMaxDynamicSharedMemorySize, mod.smem_size), ("requested shared memory size = " + std::to_string(mod.smem_size) + " [B]").c_str());
 
 	int num_active_blocks;

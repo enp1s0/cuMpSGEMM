@@ -45,6 +45,7 @@ struct gemm_module {
 	unsigned smem_size;
 	unsigned block_size;
 	unsigned num_active_blocks;
+	unsigned k_per_mn;
 };
 
 // 0 is for large size matmul and (num_kernel_candidates - 1) is for small.
@@ -77,15 +78,13 @@ struct dynamic_launch_handle;
 
 void configure_instance_sm80(
 		cumpsgemm::gemm_module gemm_module[cumpsgemm::kernel_module_code::max_code][cumpsgemm::num_kernel_candidates],
-		cumpsgemm::gemm_module gemm_stridedBatch_module[cumpsgemm::kernel_module_code::max_code][cumpsgemm::num_kernel_candidates]
+		cumpsgemm::gemm_module gemm_stridedBatch_module[cumpsgemm::kernel_module_code::max_code][cumpsgemm::num_kernel_candidates],
+		cumpsgemm::gemm_module gemm_atomic_module[cumpsgemm::kernel_module_code::max_code]
 		);
 void configure_instance_sm86(
 		cumpsgemm::gemm_module gemm_module[cumpsgemm::kernel_module_code::max_code][cumpsgemm::num_kernel_candidates],
-		cumpsgemm::gemm_module gemm_stridedBatch_module[cumpsgemm::kernel_module_code::max_code][cumpsgemm::num_kernel_candidates]
-		);
-void configure_instance_simt(
-		cumpsgemm::gemm_module gemm_module[cumpsgemm::kernel_module_code::max_code][cumpsgemm::num_kernel_candidates],
-		cumpsgemm::gemm_module gemm_stridedBatch_module[cumpsgemm::kernel_module_code::max_code][cumpsgemm::num_kernel_candidates]
+		cumpsgemm::gemm_module gemm_stridedBatch_module[cumpsgemm::kernel_module_code::max_code][cumpsgemm::num_kernel_candidates],
+		cumpsgemm::gemm_module gemm_atomic_module[cumpsgemm::kernel_module_code::max_code]
 		);
 } // namespace cumpsgemm
 
@@ -97,7 +96,13 @@ void configure_instance_simt(
 	module_list[cumpsgemm::kernel_module_code::tc_t | cumpsgemm::kernel_module_code::ec | cumpsgemm::kernel_module_code::op_a_##op_a | cumpsgemm::kernel_module_code::op_b_##op_b | cumpsgemm::kernel_module_code::gemm_type][stage] =\
 	cumpsgemm::generate_gemm_stridedBatch_module<io_t,smem_m,smem_n,smem_k,frag_m,frag_n,frag_k,block_size,num_unrollings,num_stages,cumpsgemm::op_a,cumpsgemm::op_b,tc_t,mtk::wmma::tcec::ec, pipelined>();
 
+#define SET_GEMM_ATOMIC_KERNEL_MODULE(module_list, io_t, tc_t, ec, op_a, op_b, smem_m, smem_n, smem_k, k_per_mn, frag_m, frag_n, frag_k, block_size, num_unrollings, num_stages, pipelined, gemm_type) \
+	module_list[cumpsgemm::kernel_module_code::tc_t | cumpsgemm::kernel_module_code::ec | cumpsgemm::kernel_module_code::op_a_##op_a | cumpsgemm::kernel_module_code::op_b_##op_b | cumpsgemm::kernel_module_code::gemm_type] =\
+	cumpsgemm::generate_gemm_atomic_module<io_t,smem_m,smem_n,smem_k,k_per_mn,frag_m,frag_n,frag_k,block_size,num_unrollings,num_stages,cumpsgemm::op_a,cumpsgemm::op_b,tc_t,mtk::wmma::tcec::ec, pipelined>();
+
 #define COMPILE_SGEMM_KERNEL
 #define COMPILE_CGEMM_KERNEL
 #define COMPILE_SGEMM_STRIDEDBATCH_KERNEL
 #define COMPILE_CGEMM_STRIDEDBATCH_KERNEL
+#define COMPILE_SGEMM_ATOMIC_KERNEL
+#define COMPILE_CGEMM_ATOMIC_KERNEL

@@ -780,6 +780,116 @@ void gemm_test(const std::size_t min_N, const std::size_t max_N, const std::size
 	cutf::memory::free(c_ptr);
 }
 
+void gemm_tall_skinny_test(const std::size_t N, const std::size_t min_K, const std::size_t max_K, const std::size_t interval, const std::vector<implementation_type>& imp_list, const gemm_type gemm, const bool is_seq) {
+	constexpr uint64_t seed = 0;
+	const std::size_t max_num_AB_elements = (is_seq ? N * max_K : (N << max_K)) * (gemm == gemm_type::c ? 2 : 1);
+	const std::size_t num_C_elements = N * N * (gemm == gemm_type::c ? 2 : 1);
+	float* a_ptr = cutf::memory::malloc<float>(max_num_AB_elements);
+	float* b_ptr = cutf::memory::malloc<float>(max_num_AB_elements);
+	float* c_ptr = cutf::memory::malloc<float>(num_C_elements);
+	float* r_ptr = cutf::memory::malloc<float>(num_C_elements);
+
+	auto curand_gen = cutf::curand::get_curand_unique_ptr(CURAND_RNG_PSEUDO_PHILOX4_32_10);
+	CUTF_CHECK_ERROR(curandSetPseudoRandomGeneratorSeed(*curand_gen.get(), seed));
+	CUTF_CHECK_ERROR(cutf::curand::generate_normal(*curand_gen.get(), a_ptr, max_num_AB_elements, 0, 1));
+	CUTF_CHECK_ERROR(cutf::curand::generate_normal(*curand_gen.get(), b_ptr, max_num_AB_elements, 0, 1));
+
+	std::vector<cublasOperation_t> sgemm_ops = {
+		CUBLAS_OP_N,
+		CUBLAS_OP_T
+	};
+	std::vector<cublasOperation_t> cgemm_ops = {
+		CUBLAS_OP_N,
+		CUBLAS_OP_T,
+		CUBLAS_OP_C
+	};
+
+	std::printf("## %s\n", __func__);
+	std::printf("type,mode,op_A,op_B,m,n,k,throughput_in_tflops,residual,check,module_stage\n");
+	unsigned num_tests = 0;
+	unsigned num_passed = 0;
+	auto cublas_handle_uptr = cutf::cublas::get_cublas_unique_ptr();
+	cumpsgemm::handle_t cuMpSGEMM_handle;
+	cumpsgemm::create(cuMpSGEMM_handle);
+
+	std::vector<std::size_t> K_list;
+	if (is_seq) {
+		for (unsigned K = min_K; K <= max_K; K += interval) {
+			K_list.push_back(K);
+		}
+	} else {
+		for (unsigned K = min_K; K <= max_K; K += interval) {
+			K_list.push_back(1lu << K);
+		}
+	}
+
+	for (const auto imp : imp_list) {
+		const auto mode = get_compute_mode(imp);
+		const auto scaling = is_scaling_enabled(imp);
+		if (gemm == gemm_type::s) {
+			for (const auto op_A : sgemm_ops) {
+				for (const auto op_B : sgemm_ops) {
+					for (const auto K : K_list) {
+						const auto res = sgemm_test_core(
+								*cublas_handle_uptr.get(),
+								cuMpSGEMM_handle,
+								op_A,
+								op_B,
+								N, N, K,
+								a_ptr, op_A == CUBLAS_OP_N ? N : K,
+								b_ptr, op_B == CUBLAS_OP_N ? K : N,
+								c_ptr, N,
+								r_ptr, N,
+								mode,
+								scaling
+								);
+						num_tests++;
+						if (res == 0) {
+							num_passed++;
+						}
+					}
+				}
+			}
+		} else if (gemm == gemm_type::c) {
+			for (const auto op_A : cgemm_ops) {
+				for (const auto op_B : cgemm_ops) {
+					for (const auto K : K_list) {
+						const auto res = sgemm_test_core(
+								*cublas_handle_uptr.get(),
+								cuMpSGEMM_handle,
+								op_A,
+								op_B,
+								N, N, K,
+								reinterpret_cast<cuComplex*>(a_ptr), op_A == CUBLAS_OP_N ? N : K,
+								reinterpret_cast<cuComplex*>(b_ptr), op_B == CUBLAS_OP_N ? K : N,
+								reinterpret_cast<cuComplex*>(c_ptr), N,
+								reinterpret_cast<cuComplex*>(r_ptr), N,
+								mode,
+								scaling
+								);
+						num_tests++;
+						if (res == 0) {
+							num_passed++;
+						}
+					}
+				}
+			}
+		}
+	}
+	CUTF_CHECK_ERROR(cudaDeviceSynchronize());
+
+	std::printf("Result : %u / %u passed\n",
+			num_passed,
+			num_tests
+			);
+
+	cumpsgemm::destroy(cuMpSGEMM_handle);
+
+	cutf::memory::free(a_ptr);
+	cutf::memory::free(b_ptr);
+	cutf::memory::free(c_ptr);
+}
+
 void gemm_strided_batch_test(const std::size_t min_N, const std::size_t max_N, const std::size_t interval, const std::size_t batch_count, const std::vector<implementation_type>& imp_list, const gemm_type gemm, const bool is_seq) {
 	constexpr uint64_t seed = 0;
 	const std::size_t max_num_elements = (is_seq ? max_N * max_N : (1lu << (2 * max_N))) * (gemm == gemm_type::c ? 2 : 1) * batch_count;
@@ -1439,9 +1549,11 @@ void print_usage(const char* program_name) {
 			"      : %s cgemm_strided_batch_exp_stats [N] [batch_size] [ignore_threshold] [underflow_threshold]\n"
 			"      : %s sgemm_exp_stats_bw [min_log_N] [max_log_N] [batch_size]\n"
 			"      : %s cgemm_exp_stats_bw [min_log_N] [max_log_N] [batch_size]\n"
-			"- compute mode : FP16TCEC, TF32TCEC, FP16TC, TF32TC, FP16TCEC_SCALING, FP32_SIMT, CUBLAS\n"
+			"      : %s sgemm_tall_skinny [exp2|seq] [MN] [min_K] [max_K] [interval] [compute mode list...]\n"
+			"      : %s cgemm_tall_skinny [exp2|seq] [MN] [min_K] [max_K] [interval] [compute mode list...]\n"
+			"- compute mode : FP16TCEC, TF32TCEC, FP16TC, TF32TC, FP16TCEC_SCALING, CUBLAS\n"
 			,
-			program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name
+			program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name, program_name
 			);
 	std::fflush(stderr);
 }
@@ -1459,7 +1571,6 @@ std::vector<implementation_type> gen_implementation_list(
 		} else if (imp_name_str == "TF32TCEC") {         imp_list.push_back(TF32TCEC);
 		} else if (imp_name_str == "TF32TC") {           imp_list.push_back(TF32TC);
 		} else if (imp_name_str == "FP16TCEC_SCALING") { imp_list.push_back(FP16TCEC_SCALING);
-		} else if (imp_name_str == "FP32_SIMT") {        imp_list.push_back(FP32_SIMT);
 		} else {
 			std::printf("Unknown compute mode : %s\n", imp_name_str.c_str());
 		}
@@ -1531,6 +1642,14 @@ int main(int argc, char** argv) {
 		const auto imp_list = gen_implementation_list(argv + 6, argc - 6);
 		print_implementation_type_list(imp_list);
 		gemm_test(std::stoi(argv[3]), std::stoi(argv[4]), std::stoi(argv[5]), imp_list, (command == "sgemm" ? gemm_type::s : gemm_type::c), is_seq);
+	} else if (command == "sgemm_tall_skinny" || command == "cgemm_tall_skinny") {
+		if (argc < 1 + 1 + 1 + 3 + 1) {
+			print_usage(argv[0]);
+			return 1;
+		}
+		const auto imp_list = gen_implementation_list(argv + 7, argc - 7);
+		print_implementation_type_list(imp_list);
+		gemm_tall_skinny_test(std::stoi(argv[3]), std::stoi(argv[4]), std::stoi(argv[5]), std::stoi(argv[6]), imp_list, (command == "sgemm_tall_skinny" ? gemm_type::s : gemm_type::c), is_seq);
 	} else if (command == "sgemm_strided_batch" || command == "cgemm_strided_batch") {
 		if (argc < 1 + 1 + 3 + 1 + 1) {
 			print_usage(argv[0]);

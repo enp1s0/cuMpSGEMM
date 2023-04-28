@@ -4,7 +4,8 @@
 
 void cumpsgemm::configure_instance_sm86(
 		cumpsgemm::gemm_module gemm_module[cumpsgemm::kernel_module_code::max_code][cumpsgemm::num_kernel_candidates],
-		cumpsgemm::gemm_module gemm_stridedBatch_module[cumpsgemm::kernel_module_code::max_code][cumpsgemm::num_kernel_candidates]
+		cumpsgemm::gemm_module gemm_stridedBatch_module[cumpsgemm::kernel_module_code::max_code][cumpsgemm::num_kernel_candidates],
+		cumpsgemm::gemm_module gemm_atomic_module[cumpsgemm::kernel_module_code::max_code]
 		) {
 	using tf32 = nvcuda::wmma::precision::tf32;
 
@@ -331,5 +332,61 @@ void cumpsgemm::configure_instance_sm86(
 	SET_GEMM_STRIDEDBATCH_KERNEL_MODULE(gemm_stridedBatch_module, cuComplex, tf32, without_ec, conjugate, conjugate, 64, 64, 32, 32, 32, 16, 128, 2, 2, false, c, 0); // Not optimized but works on any Ampere GPUs
 	SET_GEMM_STRIDEDBATCH_KERNEL_MODULE(gemm_stridedBatch_module, cuComplex, tf32, without_ec, conjugate, conjugate, 64, 64, 32, 32, 32, 16, 128, 2, 2, false, c, 1); // Not optimized but works on any Ampere GPUs
 	SET_GEMM_STRIDEDBATCH_KERNEL_MODULE(gemm_stridedBatch_module, cuComplex, tf32, without_ec, conjugate, conjugate, 64, 64, 32, 32, 32, 16, 128, 2, 2, false, c, 2); // Not optimized but works on any Ampere GPUs
+#endif
+#ifdef COMPILE_SGEMM_ATOMIC_KERNEL
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, float    , half, with_ec   , col_major, col_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, s); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, float    , tf32, with_ec   , col_major, col_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, s); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, float    , half, without_ec, col_major, col_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, s); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, float    , tf32, without_ec, col_major, col_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, s); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, float    , half, with_ec   , col_major, row_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, s); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, float    , tf32, with_ec   , col_major, row_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, s); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, float    , half, without_ec, col_major, row_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, s); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, float    , tf32, without_ec, col_major, row_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, s); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, float    , half, with_ec   , row_major, col_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, s); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, float    , tf32, with_ec   , row_major, col_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, s); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, float    , half, without_ec, row_major, col_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, s); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, float    , tf32, without_ec, row_major, col_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, s); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, float    , half, with_ec   , row_major, row_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, s); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, float    , tf32, with_ec   , row_major, row_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, s); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, float    , half, without_ec, row_major, row_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, s); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, float    , tf32, without_ec, row_major, row_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, s); // Not optimized but works on any Ampere GPUs
+#endif
+#ifdef COMPILE_CGEMM_ATOMIC_KERNEL
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, half, with_ec   , col_major, col_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, tf32, with_ec   , col_major, col_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, half, without_ec, col_major, col_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, tf32, without_ec, col_major, col_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, half, with_ec   , col_major, row_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, tf32, with_ec   , col_major, row_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, half, without_ec, col_major, row_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, tf32, without_ec, col_major, row_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, half, with_ec   , col_major, conjugate, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, tf32, with_ec   , col_major, conjugate, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, half, without_ec, col_major, conjugate, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, tf32, without_ec, col_major, conjugate, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, half, with_ec   , row_major, col_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, tf32, with_ec   , row_major, col_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, half, without_ec, row_major, col_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, tf32, without_ec, row_major, col_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, half, with_ec   , row_major, row_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, tf32, with_ec   , row_major, row_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, half, without_ec, row_major, row_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, tf32, without_ec, row_major, row_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, half, with_ec   , row_major, conjugate, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, tf32, with_ec   , row_major, conjugate, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, half, without_ec, row_major, conjugate, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, tf32, without_ec, row_major, conjugate, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, half, with_ec   , conjugate, col_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, tf32, with_ec   , conjugate, col_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, half, without_ec, conjugate, col_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, tf32, without_ec, conjugate, col_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, half, with_ec   , conjugate, row_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, tf32, with_ec   , conjugate, row_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, half, without_ec, conjugate, row_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, tf32, without_ec, conjugate, row_major, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, half, with_ec   , conjugate, conjugate, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, tf32, with_ec   , conjugate, conjugate, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, half, without_ec, conjugate, conjugate, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
+	SET_GEMM_ATOMIC_KERNEL_MODULE(gemm_atomic_module, cuComplex, tf32, without_ec, conjugate, conjugate, 64, 64, 32, 64, 32, 32, 32, 128, 1, 2, false, c); // Not optimized but works on any Ampere GPUs
 #endif
 }

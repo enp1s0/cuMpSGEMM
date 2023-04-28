@@ -49,12 +49,23 @@ __device__ cuComplex inline mad<cuComplex>(const cuComplex a, const cuComplex al
 }
 
 template<class T>
-__device__ bool inline is_zero(const T& v) {
+__host__ __device__ bool inline is_zero(const T& v) {
 	return v == 0;
 }
 template <>
-__device__ bool inline is_zero(const cuComplex& v) {
+__host__ __device__ bool inline is_zero(const cuComplex& v) {
 	return v.x == 0 && v.y == 0;
+}
+
+__device__ inline float atomic_add(float* const ptr, const float a) {
+	return atomicAdd(ptr, a);
+}
+__device__ inline cuComplex atomic_add(cuComplex* const ptr, const cuComplex a) {
+	float* const px = &(ptr->x);
+	float* const py = &(ptr->y);
+	const auto x = ::atomicAdd(px, a.x);
+	const auto y = ::atomicAdd(py, a.y);
+	return make_cuComplex(x, y);
 }
 } // namespace device
 } // namespace cumpsgemm

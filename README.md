@@ -115,5 +115,22 @@ To output [CULiP](https://github.com/enp1s0/CULiP) logs, specify a following env
 export CUMPSGEMM_ENABLE_CULIP_PROFILING=1
 ```
 
+## Citation
+```bibtex
+@InProceedings{10.1007/978-3-031-32041-5_14,
+	author="Ootomo, Hiryuki
+	and Manabe, Hidetaka
+	and Harada, Kenji
+	and Yokota, Rio",
+	title="Quantum Circuit Simulation by SGEMM Emulation on Tensor Cores and Automatic Precision Selection",
+	booktitle="High Performance Computing",
+	year="2023",
+	publisher="Springer Nature Switzerland",
+	address="Cham",
+	pages="259--276",
+	isbn="978-3-031-32041-5"
+}
+```
+
 ## License
 MIT

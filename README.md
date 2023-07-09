@@ -7,6 +7,9 @@ A library for executing SGEMM emulation on Tensor Cores intercepting the cuBLAS 
 - `cublasCgemm`
 - `cublasGemmEx` (Only for single precision)
 
+## Throughput
+<img alt='cumpsgemm throughput' src='./docs/sgemm-throughput.svg'>
+
 ## Installation
 - For A100 (GA100) GPU
 

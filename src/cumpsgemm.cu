@@ -207,7 +207,7 @@ __global__ void post_atomic_kernel(
 		const unsigned n,
 		const std::uint64_t ldc,
 		const std::uint64_t ldt,
-		T beta
+		const T beta
 		) {
 	const auto tid = threadIdx.x + blockIdx.x * blockDim.x;
 	if (tid >= m * n) {
@@ -229,7 +229,7 @@ void post_atomic(
 		const unsigned n,
 		const std::uint64_t ldc,
 		const std::uint64_t ldt,
-		T beta,
+		const T beta,
 		cudaStream_t cuda_stream
 		) {
 	const auto block_size = 256;

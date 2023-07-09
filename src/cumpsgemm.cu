@@ -174,8 +174,8 @@ __global__ void fill_zero_kernel(
 	if (tid >= m * n) {
 		return;
 	}
-	const auto im = tid / m;
-	const auto in = tid % m;
+	const auto im = tid % m;
+	const auto in = tid / m;
 	const auto index = im + in * ld;
 
 	ptr[index] = cumpsgemm::device::zero<T>();
@@ -213,8 +213,8 @@ __global__ void post_atomic_kernel(
 	if (tid >= m * n) {
 		return;
 	}
-	const auto im = tid / m;
-	const auto in = tid % m;
+	const auto im = tid % m;
+	const auto in = tid / m;
 	const auto c_index = im + in * ldc;
 	const auto t_index = im + in * ldt;
 

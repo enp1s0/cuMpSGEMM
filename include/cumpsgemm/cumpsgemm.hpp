@@ -2,6 +2,7 @@
 #define __CUMPSGEMM_HPP__
 #include <vector>
 #include <unordered_map>
+#include <string>
 #include "cumpsgemm.h"
 
 namespace cumpsgemm {

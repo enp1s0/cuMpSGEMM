@@ -121,7 +121,7 @@ export CUMPSGEMM_ENABLE_CULIP_PROFILING=1
 ## Citation
 ```bibtex
 @InProceedings{10.1007/978-3-031-32041-5_14,
-	author="Ootomo, Hiryuki
+	author="Ootomo, Hiroyuki
 	and Manabe, Hidetaka
 	and Harada, Kenji
 	and Yokota, Rio",

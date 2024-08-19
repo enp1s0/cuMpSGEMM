@@ -30,9 +30,9 @@ Comment out the following line in `src/handle.cu` before `make`.
 #define ENABLE_A100_OPTIMAZED_PARAMETERS
 ```
 Without this modification, an error may occur in dynamic shared memory size configuration step in runtime.
-The GA100 architecture has more shared memory size than other Ampere GPUs and the optimization for GA100 is besed on the shared memory size.
+The GA100 architecture has more shared memory size than other Ampere GPUs and the optimization for GA100 is based on the shared memory size.
 This throughput of this library is only optimized for A100 GPU.
-(We have used A100 40GB SXM4 for the prameters optimization.)
+(We have used A100 40GB SXM4 for the parameters optimization.)
 
 ## Usage
 
@@ -97,7 +97,7 @@ Usage : ./build/cumpsgemm_test sgemm [exp2|seq] [min_N] [max_N] [interval]
       : ./build/cumpsgemm_test log [/path/to/log]
 ```
 
-## Controling environmental variables
+## Controlling environmental variables
 ```bash
 # Select a GEMM implementation executing
 export CUMPSGEMM_COMPUTE_MODE=[FP16TC|FP16TCEC|TF32TC|TF32TCEC|CUBLAS]

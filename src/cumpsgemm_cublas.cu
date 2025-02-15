@@ -83,7 +83,7 @@ void *cuMpSGEMM_get_function_pointer(const std::string function_name,
   } else {
     function_ptr = dlsym(RTLD_NEXT, function_name.c_str());
   }
-  if (function_ptr == NULL) {
+  if (function_ptr == nullptr) {
     cuMpSGEMM_warning(
         "Failed to load a function " + function_name +
         " during selecting hijacking function. Default rule will be used.");

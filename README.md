@@ -37,19 +37,23 @@ By the default rule, the SGEMM computing mode can be changed via an environmenta
 export CUMPSGEMM_COMPUTE_MODE=FP16TCEC
 ```
 
+#### Performance modes
 | mode name            | Tensor Core Type               | Error Correction |
 |:---------------------|:-------------------------------|:-----------------|
 |`FP16TCEC`            | FP16                           | Yes              |
 |`TF32TCEC`            | TF32                           | Yes              |
+|`CUBLAS_SIMT`         | (FP32 SIMT Core)               | No               |
+|`CUBLAS_FP16TC`       | FP16                           | No               |
+|`CUBLAS_TF32TC`       | TF32                           | No               |
+|`FP16TCEC_SCALING`    | FP16                           | Yes              |
+
+#### Debugging modes
+| mode name            | Tensor Core Type               | Error Correction |
+|:---------------------|:-------------------------------|:-----------------|
 |`FP16TC`              | FP16                           | No               |
 |`TF32TC`              | TF32                           | No               |
 |`CUBLAS`              | Depends on the cublas math mode| No               |
-|`CUBLAS_SIMT`         | (FP32 SIMT Core)               | No               |
-|`CUBLAS_FP16`         | FP16                           | No               |
-|`CUBLAS_TF32`         | TF32                           | No               |
 |`AUTO`                | AUTO                           | Yes              |
-|`FP16TCEC_SCALING`    | FP16                           | Yes              |
-|`FP32_SIMT`           | (FP32 SIMT Core)               | No               |
 |`DRY_RUN`             | Nothing is computed            | No               |
 
 #### Custom rule

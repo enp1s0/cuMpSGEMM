@@ -356,23 +356,26 @@ cublasStatus_t cuMpSGEMM_hijack_core(
     } else if (compute_mode == CUMPSGEMM_CUBLAS_SIMT) {
       // Do nothing
     } else {
-      cublasMath_t math_mode;
-      cublasGetMathMode(cublas_handle, &math_mode);
-      switch (math_mode) {
-      case CUBLAS_DEFAULT_MATH:
-      case CUBLAS_MATH_DISALLOW_REDUCED_PRECISION_REDUCTION:
-        // Do nothing
-        break;
-      case CUBLAS_TF32_TENSOR_OP_MATH:
-        gemm_algo = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
-        compute_type = CUBLAS_COMPUTE_32F_FAST_TF32;
-        break;
-      case CUBLAS_TENSOR_OP_MATH:
-        gemm_algo = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
-        compute_type = CUBLAS_COMPUTE_32F_FAST_16F;
-        break;
-      default:
-        break;
+      const std::string func_name_str(func_name);
+      if (func_name_str == "cublasSgemm" || func_name_str == "cublasCgemm") {
+        cublasMath_t math_mode;
+        cublasGetMathMode(cublas_handle, &math_mode);
+        switch (math_mode) {
+        case CUBLAS_DEFAULT_MATH:
+        case CUBLAS_MATH_DISALLOW_REDUCED_PRECISION_REDUCTION:
+          // Do nothing
+          break;
+        case CUBLAS_TF32_TENSOR_OP_MATH:
+          gemm_algo = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
+          compute_type = CUBLAS_COMPUTE_32F_FAST_TF32;
+          break;
+        case CUBLAS_TENSOR_OP_MATH:
+          gemm_algo = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
+          compute_type = CUBLAS_COMPUTE_32F_FAST_16F;
+          break;
+        default:
+          break;
+        }
       }
     }
 
@@ -737,23 +740,27 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
     } else if (compute_mode == CUMPSGEMM_CUBLAS_SIMT) {
       // Do nothing
     } else {
-      cublasMath_t math_mode;
-      cublasGetMathMode(cublas_handle, &math_mode);
-      switch (math_mode) {
-      case CUBLAS_DEFAULT_MATH:
-      case CUBLAS_MATH_DISALLOW_REDUCED_PRECISION_REDUCTION:
-        // Do nothing
-        break;
-      case CUBLAS_TF32_TENSOR_OP_MATH:
-        gemm_algo = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
-        compute_type = CUBLAS_COMPUTE_32F_FAST_TF32;
-        break;
-      case CUBLAS_TENSOR_OP_MATH:
-        gemm_algo = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
-        compute_type = CUBLAS_COMPUTE_32F_FAST_16F;
-        break;
-      default:
-        break;
+      const std::string func_name_str(func_name);
+      if (func_name_str == "cublasSgemmStridedBatched" ||
+          func_name_str == "cublasCgemmStridedBatched") {
+        cublasMath_t math_mode;
+        cublasGetMathMode(cublas_handle, &math_mode);
+        switch (math_mode) {
+        case CUBLAS_DEFAULT_MATH:
+        case CUBLAS_MATH_DISALLOW_REDUCED_PRECISION_REDUCTION:
+          // Do nothing
+          break;
+        case CUBLAS_TF32_TENSOR_OP_MATH:
+          gemm_algo = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
+          compute_type = CUBLAS_COMPUTE_32F_FAST_TF32;
+          break;
+        case CUBLAS_TENSOR_OP_MATH:
+          gemm_algo = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
+          compute_type = CUBLAS_COMPUTE_32F_FAST_16F;
+          break;
+        default:
+          break;
+        }
       }
     }
 

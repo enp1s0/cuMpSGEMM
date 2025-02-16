@@ -94,11 +94,11 @@ Usage : ./build/cumpsgemm_test sgemm [exp2|seq] [min_N] [max_N] [interval]
 # Select a GEMM implementation executing (See the table above)
 export CUMPSGEMM_COMPUTE_MODE=FP16TCEC
 
-# Output debug information
+# Output debug information (default: 0)
 export CUMPSGEMM_INFO=1
 
-# Output error message
-export CUMPSGEMM_ERROR_LOG=1
+# Output error message (default: 1)
+export CUMPSGEMM_ERROR_LOG=0
 
 # Enable custom gemm_Mx2x2 (https://github.com/enp1s0/cuGEMM-Mx2x2)
 export CUMPSGEMM_CUSTOM_GEMM_MX2X2=1

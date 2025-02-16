@@ -1,3 +1,4 @@
+#include "utils.hpp"
 #include <cstdlib>
 #include <cumpsgemm/cumpsgemm.h>
 #include <string>
@@ -29,6 +30,8 @@ extern "C" cuMpSGEMM_compute_mode_t cuMpSGEMM_get_compute_mode(
       return CUMPSGEMM_CUBLAS_FP16TC;
     if (env_val_str == "CUBLAS_SIMT")
       return CUMPSGEMM_CUBLAS_SIMT;
+    if (env_val_str == "CUBLAS")
+      return CUMPSGEMM_CUBLAS;
     if (env_val_str == "DRY_RUN")
       return CUMPSGEMM_DRY_RUN;
     if (env_val_str == "AUTO")
@@ -38,6 +41,9 @@ extern "C" cuMpSGEMM_compute_mode_t cuMpSGEMM_get_compute_mode(
     // if (env_val_str == "FP32_SIMT")
     //	return CUMPSGEMM_FP32_SIMT;
   }
+
+  cuMpSGEMM_error("Unknown " + std::string(env_name) + " = " +
+                  std::string(env_val) + ". Ignored");
 
   return CUMPSGEMM_CUBLAS;
 }

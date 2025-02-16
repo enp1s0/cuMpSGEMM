@@ -25,4 +25,4 @@ for matrix_type in ['s', 'c']:
 
             residual_sum += cp.linalg.norm(dev_mat_C - dev_mat_C_ref) / cp.linalg.norm(dev_mat_C_ref)
         residual = residual_sum / TEST_COUNT
-        print('type =', matrix_type, ', N =', N, ', residual =', residual, ('OK' if residual < np.sqrt(N) * 1e-7 else 'NG'))
+        print('type =', matrix_type, ', N =', N, ', residual =', residual, ('OK' if residual < np.sqrt(N) * 1e-7 else 'NG') + ' as FP32, ', ('OK' if residual < np.sqrt(N) * 1e-4 else 'NG') + ' as FP16')

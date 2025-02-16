@@ -4,6 +4,7 @@
 #include "dynamic_scaling.hpp"
 #include "exp_stats.hpp"
 #include "handle.hpp"
+#include "utils.hpp"
 #include <cugemm_Mx2x2.hpp>
 #include <cumpsgemm/cumpsgemm.hpp>
 #include <cumpsgemm/hijack_control.hpp>
@@ -35,51 +36,24 @@ cumpsgemm::hijack_control::control_function_t internal_global_control_func;
 enum hijack_control_t { static_mode, dynamic_mode } hijack_mode = dynamic_mode;
 cuMpSGEMM_compute_mode_t internal_global_compute_mode = CUMPSGEMM_CUBLAS;
 
-template <class Func>
-void cuMpSGEMM_run_if_env_defined(const std::string env_str, const Func func) {
-  const auto env = getenv(env_str.c_str());
-  if (env != nullptr && std::string(env) != "0") {
-    func();
-  }
-}
-
-const std::string info_env_name = "CUMPSGEMM_INFO";
-void cuMpSGEMM_log(const std::string str) {
-  cuMpSGEMM_run_if_env_defined(info_env_name, [&]() {
-    std::fprintf(stdout, "[cuMpSGEMM LOG] %s\n", str.c_str());
-    std::fflush(stdout);
-  });
-}
-
-const std::string error_env_name = "CUMPSGEMM_ERROR_LOG";
-void cuMpSGEMM_error(const std::string str) {
-  cuMpSGEMM_run_if_env_defined(error_env_name, [&]() {
-    std::fprintf(stdout, "[cuMpSGEMM ERROR] %s\n", str.c_str());
-    std::fflush(stdout);
-  });
-}
-
-void cuMpSGEMM_warning(const std::string str) {
-  cuMpSGEMM_run_if_env_defined(error_env_name, [&]() {
-    std::fprintf(stdout, "[cuMpSGEMM WARNING] %s\n", str.c_str());
-    std::fflush(stdout);
-  });
-}
-
-void *cuMpSGEMM_get_function_pointer(const std::string library_name,
-                                     const std::string function_name) {
-
-  // Open the library
-  const auto lib_ptr = dlopen(library_name.c_str(), RTLD_NOW);
-  if (lib_ptr == nullptr) {
-    cuMpSGEMM_warning("Failed to load " + library_name +
-                      ". Default rule will be used.");
-    return nullptr;
-  }
-
+void *cuMpSGEMM_get_function_pointer(const std::string function_name,
+                                     const std::string library_name = "") {
   // Get function pointer
-  void *function_ptr = dlsym(lib_ptr, function_name.c_str());
-  if (function_ptr == NULL) {
+  void *function_ptr = nullptr;
+  if (library_name != "") {
+    // Open the library
+    const auto lib_ptr = dlopen(library_name.c_str(), RTLD_NOW);
+    if (lib_ptr == nullptr) {
+      cuMpSGEMM_warning("Failed to load " + library_name +
+                        ". Default rule will be used.");
+      return nullptr;
+    }
+
+    function_ptr = dlsym(lib_ptr, function_name.c_str());
+  } else {
+    function_ptr = dlsym(RTLD_NEXT, function_name.c_str());
+  }
+  if (function_ptr == nullptr) {
     cuMpSGEMM_warning(
         "Failed to load a function " + function_name +
         " during selecting hijacking function. Default rule will be used.");
@@ -100,6 +74,14 @@ std::string get_cublas_op_str(const cublasOperation_t op) {
   default:
     return "?";
   }
+}
+
+template <class T> inline cudaDataType_t get_cuda_data_type();
+template <> inline cudaDataType_t get_cuda_data_type<float>() {
+  return CUDA_R_32F;
+}
+template <> inline cudaDataType_t get_cuda_data_type<cuComplex>() {
+  return CUDA_C_32F;
 }
 
 const std::string gemm_Mx2x2_env_name = "CUMPSGEMM_CUSTOM_GEMM_MX2X2";
@@ -225,7 +207,7 @@ extern "C" cuMpSGEMM_compute_mode_t cuMpSGEMM_get_compute_mode_internal(
         const char *const func_name, cublasHandle_t const cublas_handle,
         const cublasOperation_t op_A, const cublasOperation_t op_B,
         const unsigned m, const unsigned n, const unsigned k);
-    *(void **)(&func) = cuMpSGEMM_get_function_pointer(rule_lib_name, __func__);
+    *(void **)(&func) = cuMpSGEMM_get_function_pointer(__func__, rule_lib_name);
 
     if (func == nullptr) {
       return cuMpSGEMM_get_compute_mode(func_name, cublas_handle, op_A, op_B, m,
@@ -362,23 +344,49 @@ cublasStatus_t cuMpSGEMM_hijack_core(
     // -----------------------------------
     // cuBLAS
     // -----------------------------------
-    cublasMath_t math_mode;
-    cublasGetMathMode(cublas_handle, &math_mode);
+    cublasGemmAlgo_t gemm_algo = CUBLAS_GEMM_DEFAULT;
+    cublasComputeType_t compute_type = CUBLAS_COMPUTE_32F;
+    const cudaDataType_t io_datat_type = get_cuda_data_type<T>();
     if (compute_mode == CUMPSGEMM_CUBLAS_TF32TC) {
-      cublasSetMathMode(cublas_handle, CUBLAS_TF32_TENSOR_OP_MATH);
+      gemm_algo = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
+      compute_type = CUBLAS_COMPUTE_32F_FAST_TF32;
     } else if (compute_mode == CUMPSGEMM_CUBLAS_FP16TC) {
-      cublasSetMathMode(cublas_handle, CUBLAS_TENSOR_OP_MATH);
+      gemm_algo = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
+      compute_type = CUBLAS_COMPUTE_32F_FAST_16F;
     } else if (compute_mode == CUMPSGEMM_CUBLAS_SIMT) {
-      cublasSetMathMode(cublas_handle, CUBLAS_DEFAULT_MATH);
+      // Do nothing
+    } else {
+      const std::string func_name_str(func_name);
+      if (func_name_str == "cublasSgemm" || func_name_str == "cublasCgemm") {
+        cublasMath_t math_mode;
+        cublasGetMathMode(cublas_handle, &math_mode);
+        switch (math_mode) {
+        case CUBLAS_DEFAULT_MATH:
+        case CUBLAS_MATH_DISALLOW_REDUCED_PRECISION_REDUCTION:
+          // Do nothing
+          break;
+        case CUBLAS_TF32_TENSOR_OP_MATH:
+          gemm_algo = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
+          compute_type = CUBLAS_COMPUTE_32F_FAST_TF32;
+          break;
+        case CUBLAS_TENSOR_OP_MATH:
+          gemm_algo = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
+          compute_type = CUBLAS_COMPUTE_32F_FAST_16F;
+          break;
+        default:
+          break;
+        }
+      }
     }
 
     cublasStatus_t (*func_ptr)(
         cublasHandle_t, cublasOperation_t, cublasOperation_t, int, int, int,
-        const T *, const T *, int, const T *, int, const T *, T *, int);
-    *(void **)(&func_ptr) =
-        cuMpSGEMM_get_function_pointer(cublas_lib_name.c_str(), func_name);
+        const void *, const void *, cudaDataType, int, const void *,
+        cudaDataType, int, const void *, void *, cudaDataType, int,
+        cublasComputeType_t, cublasGemmAlgo_t);
+    *(void **)(&func_ptr) = cuMpSGEMM_get_function_pointer("cublasGemmEx");
     if (func_ptr == nullptr) {
-      cuMpSGEMM_error(std::string("Could not load cuBLAS function \"") +
+      cuMpSGEMM_error(std::string("Could not load the cuBLAS function \"") +
                       func_name + "\"");
     }
 
@@ -394,7 +402,8 @@ cublasStatus_t cuMpSGEMM_hijack_core(
     }
 
     res = (*func_ptr)(cublas_handle, op_A, op_B, m, n, k, alpha, a_dmem_ptr,
-                      lda, b_dmem_ptr, ldb, beta, c_dmem_ptr, ldc);
+                      io_datat_type, lda, b_dmem_ptr, io_datat_type, ldb, beta,
+                      c_dmem_ptr, io_datat_type, ldc, compute_type, gemm_algo);
 
     if (profiling_flag) {
       // Record end rimestamp
@@ -407,9 +416,6 @@ cublasStatus_t cuMpSGEMM_hijack_core(
                                         &cumpsgemm::CULiP::print_profile_result,
                                         (void *)&profile_result);
     }
-
-    // restore math mode
-    cublasSetMathMode(cublas_handle, math_mode);
 
     if (cumpsgemm::hijack_control::get_internal_global_handle()
             ->exp_stats_handle->enabled) {
@@ -458,7 +464,7 @@ cublasStatus_t cuMpSGEMM_hijack_core(
           cuMpSGEMM_get_internal_global_handle(), dynamic_launch_id,
           A_exp_stats_id, B_exp_stats_id);
 
-      cuMpSGEMM_run_if_env_defined(info_env_name, [&]() {
+      cuMpSGEMM_run_if_env_defined(cumpsgemm::info_env_name, [&]() {
         int flag;
         cutf::memory::copy(&flag,
                            cuMpSGEMM_get_internal_global_handle()
@@ -722,24 +728,53 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
     // -----------------------------------
     // cuBLAS
     // -----------------------------------
-    cublasMath_t math_mode;
-    cublasGetMathMode(cublas_handle, &math_mode);
+    cublasGemmAlgo_t gemm_algo = CUBLAS_GEMM_DEFAULT;
+    cublasComputeType_t compute_type = CUBLAS_COMPUTE_32F;
+    const cudaDataType_t io_datat_type = get_cuda_data_type<T>();
     if (compute_mode == CUMPSGEMM_CUBLAS_TF32TC) {
-      cublasSetMathMode(cublas_handle, CUBLAS_TF32_TENSOR_OP_MATH);
+      gemm_algo = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
+      compute_type = CUBLAS_COMPUTE_32F_FAST_TF32;
     } else if (compute_mode == CUMPSGEMM_CUBLAS_FP16TC) {
-      cublasSetMathMode(cublas_handle, CUBLAS_TENSOR_OP_MATH);
+      gemm_algo = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
+      compute_type = CUBLAS_COMPUTE_32F_FAST_16F;
     } else if (compute_mode == CUMPSGEMM_CUBLAS_SIMT) {
-      cublasSetMathMode(cublas_handle, CUBLAS_DEFAULT_MATH);
+      // Do nothing
+    } else {
+      const std::string func_name_str(func_name);
+      if (func_name_str == "cublasSgemmStridedBatched" ||
+          func_name_str == "cublasCgemmStridedBatched") {
+        cublasMath_t math_mode;
+        cublasGetMathMode(cublas_handle, &math_mode);
+        switch (math_mode) {
+        case CUBLAS_DEFAULT_MATH:
+        case CUBLAS_MATH_DISALLOW_REDUCED_PRECISION_REDUCTION:
+          // Do nothing
+          break;
+        case CUBLAS_TF32_TENSOR_OP_MATH:
+          gemm_algo = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
+          compute_type = CUBLAS_COMPUTE_32F_FAST_TF32;
+          break;
+        case CUBLAS_TENSOR_OP_MATH:
+          gemm_algo = CUBLAS_GEMM_DEFAULT_TENSOR_OP;
+          compute_type = CUBLAS_COMPUTE_32F_FAST_16F;
+          break;
+        default:
+          break;
+        }
+      }
     }
 
     cublasStatus_t (*func_ptr)(
         cublasHandle_t, cublasOperation_t, cublasOperation_t, int, int, int,
-        const T *, const T *, int, long long int, const T *, int, long long int,
-        const T *, T *, int, long long int, int);
+        const void *, const void *, cudaDataType, int, long long int,
+        const void *, cudaDataType, int, long long int, const void *, void *,
+        cudaDataType, int, long long int, int, cublasComputeType_t,
+        cublasGemmAlgo_t);
+
     *(void **)(&func_ptr) =
-        cuMpSGEMM_get_function_pointer(cublas_lib_name.c_str(), func_name);
+        cuMpSGEMM_get_function_pointer("cublasGemmStridedBatchedEx");
     if (func_ptr == nullptr) {
-      cuMpSGEMM_error(std::string("Could not load cuBLAS function \"") +
+      cuMpSGEMM_error(std::string("Could not load the cuBLAS function \"") +
                       func_name + "\"");
     }
 
@@ -756,8 +791,9 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
     }
 
     res = (*func_ptr)(cublas_handle, op_A, op_B, m, n, k, alpha, a_dmem_ptr,
-                      lda, stridea, b_dmem_ptr, ldb, strideb, beta, c_dmem_ptr,
-                      ldc, stridec, batch_count);
+                      io_datat_type, lda, stridea, b_dmem_ptr, io_datat_type,
+                      ldb, strideb, beta, c_dmem_ptr, io_datat_type, ldc,
+                      stridec, batch_count, compute_type, gemm_algo);
 
     if (profiling_flag) {
       // Record end rimestamp
@@ -770,8 +806,6 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
                                         &cumpsgemm::CULiP::print_profile_result,
                                         (void *)&profile_result);
     }
-
-    cublasSetMathMode(cublas_handle, math_mode);
   } else {
     // -----------------------------------
     // cuMpSGEMM
@@ -814,7 +848,7 @@ cublasStatus_t cuMpSGEMM_stridedBatched_hijack_core(
           cuMpSGEMM_get_internal_global_handle(), dynamic_launch_id,
           A_exp_stats_id, B_exp_stats_id);
 
-      cuMpSGEMM_run_if_env_defined(info_env_name, [&]() {
+      cuMpSGEMM_run_if_env_defined(cumpsgemm::info_env_name, [&]() {
         int flag;
         cutf::memory::copy(&flag,
                            cuMpSGEMM_get_internal_global_handle()
@@ -951,9 +985,6 @@ cublasSgemm_v2(cublasHandle_t cublas_handle, cublasOperation_t op_A,
 #ifdef __CUDA_ARCH__
   return CUBLAS_STATUS_NOT_SUPPORTED;
 #else
-  cudaStream_t cuda_stream;
-  cublasGetStream(cublas_handle, &cuda_stream);
-
   return cuMpSGEMM_hijack_core<float>(__func__, cublas_handle, op_A, op_B, m, n,
                                       k, alpha, a_dmem_ptr, lda, b_dmem_ptr,
                                       ldb, beta, c_dmem_ptr, ldc);
@@ -1000,9 +1031,6 @@ CUBLASAPI cublasStatus_t cublasCgemmStridedBatched(
 #ifdef __CUDA_ARCH__
   return CUBLAS_STATUS_NOT_SUPPORTED;
 #else
-  cudaStream_t cuda_stream;
-  cublasGetStream(cublas_handle, &cuda_stream);
-
   return cuMpSGEMM_stridedBatched_hijack_core<cuComplex>(
       __func__, cublas_handle, op_A, op_B, m, n, k, alpha, a_dmem_ptr, lda,
       stridea, b_dmem_ptr, ldb, strideb, beta, c_dmem_ptr, ldc, stridec,
@@ -1020,20 +1048,22 @@ CUBLASAPI cublasStatus_t cublasGemmEx(
   return CUBLAS_STATUS_NOT_SUPPORTED;
 #else
   if (Atype == CUDA_R_32F && Btype == CUDA_R_32F && Ctype == CUDA_R_32F) {
-    return cublasSgemm(handle, transa, transb, m, n, k,
-                       reinterpret_cast<const float *>(alpha),
-                       reinterpret_cast<const float *>(A), lda,
-                       reinterpret_cast<const float *>(B), ldb,
-                       reinterpret_cast<const float *>(beta),
-                       reinterpret_cast<float *>(C), ldc);
+    return cuMpSGEMM_hijack_core<float>(__func__, handle, transa, transb, m, n,
+                                        k,
+                                        reinterpret_cast<const float *>(alpha),
+                                        reinterpret_cast<const float *>(A), lda,
+                                        reinterpret_cast<const float *>(B), ldb,
+                                        reinterpret_cast<const float *>(beta),
+                                        reinterpret_cast<float *>(C), ldc);
   }
   if (Atype == CUDA_C_32F && Btype == CUDA_C_32F && Ctype == CUDA_C_32F) {
-    return cublasCgemm(handle, transa, transb, m, n, k,
-                       reinterpret_cast<const cuComplex *>(alpha),
-                       reinterpret_cast<const cuComplex *>(A), lda,
-                       reinterpret_cast<const cuComplex *>(B), ldb,
-                       reinterpret_cast<const cuComplex *>(beta),
-                       reinterpret_cast<cuComplex *>(C), ldc);
+    return cuMpSGEMM_hijack_core<cuComplex>(
+        __func__, handle, transa, transb, m, n, k,
+        reinterpret_cast<const cuComplex *>(alpha),
+        reinterpret_cast<const cuComplex *>(A), lda,
+        reinterpret_cast<const cuComplex *>(B), ldb,
+        reinterpret_cast<const cuComplex *>(beta),
+        reinterpret_cast<cuComplex *>(C), ldc);
   }
 
   cudaStream_t cuda_stream;
@@ -1047,8 +1077,7 @@ CUBLASAPI cublasStatus_t cublasGemmEx(
       const void *, const void *, cudaDataType_t, int, const void *,
       cudaDataType_t, int, const void *, void *, cudaDataType_t, int,
       cublasComputeType_t, cublasGemmAlgo_t);
-  *(void **)(&func_ptr) =
-      cuMpSGEMM_get_function_pointer(cublas_lib_name.c_str(), __func__);
+  *(void **)(&func_ptr) = cuMpSGEMM_get_function_pointer(__func__);
 
   if (profiling_flag) {
     snprintf(profile_result.function_name,
@@ -1091,16 +1120,17 @@ CUBLASAPI cublasStatus_t cublasGemmStridedBatchedEx(
   return CUBLAS_STATUS_NOT_SUPPORTED;
 #else
   if (Atype == CUDA_R_32F && Btype == CUDA_R_32F && Ctype == CUDA_R_32F) {
-    return cublasSgemmStridedBatched(
-        handle, transa, transb, m, n, k, reinterpret_cast<const float *>(alpha),
+    return cuMpSGEMM_stridedBatched_hijack_core<float>(
+        __func__, handle, transa, transb, m, n, k,
+        reinterpret_cast<const float *>(alpha),
         reinterpret_cast<const float *>(A), lda, strideA,
         reinterpret_cast<const float *>(B), ldb, strideB,
         reinterpret_cast<const float *>(beta), reinterpret_cast<float *>(C),
         ldc, strideC, batch_count);
   }
   if (Atype == CUDA_C_32F && Btype == CUDA_C_32F && Ctype == CUDA_C_32F) {
-    return cublasCgemmStridedBatched(
-        handle, transa, transb, m, n, k,
+    return cuMpSGEMM_stridedBatched_hijack_core<cuComplex>(
+        __func__, handle, transa, transb, m, n, k,
         reinterpret_cast<const cuComplex *>(alpha),
         reinterpret_cast<const cuComplex *>(A), lda, strideA,
         reinterpret_cast<const cuComplex *>(B), ldb, strideB,
@@ -1120,8 +1150,7 @@ CUBLASAPI cublasStatus_t cublasGemmStridedBatchedEx(
       const void *, cudaDataType_t, int, long long int, const void *, void *,
       cudaDataType_t, int, long long int, int, cublasComputeType_t,
       cublasGemmAlgo_t);
-  *(void **)(&func_ptr) =
-      cuMpSGEMM_get_function_pointer(cublas_lib_name.c_str(), __func__);
+  *(void **)(&func_ptr) = cuMpSGEMM_get_function_pointer(__func__);
 
   if (profiling_flag) {
     snprintf(profile_result.function_name,

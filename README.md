@@ -10,8 +10,7 @@ A library for executing SGEMM emulation on Tensor Cores intercepting the cuBLAS 
 ## Throughput
 <img alt='cumpsgemm throughput' src='./docs/sgemm-throughput.svg'>
 
-## Installation
-- For A100 (GA100) GPU
+## Build
 
 ```
 git clone https://github.com/enp1s0/cuMpSGEMM.git --recursive
@@ -22,17 +21,6 @@ cmake ..
 # It may take ~15 min
 make -j4
 ```
-
-- For other Ampere GPUs
-
-Comment out the following line in `src/handle.cu` before `make`.
-```
-#define ENABLE_A100_OPTIMAZED_PARAMETERS
-```
-Without this modification, an error may occur in dynamic shared memory size configuration step in runtime.
-The GA100 architecture has more shared memory size than other Ampere GPUs and the optimization for GA100 is based on the shared memory size.
-This throughput of this library is only optimized for A100 GPU.
-(We have used A100 40GB SXM4 for the parameters optimization.)
 
 ## Usage
 
@@ -49,19 +37,23 @@ By the default rule, the SGEMM computing mode can be changed via an environmenta
 export CUMPSGEMM_COMPUTE_MODE=FP16TCEC
 ```
 
+#### Performance modes
 | mode name            | Tensor Core Type               | Error Correction |
 |:---------------------|:-------------------------------|:-----------------|
 |`FP16TCEC`            | FP16                           | Yes              |
 |`TF32TCEC`            | TF32                           | Yes              |
+|`CUBLAS_SIMT`         | (FP32 SIMT Core)               | No               |
+|`CUBLAS_FP16TC`       | FP16                           | No               |
+|`CUBLAS_TF32TC`       | TF32                           | No               |
+|`FP16TCEC_SCALING`    | FP16                           | Yes              |
+
+#### Debugging modes
+| mode name            | Tensor Core Type               | Error Correction |
+|:---------------------|:-------------------------------|:-----------------|
 |`FP16TC`              | FP16                           | No               |
 |`TF32TC`              | TF32                           | No               |
 |`CUBLAS`              | Depends on the cublas math mode| No               |
-|`CUBLAS_SIMT`         | (FP32 SIMT Core)               | No               |
-|`CUBLAS_FP16`         | FP16                           | No               |
-|`CUBLAS_TF32`         | TF32                           | No               |
 |`AUTO`                | AUTO                           | Yes              |
-|`FP16TCEC_SCALING`    | FP16                           | Yes              |
-|`FP32_SIMT`           | (FP32 SIMT Core)               | No               |
 |`DRY_RUN`             | Nothing is computed            | No               |
 
 #### Custom rule
@@ -99,17 +91,17 @@ Usage : ./build/cumpsgemm_test sgemm [exp2|seq] [min_N] [max_N] [interval]
 
 ## Controlling environmental variables
 ```bash
-# Select a GEMM implementation executing
-export CUMPSGEMM_COMPUTE_MODE=[FP16TC|FP16TCEC|TF32TC|TF32TCEC|CUBLAS]
+# Select a GEMM implementation executing (See the table above)
+export CUMPSGEMM_COMPUTE_MODE=FP16TCEC
 
-# Output debug information
-export CUMPSGEMM_INFO=[0|1]
+# Output debug information (default: 0)
+export CUMPSGEMM_INFO=1
 
-# Output error message
-export CUMPSGEMM_ERROR_LOG=[0|1]
+# Output error message (default: 1)
+export CUMPSGEMM_ERROR_LOG=0
 
 # Enable custom gemm_Mx2x2 (https://github.com/enp1s0/cuGEMM-Mx2x2)
-export CUMPSGEMM_CUSTOM_GEMM_MX2X2=[0|1]
+export CUMPSGEMM_CUSTOM_GEMM_MX2X2=1
 ```
 
 ### CULiP integration

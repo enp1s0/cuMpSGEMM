@@ -47,7 +47,7 @@ target_include_directories(libobjs PUBLIC ${INCDIR} ${SUBMODULEDIR}/cutf/include
 ## static library
 add_library(cumpsgemm_static STATIC $<TARGET_OBJECTS:libobjs>)
 target_link_libraries(cumpsgemm_static PRIVATE
-	cublas_static
+	cublas
 	cublasLt_static
 	culibos
 	)
@@ -59,7 +59,7 @@ add_library(cumpsgemm SHARED $<TARGET_OBJECTS:libobjs>)
 
 #target_include_directories(cumpsgemm PUBLIC ${INCDIR} ${SUBMODULEDIR}/cutf/include ${SUBMODULEDIR}/wmma_extension/include)
 target_link_libraries(cumpsgemm PRIVATE
-	cublas_static
+	cublas
 	cublasLt_static
 	culibos
 	)
@@ -94,7 +94,7 @@ if (${BUILD_TEST})
 	target_include_directories(cumpsgemm_test PRIVATE ${INCDIR} ${SUBMODULEDIR}/cutf/include ${SUBMODULEDIR}/wmma_extension/include ${TESTSRCDIR}/mateval/include)
 	target_link_libraries(cumpsgemm_test PRIVATE
 		CUDA::cublas
-		cumpsgemm_static
+		cumpsgemm
 		cuda
 		curand
 		)
